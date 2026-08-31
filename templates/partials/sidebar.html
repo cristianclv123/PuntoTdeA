@@ -1,0 +1,39 @@
+{% load icons %}
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-mark font-brand">TdeA</div>
+    <div>
+      <div class="sidebar-brand-title font-brand">Punto TdeA</div>
+      <div class="sidebar-brand-subtitle">Atención al ciudadano</div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="{% url 'cases:bandeja' %}" class="sidebar-link {% if active_nav == 'bandeja' %}active{% endif %}">
+      {% icon 'inbox' %}
+      <span>Bandeja</span>
+    </a>
+    <a href="{% url 'knowledge:list' %}" class="sidebar-link {% if active_nav == 'knowledge' %}active{% endif %}">
+      {% icon 'book-open' %}
+      <span>Base de conocimiento</span>
+    </a>
+    <a href="{% url 'communications:campaigns' %}" class="sidebar-link {% if active_nav == 'campaigns' %}active{% endif %}">
+      {% icon 'send' %}
+      <span>Campañas</span>
+    </a>
+    <a href="{% url 'announcements:list' %}" class="sidebar-link {% if active_nav == 'announcements' %}active{% endif %}">
+      {% icon 'megaphone' %}
+      <span>Avisos</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="sidebar-link {% if active_nav == 'dashboard' %}active{% endif %}">
+      {% icon 'layout-dashboard' %}
+      <span>Dashboard</span>
+    </a>
+  </nav>
+  <div class="sidebar-spacer"></div>
+  <nav class="sidebar-nav">
+    <a href="#" class="sidebar-link {% if active_nav == 'settings' %}active{% endif %}">
+      {% icon 'settings' %}
+      <span>Configuración</span>
+    </a>
+  </nav>
+</aside>

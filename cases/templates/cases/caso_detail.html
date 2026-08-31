@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}{{ conversation.name }} — Punto TdeA{% endblock %}
+
+{% block topbar %}{% endblock %}
+
+{% block body %}
+  <div class="case-layout">
+    <div class="chat-column">
+      <div class="chat-header">
+        <div class="chat-header-left">
+          <a href="{% url 'cases:bandeja' %}" style="display:flex;">{% icon 'arrow-left' size=19 %}</a>
+          <div class="avatar avatar-soft" style="width:42px;height:42px;font-size:14px;">{{ conversation.initials }}</div>
+          <div>
+            <div class="chat-header-name-row">
+              <span class="chat-header-name font-brand">{{ conversation.name }}</span>
+              <span class="tag">{{ conversation.role }}</span>
+            </div>
+            <div class="chat-header-meta">
+              <span class="channel-inline">
+                {% icon conversation.channel_icon size=12 %}
+                {{ conversation.channel_label }}
+              </span>
+              <span>·</span>
+              <span>Caso #4821</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          {% if conversation.status == "pendiente" %}
+            <span class="pill pill-warning" style="padding:6px 14px;font-size:12px;">Pendiente</span>
+          {% elif conversation.status == "en_gestion" %}
+            <span class="pill pill-info" style="padding:6px 14px;font-size:12px;">En gestión</span>
+          {% elif conversation.status == "escalado" %}
+            <span class="pill pill-danger" style="padding:6px 14px;font-size:12px;">Escalado</span>
+          {% elif conversation.status == "atendido" %}
+            <span class="pill pill-success" style="padding:6px 14px;font-size:12px;">Atendido</span>
+          {% else %}
+            <span class="pill pill-neutral" style="padding:6px 14px;font-size:12px;">Cerrado</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="message-area">
+        <div class="date-sep"><div class="date-chip">Hoy, 24 de agosto</div></div>
+        {% for m in messages %}
+          <div class="message-row {% if m.from_agent %}from-agent{% endif %}">
+            <div class="message-col">
+              <div class="bubble">{{ m.text }}</div>
+              <div class="bubble-time">{{ m.time }}</div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="composer">
+        <div class="suggested-chip">
+          {% icon 'sparkles' size=13 %}
+          Respuesta sugerida: Certificados de notas
+        </div>
+        <div class="composer-row">
+          {% icon 'paperclip' size=19 css_class='icon' %}
+          <div class="composer-field">Escribe tu respuesta...</div>
+          <button class="composer-send" type="button" aria-label="Enviar">
+            {% icon 'send' size=18 %}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="profile-panel">
+      <div class="profile-top">
+        <div class="profile-avatar font-brand">{{ conversation.initials }}</div>
+        <div class="profile-name font-brand">{{ conversation.name }}</div>
+        <div class="pill pill-info" style="padding:5px 14px;">{{ conversation.role }}</div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="info-col">
+        <div class="section-title">INFORMACIÓN DE CONTACTO</div>
+        <div class="info-row">{% icon 'mail' size=15 %}<span>valentina.soto@correo.com</span></div>
+        <div class="info-row">{% icon 'phone' size=15 %}<span>+57 300 123 4567</span></div>
+        <div class="info-row">{% icon 'graduation-cap' size=15 %}<span>Ingeniería de Sistemas · 2022</span></div>
+        <div class="info-row">{% icon 'calendar' size=15 %}<span>Caso abierto: 24 ago, 08:58 a. m.</span></div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="info-col">
+        <div class="section-title">ACCIONES RÁPIDAS</div>
+        <div class="field-group">
+          <div class="field-label">Estado del caso</div>
+          <div class="field-select field-select-row">
+            <span style="color: var(--danger-text); font-weight: 600;">Escalado</span>
+            {% icon 'chevron-down' size=15 %}
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Clasificar por tema</div>
+          <div class="field-select field-select-row">
+            <span style="font-weight: 600;">{{ conversation.theme }}</span>
+            {% icon 'chevron-down' size=15 %}
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Escalar a dependencia</div>
+          <div style="display:flex; gap:8px;">
+            <div class="field-select field-select-row" style="flex:1;">
+              <span>Registro Académico</span>
+              {% icon 'chevron-down' size=15 %}
+            </div>
+            <button class="btn btn-primary btn-icon-only" type="button" aria-label="Escalar">
+              {% icon 'corner-up-right' size=16 %}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="notes-col">
+        <div class="section-title">NOTAS INTERNAS</div>
+        {% for note in notes %}
+          <div class="note-card">
+            <div class="note-top">
+              <span class="note-author">{{ note.author }}</span>
+              <span class="note-time">{{ note.time }}</span>
+            </div>
+            <div class="note-text">{{ note.text }}</div>
+          </div>
+        {% endfor %}
+        <div class="note-input">Agregar una nota interna (solo visible para asesores)...</div>
+        <button class="add-note-btn" type="button">
+          {% icon 'plus' size=14 %}
+          Agregar nota
+        </button>
+      </div>
+    </aside>
+  </div>
+{% endblock %}

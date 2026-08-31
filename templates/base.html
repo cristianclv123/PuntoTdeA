@@ -1,0 +1,51 @@
+{% load icons static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Punto TdeA{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+    {% include 'partials/sidebar.html' %}
+    <div class="main-column">
+      {% block topbar %}
+      <header class="topbar">
+        <div>
+          <div class="topbar-title font-brand">{% block page_title %}{% endblock %}</div>
+          <div class="topbar-subtitle">{% block page_subtitle %}{% endblock %}</div>
+        </div>
+        <div class="topbar-right">
+          <div class="search-box">
+            {% icon 'search' size=16 %}
+            <input type="text" placeholder="Buscar por nombre, tema...">
+          </div>
+          <button class="icon-btn" type="button" aria-label="Notificaciones">
+            {% icon 'bell' size=17 %}
+          </button>
+          <div class="user-row">
+            <div class="avatar">LG</div>
+            <div>
+              <div class="user-name">Laura Gómez</div>
+              <div class="user-role">Asesora</div>
+            </div>
+          </div>
+        </div>
+      </header>
+      {% endblock %}
+      {% block body %}
+      <div class="content">
+        {% block content %}{% endblock %}
+      </div>
+      {% endblock %}
+    </div>
+  </div>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

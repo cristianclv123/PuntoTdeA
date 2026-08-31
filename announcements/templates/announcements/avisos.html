@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}Avisos — Punto TdeA{% endblock %}
+{% block page_title %}Avisos y novedades{% endblock %}
+{% block page_subtitle %}Publica anuncios visibles para toda la comunidad{% endblock %}
+
+{% block content %}
+  <div class="two-col-layout">
+    <form class="card form-col" method="post">
+      {% csrf_token %}
+      <div class="card-title font-brand" style="margin-bottom:18px;">Nuevo aviso</div>
+
+      <div class="field-group" style="margin-bottom:8px;">
+        <div class="field-label">Título del aviso</div>
+        <input class="field-input" type="text" value="Suspensión de clases — 28 de agosto">
+      </div>
+
+      <div class="field-group" style="margin-bottom:8px;">
+        <div class="field-label">Tipo de aviso</div>
+        <div class="segmented-row">
+          <div class="segmented-option active-danger">Urgente</div>
+          <div class="segmented-option">Informativo</div>
+        </div>
+      </div>
+
+      <div class="field-group" style="margin-bottom:8px;">
+        <div class="field-label">Contenido</div>
+        <textarea class="field-textarea" rows="4">Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto quedan suspendidas. Las actividades académicas continúan de forma virtual.</textarea>
+      </div>
+
+      <div class="field-group" style="margin-bottom:8px;">
+        <div class="field-label">Audiencia</div>
+        <div class="segmented-row">
+          <div class="segmented-option active">{% icon 'square-check' size=14 %} Estudiantes</div>
+          <div class="segmented-option active">{% icon 'square-check' size=14 %} Aspirantes</div>
+          <div class="segmented-option">{% icon 'square' size=14 %} Egresados</div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top:8px;">
+        {% icon 'megaphone' size=16 %}
+        Publicar aviso
+      </button>
+    </form>
+
+    <div class="list-col">
+      <div class="list-head">
+        <div class="list-title font-brand">Avisos publicados</div>
+        <div class="list-count">{{ announcements|length }} avisos activos</div>
+      </div>
+      {% for a in announcements %}
+        <div class="list-card">
+          <div class="list-card-top">
+            <div class="list-card-name" style="flex:1;">{{ a.title }}</div>
+            {% if a.type == "urgente" %}
+              <span class="pill pill-danger" style="padding:5px 12px;">Urgente</span>
+            {% else %}
+              <span class="pill pill-info" style="padding:5px 12px;">Informativo</span>
+            {% endif %}
+          </div>
+          <div class="list-card-body">{{ a.body }}</div>
+          <div class="card-meta-row">
+            {% icon 'user-round' size=13 %}
+            <span>{{ a.author }}</span>
+            <span class="meta-dot">·</span>
+            <span>{{ a.date }}</span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}

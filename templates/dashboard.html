@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}Dashboard — Punto TdeA{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Panorama general de la operación de hoy{% endblock %}
+
+{% block content %}
+  <div class="metrics-cards">
+    {% for card in metric_cards %}
+      <div class="metric-card">
+        <div class="metric-card-top">
+          <div class="metric-card-label">{{ card.label }}</div>
+          <div class="metric-icon-wrap" style="background: {{ card.bg }}; color: {{ card.fg }};">
+            {% icon card.icon size=16 %}
+          </div>
+        </div>
+        <div class="metric-card-value font-brand">{{ card.value }}</div>
+        <div class="metric-card-sub">{{ card.sub }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="charts-row">
+    <div class="card channel-card">
+      <div class="card-title font-brand">Casos por canal</div>
+      <div class="channel-bars">
+        {% for bar in channel_bars %}
+          <div class="channel-bar-col">
+            <div class="channel-bar-value">{{ bar.value }}</div>
+            <div class="channel-bar" style="height: {{ bar.height_pct }}%; background: {{ bar.color }};"></div>
+            <div class="channel-bar-icon-row" style="color: {{ bar.color }};">
+              {% icon bar.icon size=13 %}
+              <span style="color: var(--text-secondary);">{{ bar.label }}</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card advisor-card">
+      <div class="card-title font-brand">Casos por asesor</div>
+      {% for advisor in advisor_load %}
+        <div class="advisor-row">
+          <div class="advisor-row-top">
+            <div class="advisor-row-name">{{ advisor.name }}</div>
+            <div class="advisor-row-val">{{ advisor.value }}</div>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {{ advisor.width_pct }}%;"></div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="workload-card">
+    <div class="workload-title-wrap">
+      <div class="card-title font-brand">Carga de trabajo por asesor</div>
+    </div>
+    <div class="data-table-head">
+      <div class="col-flex">Asesor</div>
+      <div class="col-fixed-120">Asignados</div>
+      <div class="col-fixed-120">Pendientes</div>
+      <div class="col-fixed-120">Cerrados hoy</div>
+      <div class="col-fixed-130">Estado</div>
+    </div>
+    {% for row in workload_rows %}
+      <div class="data-table-row">
+        <div class="col-flex workload-row-name">
+          <div class="workload-avatar">{{ row.initials }}</div>
+          <div style="font-weight: 600;">{{ row.name }}</div>
+        </div>
+        <div class="col-fixed-120" style="color: var(--text-secondary);">{{ row.assigned }}</div>
+        <div class="col-fixed-120" style="color: var(--text-secondary);">{{ row.pending }}</div>
+        <div class="col-fixed-120" style="color: var(--text-secondary);">{{ row.closed_today }}</div>
+        <div class="col-fixed-130"><span class="pill {{ row.state_class }}">{{ row.state }}</span></div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

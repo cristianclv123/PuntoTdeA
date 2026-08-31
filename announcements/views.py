@@ -1,3 +1,11 @@
 from django.shortcuts import render
 
-# Create your views here.
+from .mock_data import ANNOUNCEMENTS
+
+
+def announcement_list(request):
+    context = {
+        "active_nav": "announcements",
+        "announcements": ANNOUNCEMENTS,
+    }
+    return render(request, "announcements/avisos.html", context)

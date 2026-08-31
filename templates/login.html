@@ -1,0 +1,95 @@
+{% load icons static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar sesión — Punto TdeA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+  <div class="login-shell">
+    <div class="brand-panel">
+      <div class="brand-panel-top">
+        <div class="brand-mark font-brand">TdeA</div>
+        <div>
+          <div class="sidebar-brand-title font-brand">Punto TdeA</div>
+          <div class="sidebar-brand-subtitle">Atención al ciudadano</div>
+        </div>
+      </div>
+      <div class="brand-mid">
+        <div class="brand-headline">Toda la atención al ciudadano, centralizada en un solo lugar.</div>
+        <div class="brand-sub">
+          Gestiona WhatsApp, Facebook, Instagram y la web desde un mismo panel, pensado para el
+          ritmo de trabajo de tu equipo.
+        </div>
+        <div class="feat-col">
+          <div class="feat-row">
+            <div class="feat-icon-wrap">{% icon 'message-circle-more' size=15 %}</div>
+            <div class="feat-label">Bandeja omnicanal: WhatsApp, Facebook, Instagram y Web</div>
+          </div>
+          <div class="feat-row">
+            <div class="feat-icon-wrap">{% icon 'zap' size=15 %}</div>
+            <div class="feat-label">Respuestas sugeridas y base de conocimiento integrada</div>
+          </div>
+          <div class="feat-row">
+            <div class="feat-icon-wrap">{% icon 'chart-column' size=15 %}</div>
+            <div class="feat-label">Métricas de gestión y tiempos de respuesta en vivo</div>
+          </div>
+        </div>
+      </div>
+      <div class="brand-footer">© 2026 Punto TdeA · Institución Educativa</div>
+    </div>
+    <div class="form-panel">
+      <form class="form-col-login" method="post" action="{% url 'dashboard' %}">
+        {% csrf_token %}
+        <div>
+          <div class="login-title">Bienvenido de nuevo</div>
+          <div class="login-sub">Ingresa con tu cuenta institucional para acceder al panel de asesores.</div>
+        </div>
+        <div class="field-group" style="margin-top: 20px;">
+          <div class="field-label">Correo institucional</div>
+          <div class="login-field">
+            {% icon 'mail' size=16 css_class='icon' %}
+            <input type="email" name="email" value="laura.gomez@tdea.edu.co" autocomplete="username">
+          </div>
+        </div>
+        <div class="field-group" style="margin-top: 16px;">
+          <div class="field-label">Contraseña</div>
+          <div class="login-field focused">
+            <div class="login-field-inner">
+              {% icon 'lock' size=16 %}
+              <input type="password" name="password" value="••••••••••" autocomplete="current-password">
+            </div>
+            {% icon 'eye-off' size=16 %}
+          </div>
+        </div>
+        <div class="remember-row" style="margin-top: 16px;">
+          <label class="remember-left">
+            {% icon 'square-check' size=16 css_class='icon' %}
+            Recordarme
+          </label>
+          <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 20px;">
+          Iniciar sesión
+          {% icon 'arrow-right' size=16 %}
+        </button>
+        <div class="divider-row" style="margin-top: 20px;">
+          <div class="divider-line"></div>
+          <div class="divider-or">o</div>
+          <div class="divider-line"></div>
+        </div>
+        <button type="button" class="btn btn-outline btn-block" style="margin-top: 20px;">
+          {% icon 'shield-check' size=16 %}
+          Iniciar con cuenta institucional
+        </button>
+        <div class="support-text" style="margin-top: 20px;">¿Problemas para ingresar? Contacta a soporte TI</div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

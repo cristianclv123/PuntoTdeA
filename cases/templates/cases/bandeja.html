@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}Bandeja — Punto TdeA{% endblock %}
+{% block page_title %}Bandeja de entrada{% endblock %}
+{% block page_subtitle %}Todos los canales centralizados en un solo lugar{% endblock %}
+
+{% block content %}
+  <div class="filters-bar">
+    <div class="chip">Estado {% icon 'chevron-down' size=14 %}</div>
+    <div class="chip">Canal {% icon 'chevron-down' size=14 %}</div>
+    <div class="chip">Asesor {% icon 'chevron-down' size=14 %}</div>
+    <div class="chip">Fecha {% icon 'chevron-down' size=14 %}</div>
+    <div class="chip">Tema {% icon 'chevron-down' size=14 %}</div>
+    <div class="result-count">{{ result_count }} conversaciones</div>
+  </div>
+
+  <div class="conversation-list">
+    {% for conv in conversations %}
+      <a class="conversation-row" href="{% url 'cases:detail' conv.id %}">
+        <div class="channel-wrap {{ conv.channel_class }}">
+          {% icon conv.channel_icon size=16 %}
+        </div>
+        <div class="avatar avatar-soft">{{ conv.initials }}</div>
+        <div class="conversation-name-col">
+          <div class="conversation-name-row">
+            <span class="conversation-name">{{ conv.name }}</span>
+            <span class="conversation-role">{{ conv.role }}</span>
+          </div>
+          <div class="conversation-message">{{ conv.last_message }}</div>
+        </div>
+        <div class="tag">{{ conv.theme }}</div>
+        <div class="conversation-time">{{ conv.time }}</div>
+        <div class="advisor-col">
+          {% icon 'user-round' size=14 %}
+          <span>{{ conv.advisor }}</span>
+        </div>
+        {% if conv.status == "pendiente" %}
+          <span class="pill pill-warning">Pendiente</span>
+        {% elif conv.status == "en_gestion" %}
+          <span class="pill pill-info">En gestión</span>
+        {% elif conv.status == "escalado" %}
+          <span class="pill pill-danger">Escalado</span>
+        {% elif conv.status == "atendido" %}
+          <span class="pill pill-success">Atendido</span>
+        {% else %}
+          <span class="pill pill-neutral">Cerrado</span>
+        {% endif %}
+      </a>
+    {% endfor %}
+  </div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}Campañas — Punto TdeA{% endblock %}
+{% block page_title %}Campañas{% endblock %}
+{% block page_subtitle %}Mensajería masiva y programación de envíos{% endblock %}
+
+{% block content %}
+  <div class="two-col-layout">
+    <form class="card form-col" method="post">
+      {% csrf_token %}
+      <div class="card-title font-brand" style="margin-bottom:18px;">Nueva campaña</div>
+
+      <div class="field-group" style="margin-bottom:8px;">
+        <div class="field-label">Segmento</div>
+        <div class="segmented-row">
+          <div class="segmented-option active">Estudiantes</div>
+          <div class="segmented-option">Aspirantes</div>
+          <div class="segmented-option">Egresados</div>
+        </div>
+        <div class="field-select field-select-row" style="margin-top:8px;">
+          <span style="color:var(--text-muted);">Programa específico (opcional)</span>
+          {% icon 'chevron-down' size=15 %}
+        </div>
+      </div>
+
+      <div class="field-group" style="margin-bottom:8px;">
+        <div class="field-label">Canal de envío</div>
+        <div class="segmented-row">
+          <div class="segmented-option active">{% icon 'message-circle' size=14 %} WhatsApp</div>
+          <div class="segmented-option">{% icon 'facebook' size=14 %} Facebook</div>
+          <div class="segmented-option">{% icon 'instagram' size=14 %} Instagram</div>
+        </div>
+      </div>
+
+      <div class="field-group" style="margin-bottom:8px;">
+        <div class="field-label">Mensaje</div>
+        <textarea class="field-textarea" rows="4">Recuerda que las inscripciones para el segundo semestre 2026 cierran el 5 de septiembre. ¡No te quedes por fuera!</textarea>
+      </div>
+
+      <div class="field-row" style="margin-bottom:8px;">
+        <div class="field-group">
+          <div class="field-label">Fecha de envío</div>
+          <div class="field-select field-select-row">
+            {% icon 'calendar' size=15 %}
+            <span style="flex:1;">28 ago 2026</span>
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Hora</div>
+          <div class="field-select field-select-row">
+            {% icon 'clock-4' size=15 %}
+            <span style="flex:1;">9:00 a. m.</span>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top:8px;">
+        {% icon 'send' size=16 %}
+        Programar envío
+      </button>
+    </form>
+
+    <div class="list-col">
+      <div class="list-head">
+        <div class="list-title font-brand">Campañas programadas y enviadas</div>
+        <div class="list-count">{{ campaigns|length }} campañas</div>
+      </div>
+      {% for c in campaigns %}
+        <div class="list-card">
+          <div class="list-card-top">
+            <div class="list-card-left">
+              <div class="list-card-icon {{ c.channel_class }}">{% icon c.channel_icon size=16 %}</div>
+              <div>
+                <div class="list-card-name">{{ c.name }}</div>
+                <div class="list-card-meta">{{ c.meta }}</div>
+              </div>
+            </div>
+            {% if c.status == "enviada" %}
+              <span class="pill pill-success" style="padding:5px 12px;">Enviada</span>
+            {% else %}
+              <span class="pill pill-info" style="padding:5px 12px;">Programada</span>
+            {% endif %}
+          </div>
+          {% if c.status == "enviada" %}
+            <div class="metrics-row">
+              <div class="metric-col">
+                <div class="metric-val font-brand">{{ c.sent }}</div>
+                <div class="metric-label">Enviados</div>
+              </div>
+              <div class="metric-col">
+                <div class="metric-val font-brand">{{ c.delivered }}</div>
+                <div class="metric-label">Entregados</div>
+              </div>
+              <div class="metric-col">
+                <div class="metric-val font-brand">{{ c.read }}</div>
+                <div class="metric-label">Leídos</div>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}
