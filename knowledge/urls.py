@@ -1,7 +1,8 @@
 from django.urls import path
 from . import views
 
-app_name = 'announcements'  # <-- Esta línea registra el namespace
+app_name = 'knowledge'
+
 urlpatterns = [
     path('', views.index, name='index'),
 ]
