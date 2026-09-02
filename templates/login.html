@@ -12,84 +12,102 @@
 </head>
 <body>
   <div class="login-shell">
-    <div class="brand-panel">
+    <aside class="brand-panel">
       <div class="brand-panel-top">
         <div class="brand-mark font-brand">TdeA</div>
         <div>
           <div class="sidebar-brand-title font-brand">Punto TdeA</div>
-          <div class="sidebar-brand-subtitle">Atención al ciudadano</div>
+          <div class="sidebar-brand-subtitle">Portal institucional</div>
         </div>
       </div>
+
       <div class="brand-mid">
-        <div class="brand-headline">Toda la atención al ciudadano, centralizada en un solo lugar.</div>
-        <div class="brand-sub">
-          Gestiona WhatsApp, Facebook, Instagram y la web desde un mismo panel, pensado para el
-          ritmo de trabajo de tu equipo.
-        </div>
-        <div class="feat-col">
-          <div class="feat-row">
+        <p class="brand-eyebrow">Acceso asesores</p>
+        <h1 class="brand-headline">Atención ciudadana, en un solo lugar.</h1>
+        <p class="brand-sub">
+          Gestiona WhatsApp, Facebook, Instagram y la web desde un mismo panel,
+          pensado para el ritmo de trabajo de tu equipo.
+        </p>
+        <ul class="feat-col">
+          <li class="feat-row">
             <div class="feat-icon-wrap">{% icon 'message-circle-more' size=15 %}</div>
-            <div class="feat-label">Bandeja omnicanal: WhatsApp, Facebook, Instagram y Web</div>
-          </div>
-          <div class="feat-row">
+            <span class="feat-label">Bandeja omnicanal unificada</span>
+          </li>
+          <li class="feat-row">
             <div class="feat-icon-wrap">{% icon 'zap' size=15 %}</div>
-            <div class="feat-label">Respuestas sugeridas y base de conocimiento integrada</div>
-          </div>
-          <div class="feat-row">
+            <span class="feat-label">Base de conocimiento integrada</span>
+          </li>
+          <li class="feat-row">
             <div class="feat-icon-wrap">{% icon 'chart-column' size=15 %}</div>
-            <div class="feat-label">Métricas de gestión y tiempos de respuesta en vivo</div>
-          </div>
-        </div>
+            <span class="feat-label">Métricas y tiempos en vivo</span>
+          </li>
+        </ul>
       </div>
-      <div class="brand-footer">© 2026 Punto TdeA · Institución Educativa</div>
-    </div>
-    <div class="form-panel">
+
+      <div class="brand-footer">© 2026 Tecnológico de Antioquia · Punto TdeA</div>
+    </aside>
+
+    <main class="form-panel">
       <form class="form-col-login" method="post" action="{% url 'dashboard' %}">
         {% csrf_token %}
-        <div>
-          <div class="login-title">Bienvenido de nuevo</div>
-          <div class="login-sub">Ingresa con tu cuenta institucional para acceder al panel de asesores.</div>
+
+        <div class="login-header">
+          <a href="{% url 'home' %}" class="login-back">← Volver al portal</a>
+          <h2 class="login-title">Iniciar sesión</h2>
+          <p class="login-sub">Usa tu cuenta institucional para entrar al panel de asesores.</p>
         </div>
-        <div class="field-group" style="margin-top: 20px;">
-          <div class="field-label">Correo institucional</div>
-          <div class="login-field">
-            {% icon 'mail' size=16 css_class='icon' %}
-            <input type="email" name="email" value="laura.gomez@tdea.edu.co" autocomplete="username">
-          </div>
-        </div>
-        <div class="field-group" style="margin-top: 16px;">
-          <div class="field-label">Contraseña</div>
-          <div class="login-field focused">
-            <div class="login-field-inner">
-              {% icon 'lock' size=16 %}
-              <input type="password" name="password" value="••••••••••" autocomplete="current-password">
+
+        <div class="login-fields">
+          <div class="field-group">
+            <label class="field-label" for="email">Correo institucional</label>
+            <div class="login-field">
+              {% icon 'mail' size=16 css_class='icon' %}
+              <input id="email" type="email" name="email" value="laura.gomez@tdea.edu.co" autocomplete="username">
             </div>
-            {% icon 'eye-off' size=16 %}
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="password">Contraseña</label>
+            <div class="login-field">
+              <div class="login-field-inner">
+                {% icon 'lock' size=16 %}
+                <input id="password" type="password" name="password" value="••••••••••" autocomplete="current-password">
+              </div>
+              {% icon 'eye-off' size=16 %}
+            </div>
+          </div>
+
+          <div class="remember-row">
+            <label class="remember-left">
+              <input type="checkbox" name="remember" checked>
+              Recordarme
+            </label>
+            <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
           </div>
         </div>
-        <div class="remember-row" style="margin-top: 16px;">
-          <label class="remember-left">
-            {% icon 'square-check' size=16 css_class='icon' %}
-            Recordarme
-          </label>
-          <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
+
+        <div class="login-actions">
+          <button type="submit" class="btn btn-primary btn-block btn-login">
+            Iniciar sesión
+            {% icon 'arrow-right' size=16 %}
+          </button>
+
+          <div class="divider-row">
+            <div class="divider-line"></div>
+            <div class="divider-or">o</div>
+            <div class="divider-line"></div>
+          </div>
+
+          <button type="button" class="btn btn-outline btn-block">
+            {% icon 'shield-check' size=16 %}
+            Cuenta institucional SSO
+          </button>
         </div>
-        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 20px;">
-          Iniciar sesión
-          {% icon 'arrow-right' size=16 %}
-        </button>
-        <div class="divider-row" style="margin-top: 20px;">
-          <div class="divider-line"></div>
-          <div class="divider-or">o</div>
-          <div class="divider-line"></div>
-        </div>
-        <button type="button" class="btn btn-outline btn-block" style="margin-top: 20px;">
-          {% icon 'shield-check' size=16 %}
-          Iniciar con cuenta institucional
-        </button>
-        <div class="support-text" style="margin-top: 20px;">¿Problemas para ingresar? Contacta a soporte TI</div>
+
+        <p class="support-text">¿Problemas para ingresar? Contacta a soporte TI</p>
+        <p class="login-mobile-footer">© 2026 Tecnológico de Antioquia · Punto TdeA</p>
       </form>
-    </div>
+    </main>
   </div>
 </body>
 </html>

@@ -1,13 +1,17 @@
 {% load icons %}
 <aside class="sidebar">
-  <div class="sidebar-brand">
+  <a href="{% url 'home' %}" class="sidebar-brand">
     <div class="sidebar-mark font-brand">TdeA</div>
     <div>
       <div class="sidebar-brand-title font-brand">Punto TdeA</div>
-      <div class="sidebar-brand-subtitle">Atención al ciudadano</div>
+      <div class="sidebar-brand-subtitle">Portal institucional</div>
     </div>
-  </div>
+  </a>
   <nav class="sidebar-nav">
+    <a href="{% url 'dashboard' %}" class="sidebar-link {% if active_nav == 'dashboard' %}active{% endif %}">
+      {% icon 'layout-dashboard' %}
+      <span>Dashboard</span>
+    </a>
     <a href="{% url 'cases:bandeja' %}" class="sidebar-link {% if active_nav == 'bandeja' %}active{% endif %}">
       {% icon 'inbox' %}
       <span>Bandeja</span>
@@ -24,16 +28,16 @@
       {% icon 'megaphone' %}
       <span>Avisos</span>
     </a>
-    <a href="{% url 'dashboard' %}" class="sidebar-link {% if active_nav == 'dashboard' %}active{% endif %}">
-      {% icon 'layout-dashboard' %}
-      <span>Dashboard</span>
-    </a>
   </nav>
   <div class="sidebar-spacer"></div>
   <nav class="sidebar-nav">
     <a href="#" class="sidebar-link {% if active_nav == 'settings' %}active{% endif %}">
       {% icon 'settings' %}
       <span>Configuración</span>
+    </a>
+    <a href="{% url 'login' %}" class="sidebar-link">
+      {% icon 'log-out' %}
+      <span>Cerrar sesión</span>
     </a>
   </nav>
 </aside>
