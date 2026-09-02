@@ -29,6 +29,11 @@ WORKLOAD_ROWS = [
 ]
 
 
+def home(request):
+    """Vista principal (Landing Page) para el proyecto Punto TdeA."""
+    return render(request, "index.html")
+
+
 def login_view(request):
     return render(request, "login.html")
 

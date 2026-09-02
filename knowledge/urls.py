@@ -6,4 +6,5 @@ app_name = "knowledge"
 
 urlpatterns = [
     path("", views.faq_list, name="list"),
+    path("", views.faq_list, name="index"),
 ]

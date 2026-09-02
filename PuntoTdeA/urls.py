@@ -11,10 +11,15 @@ from . import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.login_view, name='login'),
+    path('', views.home, name='home'),
+    path('login/', views.login_view, name='login'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('bandeja/', include('cases.urls')),
     path('base-de-conocimiento/', include('knowledge.urls')),
     path('campanas/', include('communications.urls')),
     path('avisos/', include('announcements.urls')),
+    # Alias en inglés usados por la landing de main
+    path('announcements/', include('announcements.urls')),
+    path('communications/', include('communications.urls')),
+    path('knowledge/', include('knowledge.urls')),
 ]
