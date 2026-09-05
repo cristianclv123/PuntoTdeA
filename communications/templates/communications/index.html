@@ -1,0 +1,78 @@
+{% extends "communications/base.html" %}
+
+{% block title %}Outbound{% endblock %}
+{% block page_heading %}Outbound institucional{% endblock %}
+{% block page_lead %}El mensaje correcto, en el momento correcto, por WhatsApp, SMS, correo, Facebook o Instagram.{% endblock %}
+{% block hero_actions %}
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-light fw-semibold rounded-pill px-4">
+    <i class="bi bi-plus-lg"></i> Nueva campaña
+</a>
+{% endblock %}
+
+{% block content %}
+<section class="row g-3 mb-4" id="kpiGrid"></section>
+
+<section class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card outbound-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Campañas recientes</h2>
+                    <a class="small fw-semibold text-success text-decoration-none" href="{% url 'communications:campaigns' %}">Ver todas</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle outbound-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Campaña</th>
+                                <th>Canal</th>
+                                <th>Audiencia</th>
+                                <th>Estado</th>
+                                <th>Lectura</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentCampaignsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card outbound-card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Canales activos</h2>
+                <div id="channelList" class="d-grid gap-2"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="row g-4">
+    <div class="col-md-6">
+        <div class="card outbound-card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-2">De envío a operación</h2>
+                <p class="text-muted small mb-3">Cuando una persona responde, la conversación queda registrada y puede continuar en el flujo institucional.</p>
+                <ul class="outbound-checklist">
+                    <li>Plantillas con botones y multimedia</li>
+                    <li>Segmentación por rol, programa y señal</li>
+                    <li>Envío inmediato o programado</li>
+                    <li>Trazabilidad de cada interacción</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card outbound-card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Actividad reciente</h2>
+                <div id="activityFeed" class="activity-feed"></div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>document.addEventListener('DOMContentLoaded', () => OutboundUI.renderDashboard());</script>
+{% endblock %}

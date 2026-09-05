@@ -1,0 +1,69 @@
+{% extends "communications/base.html" %}
+
+{% block title %}Campañas{% endblock %}
+{% block page_heading %}Campañas{% endblock %}
+{% block page_lead %}Envía al público correcto, por el canal correcto, con el contenido correcto.{% endblock %}
+{% block hero_actions %}
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-light fw-semibold rounded-pill px-4">
+    <i class="bi bi-plus-lg"></i> Iniciar campaña
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="card outbound-card">
+    <div class="card-body">
+        <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold" for="filterSearch">Buscar</label>
+                <input id="filterSearch" class="form-control" type="search" placeholder="Nombre o audiencia">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold" for="filterChannel">Canal</label>
+                <select id="filterChannel" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="sms">SMS</option>
+                    <option value="email">Correo</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="instagram">Instagram</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold" for="filterStatus">Estado</label>
+                <select id="filterStatus" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="enviada">Enviada</option>
+                    <option value="programada">Programada</option>
+                    <option value="borrador">Borrador</option>
+                    <option value="cancelada">Cancelada</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button id="clearFilters" class="btn btn-outline-secondary w-100" type="button">Limpiar</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle outbound-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Campaña</th>
+                        <th>Canal</th>
+                        <th>Audiencias</th>
+                        <th>Ejecución</th>
+                        <th>Lectura</th>
+                        <th>Clics</th>
+                        <th>Respuestas</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="campaignsTableBody"></tbody>
+            </table>
+        </div>
+        <p id="campaignsEmpty" class="text-muted text-center py-4 mb-0 d-none">No hay campañas con esos filtros.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>document.addEventListener('DOMContentLoaded', () => OutboundUI.renderCampaignsPage());</script>
+{% endblock %}

@@ -9,6 +9,10 @@ CHANNEL_META = {
 }
 
 
+def index(request):
+    return render(request, "communications/index.html", {"nav_section": "dashboard"})
+
+
 def campaigns(request):
     enriched = []
     for c in CAMPAIGNS:
@@ -19,3 +23,19 @@ def campaigns(request):
         "campaigns": enriched,
     }
     return render(request, "communications/campanas.html", context)
+
+
+def campaign_new(request):
+    return render(request, "communications/campaign_new.html", {"nav_section": "campaigns"})
+
+
+def campaign_detail(request):
+    return render(request, "communications/campaign_detail.html", {"nav_section": "campaigns"})
+
+
+def segments(request):
+    return render(request, "communications/segments.html", {"nav_section": "segments"})
+
+
+def interactions(request):
+    return render(request, "communications/interactions.html", {"nav_section": "interactions"})

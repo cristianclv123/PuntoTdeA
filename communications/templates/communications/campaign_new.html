@@ -1,0 +1,109 @@
+{% extends "communications/base.html" %}
+
+{% block title %}Nueva campaña{% endblock %}
+{% block page_heading %}Nueva campaña{% endblock %}
+{% block page_lead %}Un canal por campaña. Elige audiencia, plantilla y momento de envío.{% endblock %}
+
+{% block content %}
+<div class="wizard-steps mb-4" id="wizardSteps">
+    <button type="button" class="wizard-step is-active" data-step="1">1. Canal y detalles</button>
+    <button type="button" class="wizard-step" data-step="2">2. Plantilla</button>
+    <button type="button" class="wizard-step" data-step="3">3. Revisar y enviar</button>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <form id="campaignWizard" class="card outbound-card" novalidate>
+            <div class="card-body">
+                <section class="wizard-pane" data-pane="1">
+                    <h2 class="h5 mb-3">Canal de envío</h2>
+                    <div class="channel-picker mb-4" id="channelPicker"></div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="campaignName">Nombre de la campaña</label>
+                        <input id="campaignName" class="form-control" maxlength="80" placeholder="Ej. Recordatorio de matrícula 2026-1" required>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="campaignType">Tipo</label>
+                            <select id="campaignType" class="form-select">
+                                <option value="utilidad">Utilidad</option>
+                                <option value="marketing">Informativo / marketing</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="senderAccount">Cuenta de envío</label>
+                            <select id="senderAccount" class="form-select"></select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Audiencias a incluir (máx. 5)</label>
+                        <div id="includeSegments" class="segment-chips"></div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold">Audiencias a excluir</label>
+                        <div id="excludeSegments" class="segment-chips"></div>
+                    </div>
+                </section>
+
+                <section class="wizard-pane d-none" data-pane="2">
+                    <h2 class="h5 mb-3">Selecciona y personaliza la plantilla</h2>
+                    <div id="templateGrid" class="template-grid mb-4"></div>
+                    <div id="variableEditor" class="d-none">
+                        <h3 class="h6">Variables</h3>
+                        <div id="variableFields"></div>
+                    </div>
+                </section>
+
+                <section class="wizard-pane d-none" data-pane="3">
+                    <h2 class="h5 mb-3">Revisar y finalizar</h2>
+                    <dl class="row review-list mb-4" id="reviewList"></dl>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="sendMode">Momento de envío</label>
+                            <select id="sendMode" class="form-select">
+                                <option value="now">Enviar ahora</option>
+                                <option value="later">Programar</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="scheduleAt">Fecha y hora</label>
+                            <input id="scheduleAt" class="form-control" type="datetime-local" disabled>
+                        </div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="optOutCheck" checked>
+                        <label class="form-check-label" for="optOutCheck">Incluir mensaje de exclusión (opt-out) en envíos informativos</label>
+                    </div>
+                    <p class="small text-muted mb-0" id="costEstimate"></p>
+                </section>
+            </div>
+            <div class="card-footer bg-white d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary" id="wizardBack" disabled>Atrás</button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-success d-none" id="wizardTest">Enviar prueba</button>
+                    <button type="button" class="btn btn-entry px-4" id="wizardNext">Continuar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="col-lg-4">
+        <div class="card outbound-card sticky-preview">
+            <div class="card-body">
+                <h2 class="h6 text-muted text-uppercase mb-3">Vista previa</h2>
+                <div class="phone-frame">
+                    <div class="phone-screen" id="messagePreview">
+                        <p class="text-muted small mb-0">Selecciona un canal y una plantilla.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>document.addEventListener('DOMContentLoaded', () => OutboundUI.initWizard());</script>
+{% endblock %}

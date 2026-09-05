@@ -1,0 +1,46 @@
+{% extends "communications/base.html" %}
+
+{% block title %}Interacciones{% endblock %}
+{% block page_heading %}Registro de interacciones{% endblock %}
+{% block page_lead %}Cada envío, lectura, clic o respuesta queda trazado para seguimiento institucional.{% endblock %}
+
+{% block content %}
+<div class="card outbound-card">
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <input id="logSearch" class="form-control" type="search" placeholder="Buscar persona, campaña o evento">
+            </div>
+            <div class="col-md-3">
+                <select id="logChannel" class="form-select">
+                    <option value="">Todos los canales</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="sms">SMS</option>
+                    <option value="email">Correo</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="instagram">Instagram</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle outbound-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Persona</th>
+                        <th>Canal</th>
+                        <th>Campaña</th>
+                        <th>Evento</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>document.addEventListener('DOMContentLoaded', () => OutboundUI.renderLogs());</script>
+{% endblock %}

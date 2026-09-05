@@ -128,6 +128,7 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
     BASE_DIR / 'PuntoTdeA' / 'static',
+    BASE_DIR / 'communications' / 'statics',
 ]
 
 # Default primary key field type
