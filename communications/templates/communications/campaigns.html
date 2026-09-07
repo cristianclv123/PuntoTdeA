@@ -1,21 +1,26 @@
 {% extends "communications/base.html" %}
+{% load static %}
 
 {% block title %}Campañas{% endblock %}
 {% block page_heading %}Campañas{% endblock %}
 {% block page_lead %}Envía al público correcto, por el canal correcto, con el contenido correcto.{% endblock %}
+
 {% block hero_actions %}
 <a href="{% url 'communications:campaign_new' %}" class="btn btn-light fw-semibold rounded-pill px-4">
-    <i class="bi bi-plus-lg"></i> Iniciar campaña
+    <i class="bi bi-plus-lg me-1"></i> Iniciar campaña
 </a>
 {% endblock %}
 
 {% block content %}
-<div class="card outbound-card">
-    <div class="card-body">
-        <div class="row g-3 align-items-end mb-3">
+<div class="card outbound-card shadow-sm">
+    <div class="card-body p-4">
+        <div class="row g-3 align-items-end mb-4">
             <div class="col-md-4">
                 <label class="form-label small fw-semibold" for="filterSearch">Buscar</label>
-                <input id="filterSearch" class="form-control" type="search" placeholder="Nombre o audiencia">
+                <div class="input-group">
+                    <span class="input-group-text bg-light text-muted"><i class="bi bi-search"></i></span>
+                    <input id="filterSearch" class="form-control" type="search" placeholder="Nombre o audiencia">
+                </div>
             </div>
             <div class="col-md-3">
                 <label class="form-label small fw-semibold" for="filterChannel">Canal</label>
@@ -39,31 +44,54 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <button id="clearFilters" class="btn btn-outline-secondary w-100" type="button">Limpiar</button>
+                <button id="clearFilters" class="btn btn-outline-secondary w-100" type="button">
+                    <i class="bi bi-x-circle me-1"></i> Limpiar
+                </button>
             </div>
         </div>
+
         <div class="table-responsive">
             <table class="table align-middle outbound-table mb-0">
                 <thead>
                     <tr>
-                        <th>Campaña</th>
-                        <th>Canal</th>
-                        <th>Audiencias</th>
-                        <th>Ejecución</th>
-                        <th>Lectura</th>
-                        <th>Clics</th>
-                        <th>Respuestas</th>
-                        <th>Estado</th>
+                        <th scope="col">Campaña</th>
+                        <th scope="col">Canal</th>
+                        <th scope="col">Audiencias</th>
+                        <th scope="col">Ejecución</th>
+                        <th scope="col">Lectura</th>
+                        <th scope="col">Clics</th>
+                        <th scope="col">Respuestas</th>
+                        <th scope="col">Estado</th>
                     </tr>
                 </thead>
-                <tbody id="campaignsTableBody"></tbody>
+                <tbody id="campaignsTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm text-success me-2" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            Cargando listado de campañas…
+                        </td>
+                    </tr>
+                </tbody>
             </table>
         </div>
-        <p id="campaignsEmpty" class="text-muted text-center py-4 mb-0 d-none">No hay campañas con esos filtros.</p>
+
+        <p id="campaignsEmpty" class="text-muted text-center py-4 mb-0 d-none">
+            <i class="bi bi-inbox fs-4 d-block mb-2"></i> No se encontraron campañas con los filtros aplicados.
+        </p>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>document.addEventListener('DOMContentLoaded', () => OutboundUI.renderCampaignsPage());</script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.renderCampaignsPage === 'function') {
+            OutboundUI.renderCampaignsPage();
+        } else {
+            console.error('El módulo OutboundUI o la función renderCampaignsPage no están disponibles.');
+        }
+    });
+</script>
 {% endblock %}

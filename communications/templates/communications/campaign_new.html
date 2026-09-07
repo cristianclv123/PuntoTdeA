@@ -1,8 +1,15 @@
 {% extends "communications/base.html" %}
+{% load static %}
 
 {% block title %}Nueva campaña{% endblock %}
 {% block page_heading %}Nueva campaña{% endblock %}
 {% block page_lead %}Un canal por campaña. Elige audiencia, plantilla y momento de envío.{% endblock %}
+
+{% block hero_actions %}
+<a href="{% url 'communications:campaigns' %}" class="btn btn-outline-light rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i> Volver al listado
+</a>
+{% endblock %}
 
 {% block content %}
 <div class="wizard-steps mb-4" id="wizardSteps">
@@ -13,10 +20,10 @@
 
 <div class="row g-4">
     <div class="col-lg-8">
-        <form id="campaignWizard" class="card outbound-card" novalidate>
-            <div class="card-body">
+        <form id="campaignWizard" class="card outbound-card shadow-sm" novalidate>
+            <div class="card-body p-4">
                 <section class="wizard-pane" data-pane="1">
-                    <h2 class="h5 mb-3">Canal de envío</h2>
+                    <h2 class="h5 mb-3 fw-bold">Canal de envío</h2>
                     <div class="channel-picker mb-4" id="channelPicker"></div>
 
                     <div class="mb-3">
@@ -49,16 +56,16 @@
                 </section>
 
                 <section class="wizard-pane d-none" data-pane="2">
-                    <h2 class="h5 mb-3">Selecciona y personaliza la plantilla</h2>
+                    <h2 class="h5 mb-3 fw-bold">Selecciona y personaliza la plantilla</h2>
                     <div id="templateGrid" class="template-grid mb-4"></div>
                     <div id="variableEditor" class="d-none">
-                        <h3 class="h6">Variables</h3>
+                        <h3 class="h6 fw-bold">Variables</h3>
                         <div id="variableFields"></div>
                     </div>
                 </section>
 
                 <section class="wizard-pane d-none" data-pane="3">
-                    <h2 class="h5 mb-3">Revisar y finalizar</h2>
+                    <h2 class="h5 mb-3 fw-bold">Revisar y finalizar</h2>
                     <dl class="row review-list mb-4" id="reviewList"></dl>
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
@@ -80,19 +87,20 @@
                     <p class="small text-muted mb-0" id="costEstimate"></p>
                 </section>
             </div>
-            <div class="card-footer bg-white d-flex justify-content-between">
+            <div class="card-footer bg-white d-flex justify-content-between py-3 px-4">
                 <button type="button" class="btn btn-outline-secondary" id="wizardBack" disabled>Atrás</button>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-outline-success d-none" id="wizardTest">Enviar prueba</button>
-                    <button type="button" class="btn btn-entry px-4" id="wizardNext">Continuar</button>
+                    <button type="button" class="btn btn-success px-4" id="wizardNext">Continuar</button>
                 </div>
             </div>
         </form>
     </div>
+
     <div class="col-lg-4">
-        <div class="card outbound-card sticky-preview">
-            <div class="card-body">
-                <h2 class="h6 text-muted text-uppercase mb-3">Vista previa</h2>
+        <div class="card outbound-card shadow-sm sticky-preview">
+            <div class="card-body p-4">
+                <h2 class="h6 text-muted text-uppercase fw-bold mb-3">Vista previa</h2>
                 <div class="phone-frame">
                     <div class="phone-screen" id="messagePreview">
                         <p class="text-muted small mb-0">Selecciona un canal y una plantilla.</p>
@@ -105,5 +113,13 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>document.addEventListener('DOMContentLoaded', () => OutboundUI.initWizard());</script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initWizard === 'function') {
+            OutboundUI.initWizard();
+        } else {
+            console.error('El módulo OutboundUI o la función initWizard no están disponibles.');
+        }
+    });
+</script>
 {% endblock %}

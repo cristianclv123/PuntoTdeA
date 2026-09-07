@@ -1,105 +1,158 @@
-{% extends "base.html" %}
-{% load icons %}
+{% extends "communications/base.html" %}
+{% load static %}
 
 {% block title %}Campañas — Punto TdeA{% endblock %}
-{% block page_title %}Campañas{% endblock %}
-{% block page_subtitle %}Mensajería masiva y programación de envíos{% endblock %}
+{% block page_heading %}Campañas{% endblock %}
+{% block page_lead %}Mensajería masiva y programación de envíos por canal institucional.{% endblock %}
+
+{% block hero_actions %}
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-light fw-semibold rounded-pill px-4">
+    <i class="bi bi-plus-lg me-1"></i> Nueva campaña asistida
+</a>
+{% endblock %}
 
 {% block content %}
-  <div class="two-col-layout">
-    <form class="card form-col" method="post">
-      {% csrf_token %}
-      <div class="card-title font-brand" style="margin-bottom:18px;">Nueva campaña</div>
+<div class="row g-4">
+    <!-- Columna del Formulario de Creación Rápida -->
+    <div class="col-lg-5">
+        <form class="card outbound-card shadow-sm h-100" method="post">
+            {% csrf_token %}
+            <div class="card-body p-4">
+                <h2 class="h5 fw-bold mb-3">Nueva campaña rápida</h2>
 
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label">Segmento</div>
-        <div class="segmented-row">
-          <div class="segmented-option active">Estudiantes</div>
-          <div class="segmented-option">Aspirantes</div>
-          <div class="segmented-option">Egresados</div>
-        </div>
-        <div class="field-select field-select-row" style="margin-top:8px;">
-          <span style="color:var(--text-muted);">Programa específico (opcional)</span>
-          {% icon 'chevron-down' size=15 %}
-        </div>
-      </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Segmento objetivo</label>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="segment" id="segStudents" value="estudiantes" checked>
+                        <label class="btn btn-outline-success btn-sm" for="segStudents">Estudiantes</label>
 
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label">Canal de envío</div>
-        <div class="segmented-row">
-          <div class="segmented-option active">{% icon 'message-circle' size=14 %} WhatsApp</div>
-          <div class="segmented-option">{% icon 'facebook' size=14 %} Facebook</div>
-          <div class="segmented-option">{% icon 'instagram' size=14 %} Instagram</div>
-        </div>
-      </div>
+                        <input type="radio" class="btn-check" name="segment" id="segApplicants" value="aspirantes">
+                        <label class="btn btn-outline-success btn-sm" for="segApplicants">Aspirantes</label>
 
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label">Mensaje</div>
-        <textarea class="field-textarea" rows="4">Recuerda que las inscripciones para el segundo semestre 2026 cierran el 5 de septiembre. ¡No te quedes por fuera!</textarea>
-      </div>
+                        <input type="radio" class="btn-check" name="segment" id="segAlumni" value="egresados">
+                        <label class="btn btn-outline-success btn-sm" for="segAlumni">Egresados</label>
+                    </div>
+                    <select class="form-select form-select-sm text-muted" name="program">
+                        <option value="">Programa específico (opcional)</option>
+                        <option value="ing_sistemas">Ingeniería de Software / Sistemas</option>
+                        <option value="derecho">Derecho</option>
+                        <option value="administracion">Administración de Empresas</option>
+                    </select>
+                </div>
 
-      <div class="field-row" style="margin-bottom:8px;">
-        <div class="field-group">
-          <div class="field-label">Fecha de envío</div>
-          <div class="field-select field-select-row">
-            {% icon 'calendar' size=15 %}
-            <span style="flex:1;">28 ago 2026</span>
-          </div>
-        </div>
-        <div class="field-group">
-          <div class="field-label">Hora</div>
-          <div class="field-select field-select-row">
-            {% icon 'clock-4' size=15 %}
-            <span style="flex:1;">9:00 a. m.</span>
-          </div>
-        </div>
-      </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Canal de envío</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="channel" id="chanWp" value="whatsapp" checked>
+                        <label class="btn btn-outline-secondary btn-sm" for="chanWp">
+                            <i class="bi bi-whatsapp me-1 text-success"></i> WhatsApp
+                        </label>
 
-      <button type="submit" class="btn btn-primary btn-block" style="margin-top:8px;">
-        {% icon 'send' size=16 %}
-        Programar envío
-      </button>
-    </form>
+                        <input type="radio" class="btn-check" name="channel" id="chanFb" value="facebook">
+                        <label class="btn btn-outline-secondary btn-sm" for="chanFb">
+                            <i class="bi bi-facebook me-1 text-primary"></i> Facebook
+                        </label>
 
-    <div class="list-col">
-      <div class="list-head">
-        <div class="list-title font-brand">Campañas programadas y enviadas</div>
-        <div class="list-count">{{ campaigns|length }} campañas</div>
-      </div>
-      {% for c in campaigns %}
-        <div class="list-card">
-          <div class="list-card-top">
-            <div class="list-card-left">
-              <div class="list-card-icon {{ c.channel_class }}">{% icon c.channel_icon size=16 %}</div>
-              <div>
-                <div class="list-card-name">{{ c.name }}</div>
-                <div class="list-card-meta">{{ c.meta }}</div>
-              </div>
+                        <input type="radio" class="btn-check" name="channel" id="chanIg" value="instagram">
+                        <label class="btn btn-outline-secondary btn-sm" for="chanIg">
+                            <i class="bi bi-instagram me-1 text-danger"></i> Instagram
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" for="campaignMessage">Mensaje</label>
+                    <textarea id="campaignMessage" name="message" class="form-control" rows="4" required>Recuerda que las inscripciones para el segundo semestre 2026 cierran el 5 de septiembre. ¡No te quedes por fuera!</textarea>
+                </div>
+
+                <div class="row g-2 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold" for="sendDate">Fecha de envío</label>
+                        <input type="date" id="sendDate" name="send_date" class="form-control form-control-sm" value="2026-08-28">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold" for="sendTime">Hora</label>
+                        <input type="time" id="sendTime" name="send_time" class="form-control form-control-sm" value="09:00">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success w-100 fw-bold">
+                    <i class="bi bi-send me-1"></i> Programar envío
+                </button>
             </div>
-            {% if c.status == "enviada" %}
-              <span class="pill pill-success" style="padding:5px 12px;">Enviada</span>
-            {% else %}
-              <span class="pill pill-info" style="padding:5px 12px;">Programada</span>
-            {% endif %}
-          </div>
-          {% if c.status == "enviada" %}
-            <div class="metrics-row">
-              <div class="metric-col">
-                <div class="metric-val font-brand">{{ c.sent }}</div>
-                <div class="metric-label">Enviados</div>
-              </div>
-              <div class="metric-col">
-                <div class="metric-val font-brand">{{ c.delivered }}</div>
-                <div class="metric-label">Entregados</div>
-              </div>
-              <div class="metric-col">
-                <div class="metric-val font-brand">{{ c.read }}</div>
-                <div class="metric-label">Leídos</div>
-              </div>
-            </div>
-          {% endif %}
-        </div>
-      {% endfor %}
+        </form>
     </div>
-  </div>
+
+    <!-- Columna del Listado de Campañas -->
+    <div class="col-lg-7">
+        <div class="card outbound-card shadow-sm h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                    <h2 class="h5 fw-bold mb-0">Campañas programadas y enviadas</h2>
+                    <span class="badge bg-light text-dark border">{{ campaigns|length }} campañas</span>
+                </div>
+
+                <div class="d-flex flex-column gap-3">
+                    {% for c in campaigns %}
+                        <div class="border rounded p-3 bg-light-subtle">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle p-2 bg-white shadow-sm d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                        {% if c.channel == 'whatsapp' %}
+                                            <i class="bi bi-whatsapp text-success fs-5"></i>
+                                        {% elif c.channel == 'facebook' %}
+                                            <i class="bi bi-facebook text-primary fs-5"></i>
+                                        {% elif c.channel == 'instagram' %}
+                                            <i class="bi bi-instagram text-danger fs-5"></i>
+                                        {% else %}
+                                            <i class="bi bi-envelope text-secondary fs-5"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <h3 class="h6 fw-bold mb-0">{{ c.name }}</h3>
+                                        <span class="small text-muted">{{ c.meta }}</span>
+                                    </div>
+                                </div>
+                                {% if c.status == "enviada" %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1">Enviada</span>
+                                {% else %}
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill px-3 py-1">Programada</span>
+                                {% endif %}
+                            </div>
+
+                            {% if c.status == "enviada" %}
+                                <div class="row text-center g-2 pt-2 mt-2 border-top">
+                                    <div class="col-4">
+                                        <div class="fw-bold text-dark">{{ c.sent }}</div>
+                                        <div class="small text-muted" style="font-size: 0.75rem;">Enviados</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="fw-bold text-dark">{{ c.delivered }}</div>
+                                        <div class="small text-muted" style="font-size: 0.75rem;">Entregados</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="fw-bold text-dark">{{ c.read }}</div>
+                                        <div class="small text-muted" style="font-size: 0.75rem;">Leídos</div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% empty %}
+                        <p class="text-muted text-center py-4 mb-0">No hay campañas registradas hasta el momento.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initQuickCampaignForm === 'function') {
+            OutboundUI.initQuickCampaignForm();
+        }
+    });
+</script>
 {% endblock %}

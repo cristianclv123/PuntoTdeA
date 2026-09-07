@@ -1,18 +1,35 @@
 {% extends "communications/base.html" %}
+{% load static %}
 
-{% block title %}Detalle de campaña{% endblock %}
-{% block page_heading %}Detalle de campaña{% endblock %}
+{% block title %}Detalle de Campaña{% endblock %}
+{% block page_heading %}Detalle de Campaña{% endblock %}
 {% block page_lead %}Métricas de envío, lectura, clics y respuestas.{% endblock %}
+
 {% block hero_actions %}
-<a href="{% url 'communications:campaigns' %}" class="btn btn-outline-light rounded-pill">Volver al listado</a>
+<a href="{% url 'communications:campaigns' %}" class="btn btn-outline-light rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i> Volver al listado
+</a>
 {% endblock %}
 
 {% block content %}
 <div id="campaignDetailRoot">
-    <p class="text-muted">Cargando campaña…</p>
+    <div class="d-flex align-items-center gap-2 text-muted py-4">
+        <div class="spinner-border spinner-border-sm text-success" role="status">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <span>Cargando detalle de la campaña…</span>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>document.addEventListener('DOMContentLoaded', () => OutboundUI.renderCampaignDetail());</script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.renderCampaignDetail === 'function') {
+            OutboundUI.renderCampaignDetail();
+        } else {
+            console.error('El objeto OutboundUI o el método renderCampaignDetail no están disponibles.');
+        }
+    });
+</script>
 {% endblock %}
