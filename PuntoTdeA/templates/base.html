@@ -1,0 +1,137 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Comunicaciones{% endblock %} | Punto TdeA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+    <!-- Estilo global del sitio -->
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+
+    <!-- Estilos específicos de la app communications -->
+    <link rel="stylesheet" href="{% static 'communications/css/outbound.css' %}">
+</head>
+<body class="outbound-body">
+
+    <div class="top-bar-gov">
+        <div class="container d-flex justify-content-between align-items-center">
+            <span class="fw-bold">GOV.CO</span>
+            <div class="d-none d-md-flex gap-3">
+                <span>Participa</span>
+                <span>Atención al usuario</span>
+                <span>Transparencia</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="tdea-nav-bar">
+        <div class="container d-flex flex-wrap align-items-center">
+            <span class="me-3 opacity-75 small">Usuarios:</span>
+            <a href="#">Estudiantes</a>
+            <a href="#">Aspirantes</a>
+            <a href="#">Administrativos</a>
+            <a href="#">Egresados</a>
+            <a href="#" class="fw-bold text-warning">Docentes</a>
+        </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg main-nav py-3">
+        <div class="container">
+            <a class="brand-title d-flex align-items-center gap-2" href="{% url 'home' %}">
+                <i class="bi bi-bank2"></i> Punto<span class="text-success">TdeA</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 gap-2">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-bold" href="{% url 'home' %}">
+                            <i class="bi bi-house-door-fill text-success"></i> Inicio
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'announcements:index' %}">Anuncios</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold text-muted" href="#">Casos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold active" href="{% url 'communications:index' %}">Comunicaciones</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'knowledge:index' %}">Conocimiento</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="outbound-hero">
+        <div class="container">
+            <div class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+                <div>
+                    <p class="outbound-kicker mb-1">Módulo de Comunicaciones</p>
+                    <h1 class="h3 mb-1 fw-bold text-white">{% block page_heading %}Outbound institucional{% endblock %}</h1>
+                    <p class="mb-0 text-white-50">{% block page_lead %}Activa conversaciones por el canal correcto, con la audiencia correcta.{% endblock %}</p>
+                </div>
+                {% block hero_actions %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <ul class="outbound-tabs">
+            <li>
+                <a class="{% if nav_section == 'dashboard' %}is-active{% endif %}" href="{% url 'communications:index' %}">
+                    <i class="bi bi-speedometer2"></i> Panel
+                </a>
+            </li>
+            <li>
+                <a class="{% if nav_section == 'campaigns' %}is-active{% endif %}" href="{% url 'communications:campaigns' %}">
+                    <i class="bi bi-megaphone"></i> Campañas
+                </a>
+            </li>
+            <li>
+                <a class="{% if nav_section == 'segments' %}is-active{% endif %}" href="{% url 'communications:segments' %}">
+                    <i class="bi bi-people"></i> Audiencias
+                </a>
+            </li>
+            <li>
+                <a class="{% if nav_section == 'interactions' %}is-active{% endif %}" href="{% url 'communications:interactions' %}">
+                    <i class="bi bi-chat-dots"></i> Interacciones
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <main class="container pb-5">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-dark text-white py-4 mt-auto">
+        <div class="container text-center">
+            <p class="mb-0 small opacity-75">&copy; Tecnológico de Antioquia - Institución Universitaria | Sistema Punto TdeA</p>
+        </div>
+    </footer>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="outboundToast" class="toast align-items-center text-bg-success border-0" role="status">
+            <div class="d-flex">
+                <div class="toast-body" id="outboundToastBody">Acción completada.</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Scripts específicos de la app communications -->
+    <script src="{% static 'communications/js/outbound-data.js' %}"></script>
+    <script src="{% static 'communications/js/outbound.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
