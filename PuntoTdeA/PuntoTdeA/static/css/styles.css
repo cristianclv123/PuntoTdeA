@@ -1,0 +1,114 @@
+:root {
+    --gov-bar-bg: #333333;
+    --tdea-green: #00873e;
+    --tdea-green-dark: #005f2b;
+    --tdea-card-glass: rgba(0, 95, 43, 0.85);
+    --text-color: #2b2b2b;
+    --bg-light: #f4f6f8;
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-light);
+    color: var(--text-color);
+    margin: 0;
+}
+
+/* Superior GOV.CO Bar */
+.top-bar-gov {
+    background-color: var(--gov-bar-bg);
+    color: #ffffff;
+    font-size: 0.8rem;
+    padding: 6px 0;
+}
+
+/* TdeA Sub-header Bar */
+.tdea-nav-bar {
+    background-color: var(--tdea-green);
+    color: white;
+    padding: 10px 0;
+}
+
+.tdea-nav-bar a {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-right: 15px;
+}
+
+.tdea-nav-bar a:hover {
+    text-decoration: underline;
+}
+
+/* Main Navbar */
+.main-nav {
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.brand-title {
+    color: var(--tdea-green);
+    font-weight: 800;
+    font-size: 1.8rem;
+    text-decoration: none;
+}
+
+/* Hero Section */
+.hero-banner {
+    position: relative;
+    background: linear-gradient(135deg, #005f2b 0%, #00873e 100%);
+    min-height: 420px;
+    display: flex;
+    align-items: center;
+    border-radius: 0 0 24px 24px;
+    overflow: hidden;
+    padding: 40px 0;
+}
+
+.hero-overlay-card {
+    background: var(--tdea-card-glass);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 40px;
+    color: white;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+/* Grid de Módulos */
+.module-card {
+    border: none;
+    border-radius: 16px;
+    background: #ffffff;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.module-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+}
+
+.icon-box {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    background-color: #e8f5e9;
+    color: var(--tdea-green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+}
+
+.btn-entry {
+    background-color: var(--tdea-green);
+    color: white;
+    border-radius: 20px;
+    font-weight: 600;
+}
+
+.btn-entry:hover {
+    background-color: var(--tdea-green-dark);
+    color: white;
+}
