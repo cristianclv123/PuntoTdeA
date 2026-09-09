@@ -1,0 +1,180 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Punto TdeA - Portal Principal</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- CSS Personalizado -->
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+
+    <!-- Header Franja Superior GOV.CO -->
+    <div class="top-bar-gov">
+        <div class="container d-flex justify-content-between align-items-center">
+            <span class="fw-bold">GOV.CO</span>
+            <div class="d-none d-md-flex gap-3">
+                <span>Participa</span>
+                <span>Atención al usuario</span>
+                <span>Transparencia</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navegación de Roles -->
+    <div class="tdea-nav-bar">
+        <div class="container d-flex flex-wrap align-items-center">
+            <span class="me-3 opacity-75 small">Usuarios:</span>
+            <a href="#">Estudiantes</a>
+            <a href="#">Aspirantes</a>
+            <a href="#">Administrativos</a>
+            <a href="#">Egresados</a>
+            <a href="#" class="fw-bold text-warning">Docentes</a>
+        </div>
+    </div>
+
+    <!-- Barra Principal con Accesos a los Módulos -->
+    <nav class="navbar navbar-expand-lg main-nav py-3">
+        <div class="container">
+            <a class="brand-title d-flex align-items-center gap-2" href="{% url 'home' %}">
+                <i class="bi bi-bank2"></i> Punto<span class="text-success">TdeA</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navContent">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 gap-2">
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-bold active" href="{% url 'home' %}">
+                            <i class="bi bi-house-door-fill text-success"></i> Inicio
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'announcements:index' %}">Anuncios</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold text-muted" href="#">Casos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'communications:index' %}">Comunicaciones</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-dark fw-semibold" href="{% url 'knowledge:index' %}">Conocimiento</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero-banner">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="hero-overlay-card">
+                        <h1 class="display-5 fw-bold mb-3">Punto TdeA</h1>
+                        <p class="fs-5 opacity-90 mb-0">
+                            Plataforma institucional integrada. Selecciona un módulo para acceder a las herramientas de gestión, comunicación, información y conocimiento.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Grid con los Módulos -->
+    <main class="container my-5">
+        <div class="row g-4 justify-content-center">
+
+            <!-- 1. Módulo Core: Punto TdeA / Inicio -->
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card module-card h-100 p-4 d-flex flex-column justify-content-between border-success">
+                    <div>
+                        <div class="icon-box mb-3">
+                            <i class="bi bi-diagram-3-fill"></i>
+                        </div>
+                        <h5 class="fw-bold">Punto TdeA (Inicio)</h5>
+                        <p class="text-muted small">Módulo principal y panel centralizado de navegación para todos los servicios del proyecto.</p>
+                    </div>
+                    <a href="{% url 'home' %}" class="btn btn-entry w-100 mt-3">Ver Panel</a>
+                </div>
+            </div>
+
+            <!-- 2. Módulo: Announcements -->
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card module-card h-100 p-4 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="icon-box mb-3">
+                            <i class="bi bi-megaphone-fill"></i>
+                        </div>
+                        <h5 class="fw-bold">Anuncios</h5>
+                        <p class="text-muted small">Gestión y publicación de avisos, convocatorias e información institucional.</p>
+                    </div>
+                    <a href="{% url 'announcements:index' %}" class="btn btn-entry w-100 mt-3">Ingresar</a>
+                </div>
+            </div>
+
+            <!-- 3. Módulo: Cases (En desarrollo) -->
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card module-card h-100 p-4 d-flex flex-column justify-content-between opacity-75">
+                    <div>
+                        <div class="icon-box mb-3">
+                            <i class="bi bi-folder-symlink-fill"></i>
+                        </div>
+                        <h5 class="fw-bold">
+                            Casos <span class="badge bg-warning text-dark fs-6 ms-1">En desarrollo</span>
+                        </h5>
+                        <p class="text-muted small">Sistema de atención, control, seguimiento y gestión de requerimientos.</p>
+                    </div>
+                    <a href="#" class="btn btn-secondary w-100 mt-3 disabled">Próximamente</a>
+                </div>
+            </div>
+
+            <!-- 4. Módulo: Communications -->
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card module-card h-100 p-4 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="icon-box mb-3">
+                            <i class="bi bi-chat-left-text-fill"></i>
+                        </div>
+                        <h5 class="fw-bold">Comunicaciones</h5>
+                        <p class="text-muted small">Módulo para la recepción, respuesta y distribución de correspondencia oficial.</p>
+                    </div>
+                    <a href="{% url 'communications:index' %}" class="btn btn-entry w-100 mt-3">Ingresar</a>
+                </div>
+            </div>
+
+            <!-- 5. Módulo: Knowledge -->
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card module-card h-100 p-4 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="icon-box mb-3">
+                            <i class="bi bi-book-half"></i>
+                        </div>
+                        <h5 class="fw-bold">Conocimiento</h5>
+                        <p class="text-muted small">Base de datos de conocimiento, categorización de artículos y documentación.</p>
+                    </div>
+                    <a href="{% url 'knowledge:index' %}" class="btn btn-entry w-100 mt-3">Ingresar</a>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-4 mt-5">
+        <div class="container text-center">
+            <p class="mb-0 small opacity-75">&copy; Tecnológico de Antioquia - Institución Universitaria | Sistema Punto TdeA</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'js/main.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+{% extends 'index.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row g-4 align-items-start">
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <p class="text-success fw-semibold mb-1">Módulo de conocimiento</p>
+                            <h1 class="h3 mb-0">Base de conocimiento institucional</h1>
+                        </div>
+                        <a href="{% url 'knowledge:ask' %}?q=Cu%C3%A1ndo%20es%20la%20matr%C3%ADcula" class="btn btn-success btn-sm">Probar consulta</a>
+                    </div>
+
+                    <form method="get" action="{% url 'knowledge:search' %}" class="mb-4">
+                        <div class="input-group input-group-lg">
+                            <input type="text" name="q" class="form-control" placeholder="Busque fechas, trámites, costos o programas..." aria-label="Buscar conocimiento">
+                            <button class="btn btn-success" type="submit">Buscar</button>
+                        </div>
+                    </form>
+
+                    <div class="mb-4">
+                        <h2 class="h5">Artículos recientes</h2>
+                        <ul class="list-group list-group-flush">
+                            {% for article in articles %}
+                                <li class="list-group-item px-0">
+                                    <div class="fw-semibold">{{ article.title }}</div>
+                                    <div class="small text-muted">{{ article.summary }}</div>
+                                </li>
+                            {% empty %}
+                                <li class="list-group-item px-0 text-muted">Aún no hay artículos publicados.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 mb-3">Preguntas frecuentes</h2>
+                    <div class="accordion" id="faqAccordion">
+                        {% for faq in faqs %}
+                            <div class="accordion-item">
+                                <h3 class="accordion-header" id="heading-{{ forloop.counter }}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ forloop.counter }}" aria-expanded="false" aria-controls="collapse-{{ forloop.counter }}">
+                                        {{ faq.question }}
+                                    </button>
+                                </h3>
+                                <div id="collapse-{{ forloop.counter }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ forloop.counter }}" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body">
+                                        {{ faq.answer }}
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <p class="text-muted mb-0">No hay FAQs activas.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
