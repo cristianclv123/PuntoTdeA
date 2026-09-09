@@ -26,4 +26,5 @@ urlpatterns = [
     path('announcements/', lambda req: redirect('announcements:index', permanent=True)),
     path('communications/', lambda req: redirect('communications:index', permanent=True)),
     path('knowledge/', lambda req: redirect('knowledge:index', permanent=True)),
+    path('casos/', lambda req: redirect('cases:bandeja', permanent=True)),
 ]

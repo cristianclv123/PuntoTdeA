@@ -1,5 +1,4 @@
 from django.shortcuts import render
-
 from .mock_data import CASE_MESSAGES, CASE_NOTES, CHANNEL_META, CONVERSATIONS, get_conversation
 
 
