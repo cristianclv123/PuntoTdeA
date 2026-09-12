@@ -1,13 +1,58 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>anuncios</title>
-</head>
-<body>
+{% extends 'base.html' %}
 
-<h1>bienvenido al
-    modulo de anuncios</h1>
 
-</body>
-</html>
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        
+        <h1 class="mb-4 fw-bold text-dark">Módulo de Anuncios</h1>
+
+        <!-- Sección específica para la HU-08: Avisos Urgentes -->
+        <div class="mb-5">
+            <h3 class="text-danger mb-3">
+                <i class="bi bi-exclamation-triangle-fill"></i> Avisos Urgentes
+            </h3>
+            {% if urgent_announcements %}
+                {% for announcement in urgent_announcements %}
+                    <div class="card border-danger mb-3 shadow-sm">
+                        <div class="card-body">
+                            <h4 class="card-title text-danger fw-bold">{{ announcement.title }}</h4>
+                            <p class="card-text">{{ announcement.content }}</p>
+                            <p class="card-text"><small class="text-muted">Publicado el: {{ announcement.created_at }}</small></p>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-light border shadow-sm" role="alert">
+                    No hay avisos urgentes en este momento.
+                </div>
+            {% endif %}
+        </div>
+
+        <hr class="my-4">
+
+        <!-- Todos los anuncios generales -->
+        <div>
+            <h3 class="mb-3 text-secondary">
+                <i class="bi bi-megaphone-fill"></i> Todos los Anuncios
+            </h3>
+            {% if announcements %}
+                {% for announcement in announcements %}
+                    <div class="card mb-3 shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title fw-bold">{{ announcement.title }}</h5>
+                            <p class="card-text">{{ announcement.content }}</p>
+                            <p class="card-text"><small class="text-muted">Publicado el: {{ announcement.created_at }}</small></p>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-light border shadow-sm" role="alert">
+                    No hay anuncios registrados.
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}
