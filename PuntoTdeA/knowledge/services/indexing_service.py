@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.utils.text import slugify
 
-from knowledge.models import Category, FAQ, Intent, KnowledgeArticle
+from ..models import Category, FAQ, Intent, KnowledgeArticle
 
 ACADEMIC_CALENDAR_ITEMS = [
     {
@@ -27,11 +27,11 @@ ACADEMIC_CALENDAR_ITEMS = [
 
 
 def ensure_academic_defaults():
-    category, _ = Category.objects.get_or_create(
+    category, _ = getattr(Category, 'objects').get_or_create(
         name='Académico',
         defaults={'description': 'Información institucional sobre calendario, matrículas, programas y trámites académicos.'},
     )
-    intent, _ = Intent.objects.get_or_create(
+    intent, _ = getattr(Intent, 'objects').get_or_create(
         name='matricula',
         defaults={
             'description': 'Consultas relacionadas con matrículas, calendario y procesos de admisión.',
@@ -47,7 +47,7 @@ def index_academic_calendar():
     updated_count = 0
 
     for item in ACADEMIC_CALENDAR_ITEMS:
-        article, created = KnowledgeArticle.objects.update_or_create(
+        _, created = getattr(KnowledgeArticle, 'objects').update_or_create(
             slug=slugify(item['title']),
             defaults={
                 'title': item['title'],
@@ -78,7 +78,7 @@ def index_academic_calendar():
     ]
 
     for index, (question, answer) in enumerate(faq_items):
-        FAQ.objects.update_or_create(
+        getattr(FAQ, 'objects').update_or_create(
             question=question,
             defaults={
                 'answer': answer,

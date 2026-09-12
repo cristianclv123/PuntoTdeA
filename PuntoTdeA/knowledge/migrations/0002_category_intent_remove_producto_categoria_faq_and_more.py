@@ -2,7 +2,10 @@
 
 import django.core.validators
 import django.db.models.deletion
-import pgvector.django
+try:
+    import pgvector.django
+except ImportError:  # pragma: no cover - optional dependency for PostgreSQL vector support
+    pgvector = None
 from django.db import migrations, models
 
 
@@ -84,7 +87,9 @@ class Migration(migrations.Migration):
                 ('published', models.BooleanField(default=False)),
                 ('published_at', models.DateTimeField(blank=True, null=True)),
                 ('embedding', models.JSONField(blank=True, default=list)),
-                ('embedding_vector', pgvector.django.VectorField(blank=True, dimensions=1536, null=True)),
+                *([
+                    ('embedding_vector', pgvector.django.VectorField(blank=True, dimensions=1536, null=True)),
+                ] if pgvector is not None else []),
                 ('category', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='articles', to='knowledge.category')),
                 ('intent', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='articles', to='knowledge.intent')),
             ],

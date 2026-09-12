@@ -1,12 +1,15 @@
 import math
 import re
+import unicodedata
 from typing import Any
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import models
 from django.utils.text import slugify
+from django.utils import timezone
 
-from knowledge.models import FAQ, KnowledgeArticle
+from .. import models as knowledge_models
 
 
 def _normalize_text(text: str) -> str:
@@ -14,8 +17,17 @@ def _normalize_text(text: str) -> str:
 
 
 def _tokenize(text: str):
-    text = _normalize_text(text).lower()
-    return [token for token in re.findall(r"[a-záéíóúüñ0-9]+", text) if len(token) > 2]
+    text = unicodedata.normalize('NFKD', _normalize_text(text).lower())
+    text = ''.join(character for character in text if not unicodedata.combining(character))
+    stopwords = {
+        'para', 'como', 'donde', 'cuando', 'quien', 'cual', 'cuanto', 'esta',
+        'este', 'estos', 'estas', 'una', 'uno', 'unos', 'unas', 'los', 'las',
+        'del', 'por', 'con', 'que', 'hay', 'son', 'sobre', 'puedo', 'necesito',
+    }
+    return [
+        token for token in re.findall(r"[a-z0-9]+", text)
+        if len(token) > 2 and token not in stopwords
+    ]
 
 
 def _vectorize(text: str):
@@ -44,6 +56,20 @@ def _cosine_similarity(left: str, right: str) -> float:
     return numerator / (left_norm * right_norm)
 
 
+def _relevance_score(query: str, title: str, body: str) -> float:
+    query_tokens = set(_tokenize(query))
+    if not query_tokens:
+        return 0.0
+
+    title_tokens = set(_tokenize(title))
+    body_tokens = set(_tokenize(body))
+    title_overlap = len(query_tokens & title_tokens) / len(query_tokens)
+    body_overlap = len(query_tokens & body_tokens) / len(query_tokens)
+    phrase_boost = 0.15 if _normalize_text(query).lower() in _normalize_text(body).lower() else 0.0
+    cosine = _cosine_similarity(query, f'{title} {body}')
+    return min(1.0, (title_overlap * 0.55) + (body_overlap * 0.25) + (cosine * 0.2) + phrase_boost)
+
+
 def search_knowledge(query: str, limit: int | None = None):
     if not query:
         return []
@@ -55,10 +81,12 @@ def search_knowledge(query: str, limit: int | None = None):
     if cached is not None:
         return cached
 
-    articles = KnowledgeArticle.objects.filter(status='published', published=True).select_related('category', 'intent')
+    articles = getattr(knowledge_models.KnowledgeArticle, 'objects').filter(
+        status='published', published=True
+    ).select_related('category', 'intent')
     results = []
     for article in articles:
-        score = _cosine_similarity(query, article.indexable_text)
+        score = _relevance_score(query, article.title, article.indexable_text)
         if score <= 0:
             continue
         results.append({
@@ -68,6 +96,30 @@ def search_knowledge(query: str, limit: int | None = None):
             'content': article.content[:250],
             'category': article.category.name if article.category else 'General',
             'score': round(score, 4),
+            'source_type': 'article',
+        })
+
+    now = timezone.now()
+    faq_queryset = getattr(knowledge_models.FAQ, 'objects').filter(
+        is_active=True,
+    ).filter(
+        models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=now),
+    ).filter(
+        models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=now),
+    ).select_related('category', 'intent')
+    for faq in faq_queryset:
+        score = _relevance_score(query, faq.question, f'{faq.question} {faq.answer}')
+        if score <= 0:
+            continue
+        results.append({
+            'id': faq.id,
+            'title': faq.question,
+            'summary': faq.answer,
+            'content': faq.answer[:250],
+            'category': faq.category.name if faq.category else 'General',
+            'score': round(score, 4),
+            'source_type': 'faq',
+            'image_url': faq.image.url if faq.image else None,
         })
 
     results.sort(key=lambda item: item['score'], reverse=True)
@@ -88,19 +140,6 @@ def evaluate_confidence(query: str, result: dict[str, Any] | None) -> float:
     return round(min(1.0, max(0.0, base_score + boost)), 4)
 
 
-def _find_faq_matches(query: str):
-    tokens = set(_tokenize(query))
-    matches = []
-    for faq in FAQ.objects.filter(is_active=True):
-        faq_text = ' '.join([faq.question, faq.answer])
-        faq_tokens = set(_tokenize(faq_text))
-        overlap = len(tokens & faq_tokens)
-        if overlap:
-            matches.append({'question': faq.question, 'answer': faq.answer, 'score': overlap})
-    matches.sort(key=lambda item: item['score'], reverse=True)
-    return matches[:3]
-
-
 def answer_query(question: str) -> dict[str, Any]:
     question = (question or '').strip()
     if not question:
@@ -113,7 +152,8 @@ def answer_query(question: str) -> dict[str, Any]:
 
     results = search_knowledge(question, limit=5)
     if results:
-        best_result = results[0]
+        faq_results = [result for result in results if result.get('source_type') == 'faq']
+        best_result = faq_results[0] if faq_results else results[0]
         confidence = evaluate_confidence(question, best_result)
         answer = best_result.get('summary') or best_result.get('content') or 'No encontré una respuesta formulada.'
         return {
@@ -121,17 +161,6 @@ def answer_query(question: str) -> dict[str, Any]:
             'confidence': confidence,
             'needs_human_attention': confidence < settings.KNOWLEDGE_SETTINGS.get('MIN_CONFIDENCE', 0.7),
             'sources': results,
-        }
-
-    faq_matches = _find_faq_matches(question)
-    if faq_matches:
-        top_faq = faq_matches[0]
-        confidence = min(0.92, 0.5 + (top_faq['score'] * 0.1))
-        return {
-            'answer': top_faq['answer'],
-            'confidence': round(confidence, 4),
-            'needs_human_attention': confidence < settings.KNOWLEDGE_SETTINGS.get('MIN_CONFIDENCE', 0.7),
-            'sources': faq_matches,
         }
 
     return {

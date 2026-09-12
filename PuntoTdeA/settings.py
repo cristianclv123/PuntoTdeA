@@ -40,10 +40,17 @@ INSTALLED_APPS = [
     "corsheaders",
     "channels",
     # Aplicaciones del proyecto PuntoTdeA
+<<<<<<< HEAD
     "cases",
     "knowledge",
     "communications",
     "announcements",
+=======
+    'cases',
+    'PuntoTdeA.knowledge',
+    'communications',
+    'announcements',
+>>>>>>> origin/chat-bot
 ]
 
 MIDDLEWARE = [
@@ -160,12 +167,27 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
     BASE_DIR / "PuntoTdeA" / "static",
 ]
+<<<<<<< HEAD
 STATIC_ROOT = BASE_DIR / "staticfiles"
+=======
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+>>>>>>> origin/chat-bot
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+<<<<<<< HEAD
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+=======
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+KNOWLEDGE_SETTINGS = {
+    'MIN_CONFIDENCE': 0.7,
+    'MAX_RESULTS': 5,
+    'DEFAULT_EMBEDDING_DIMENSION': 512,
+}
+>>>>>>> origin/chat-bot
