@@ -40,7 +40,7 @@ INSTALLED_APPS = [
 
     # Aplicaciones del proyecto PuntoTdeA
     'cases',
-    'knowledge',
+    'PuntoTdeA.knowledge',
     'communications',
     'announcements',
 ]
@@ -127,8 +127,16 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'PuntoTdeA' / 'static',
 ]
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangopsroject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+KNOWLEDGE_SETTINGS = {
+    'MIN_CONFIDENCE': 0.7,
+    'MAX_RESULTS': 5,
+    'DEFAULT_EMBEDDING_DIMENSION': 512,
+}

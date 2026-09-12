@@ -112,3 +112,37 @@ body {
     background-color: var(--tdea-green-dark);
     color: white;
 }
+
+.knowledge-chat__messages {
+    background: #f8faf9;
+    max-height: 340px;
+    min-height: 150px;
+    overflow-y: auto;
+}
+
+.chat-message {
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding: 0.65rem 0.8rem;
+}
+
+.chat-message:last-child {
+    margin-bottom: 0;
+}
+
+.chat-message--bot {
+    background: #e8f5e9;
+}
+
+.chat-message--user {
+    background: #ffffff;
+    border: 1px solid #d9e4dc;
+    margin-left: 12%;
+}
+
+.chat-source-image {
+    display: block;
+    max-height: 180px;
+    max-width: 100%;
+    object-fit: contain;
+}

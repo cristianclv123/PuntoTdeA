@@ -40,7 +40,7 @@ INSTALLED_APPS = [
 
     # Aplicaciones del proyecto PuntoTdeA
     'cases',
-    'knowledge',
+    'PuntoTdeA.knowledge',
     'communications',
     'announcements',
 ]
