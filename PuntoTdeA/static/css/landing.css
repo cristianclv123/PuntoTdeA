@@ -112,3 +112,83 @@ body {
     background-color: var(--tdea-green-dark);
     color: white;
 }
+
+@media (max-width: 992px) {
+    .hero-banner {
+        min-height: 320px;
+        border-radius: 0 0 16px 16px;
+        padding: 28px 0;
+    }
+
+    .hero-overlay-card {
+        padding: 28px 22px;
+        border-radius: 16px;
+    }
+
+    .brand-title {
+        font-size: 1.45rem;
+    }
+
+    .main-nav .navbar-nav {
+        gap: 0 !important;
+        padding-top: 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .top-bar-gov .d-none.d-md-flex {
+        display: none !important;
+    }
+
+    .tdea-nav-bar {
+        padding: 8px 0;
+    }
+
+    .tdea-nav-bar a {
+        font-size: 0.8rem;
+        margin-right: 10px;
+    }
+
+    .hero-banner {
+        min-height: auto;
+        padding: 24px 0 28px;
+    }
+
+    .hero-overlay-card h1 {
+        font-size: 1.75rem;
+    }
+
+    .hero-overlay-card .fs-5 {
+        font-size: 1rem !important;
+    }
+
+    .module-card {
+        border-radius: 14px;
+    }
+
+    .icon-box {
+        width: 52px;
+        height: 52px;
+        font-size: 1.35rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .brand-title {
+        font-size: 1.25rem;
+    }
+
+    .hero-overlay-card {
+        padding: 20px 16px;
+    }
+
+    .btn-entry {
+        padding: 10px 14px;
+        min-height: 44px;
+    }
+}

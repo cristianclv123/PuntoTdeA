@@ -1,12 +1,17 @@
 {% load icons %}
-<aside class="sidebar">
-  <a href="{% url 'home' %}" class="sidebar-brand">
-    <div class="sidebar-mark font-brand">TdeA</div>
-    <div>
-      <div class="sidebar-brand-title font-brand">Punto TdeA</div>
-      <div class="sidebar-brand-subtitle">Portal institucional</div>
-    </div>
-  </a>
+<aside class="sidebar" id="app-sidebar">
+  <div class="sidebar-header">
+    <a href="{% url 'home' %}" class="sidebar-brand">
+      <div class="sidebar-mark font-brand">TdeA</div>
+      <div>
+        <div class="sidebar-brand-title font-brand">Punto TdeA</div>
+        <div class="sidebar-brand-subtitle">Portal institucional</div>
+      </div>
+    </a>
+    <button class="sidebar-close" type="button" id="sidebar-close" aria-label="Cerrar menú">
+      {% icon 'x' size=18 %}
+    </button>
+  </div>
   <nav class="sidebar-nav">
     <a href="{% url 'dashboard' %}" class="sidebar-link {% if active_nav == 'dashboard' %}active{% endif %}">
       {% icon 'layout-dashboard' %}

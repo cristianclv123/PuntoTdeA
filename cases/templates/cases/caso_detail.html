@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load icons %}
+{% load icons static %}
 
-{% block title %}{{ conversation.name }} — Punto TdeA{% endblock %}
+{% block title %}{{ conversation.ticket_number }} — Punto TdeA{% endblock %}
 
 {% block topbar %}{% endblock %}
 
@@ -10,12 +10,15 @@
     <div class="chat-column">
       <div class="chat-header">
         <div class="chat-header-left">
+          <button class="nav-toggle" type="button" id="nav-toggle" aria-label="Abrir menú" aria-controls="app-sidebar" aria-expanded="false">
+            {% icon 'menu' size=20 %}
+          </button>
           <a href="{% url 'cases:bandeja' %}" style="display:flex;">{% icon 'arrow-left' size=19 %}</a>
           <div class="avatar avatar-soft" style="width:42px;height:42px;font-size:14px;">{{ conversation.initials }}</div>
           <div>
             <div class="chat-header-name-row">
               <span class="chat-header-name font-brand">{{ conversation.name }}</span>
-              <span class="tag">{{ conversation.role }}</span>
+              <span class="tag">{{ conversation.ticket_number }}</span>
             </div>
             <div class="chat-header-meta">
               <span class="channel-inline">
@@ -23,117 +26,272 @@
                 {{ conversation.channel_label }}
               </span>
               <span>·</span>
-              <span>Caso #4821</span>
+              <span>{{ conversation.advisor }}</span>
             </div>
           </div>
         </div>
-        <div>
+        <div class="chat-header-badges">
+          <span class="pill pill-priority-{{ conversation.priority }}">{{ conversation.priority_label }}</span>
           {% if conversation.status == "pendiente" %}
-            <span class="pill pill-warning" style="padding:6px 14px;font-size:12px;">Pendiente</span>
-          {% elif conversation.status == "en_gestion" %}
-            <span class="pill pill-info" style="padding:6px 14px;font-size:12px;">En gestión</span>
+            <span class="pill pill-warning">Pendiente</span>
+          {% elif conversation.status == "completado" %}
+            <span class="pill pill-success">Completado</span>
+          {% elif conversation.status == "rechazado" %}
+            <span class="pill pill-danger">Rechazado</span>
           {% elif conversation.status == "escalado" %}
-            <span class="pill pill-danger" style="padding:6px 14px;font-size:12px;">Escalado</span>
-          {% elif conversation.status == "atendido" %}
-            <span class="pill pill-success" style="padding:6px 14px;font-size:12px;">Atendido</span>
+            <span class="pill pill-danger">Escalado</span>
           {% else %}
-            <span class="pill pill-neutral" style="padding:6px 14px;font-size:12px;">Cerrado</span>
+            <span class="pill pill-neutral">Cerrado</span>
           {% endif %}
         </div>
       </div>
 
-      <div class="message-area">
-        <div class="date-sep"><div class="date-chip">Hoy, 24 de agosto</div></div>
+      <div
+        class="message-area"
+        id="message-area"
+        data-conversation-id="{{ conversation.id }}"
+        data-ws-url="{% if request.is_secure %}wss{% else %}ws{% endif %}://{{ request.get_host }}/ws/conversations/{{ conversation.id }}/"
+      >
         {% for m in messages %}
-          <div class="message-row {% if m.from_agent %}from-agent{% endif %}">
+          <div class="message-row {% if m.from_agent %}from-agent{% endif %}" data-message-id="{{ m.id }}">
             <div class="message-col">
-              <div class="bubble">{{ m.text }}</div>
+              <div class="bubble">
+                {% if m.text %}<div class="bubble-text">{{ m.text }}</div>{% endif %}
+                {% if m.attachments %}
+                  <div class="bubble-attachments">
+                    {% for att in m.attachments %}
+                      {% if att.kind == "image" %}
+                        <a class="att-preview att-image" href="{{ att.file.url }}" target="_blank" rel="noopener">
+                          <img src="{{ att.file.url }}" alt="{{ att.original_name }}">
+                        </a>
+                      {% elif att.kind == "video" %}
+                        <video class="att-preview att-video" controls preload="metadata" src="{{ att.file.url }}"></video>
+                      {% else %}
+                        <a class="att-file" href="{{ att.file.url }}" target="_blank" rel="noopener" download="{{ att.original_name }}">
+                          {% icon 'file-text' size=16 %}
+                          <span>{{ att.original_name }}</span>
+                        </a>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
               <div class="bubble-time">{{ m.time }}</div>
             </div>
           </div>
+        {% empty %}
+          <div class="date-sep"><div class="date-chip">Sin mensajes aún</div></div>
         {% endfor %}
       </div>
 
-      <div class="composer">
-        <div class="suggested-chip">
-          {% icon 'sparkles' size=13 %}
-          Respuesta sugerida: Certificados de notas
-        </div>
+      <form
+        class="composer"
+        method="post"
+        action="{% url 'cases:detail' conversation.id %}"
+        enctype="multipart/form-data"
+        id="reply-form"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="action" value="reply">
+        <div class="composer-previews" id="attachment-previews" hidden></div>
         <div class="composer-row">
-          {% icon 'paperclip' size=19 css_class='icon' %}
-          <div class="composer-field">Escribe tu respuesta...</div>
-          <button class="composer-send" type="button" aria-label="Enviar">
+          <div class="clip-menu" id="clip-menu">
+            <button class="composer-clip" type="button" id="clip-toggle" aria-label="Adjuntar o plantillas" aria-expanded="false" aria-haspopup="true">
+              {% icon 'paperclip' size=19 %}
+            </button>
+            <div class="clip-dropdown" id="clip-dropdown" hidden role="menu">
+              <button type="button" class="clip-item" id="clip-attach" role="menuitem">
+                {% icon 'file' size=16 %}
+                Adjuntar archivo
+              </button>
+              <div class="clip-divider"></div>
+              <div class="clip-section-label">Plantillas</div>
+              {% for tpl in reply_templates %}
+                <button
+                  type="button"
+                  class="clip-item clip-template"
+                  role="menuitem"
+                  data-template-body="{{ tpl.body|escape }}"
+                >
+                  {% icon 'layout-template' size=16 %}
+                  {{ tpl.title }}
+                </button>
+              {% empty %}
+                <div class="clip-empty">Sin plantillas aún</div>
+              {% endfor %}
+              <div class="clip-divider"></div>
+              <button type="button" class="clip-item clip-item-accent" id="clip-create-template" role="menuitem">
+                {% icon 'plus' size=16 %}
+                Crear plantilla
+              </button>
+            </div>
+          </div>
+          <input
+            class="composer-file-input"
+            type="file"
+            name="attachments"
+            id="attachment-input"
+            accept="{{ attachment_accept }}"
+            multiple
+            hidden
+          >
+          <input class="composer-field" type="text" name="body" id="reply-body" placeholder="Escribe tu respuesta..." autocomplete="off">
+          <button class="composer-send" type="submit" aria-label="Enviar">
             {% icon 'send' size=18 %}
           </button>
         </div>
-      </div>
+        <p class="composer-hint">Imágenes, video u ofimática (PDF, Word, Excel, PowerPoint…). Máx. 25 MB por archivo.</p>
+      </form>
     </div>
+
+    <dialog class="template-dialog" id="template-dialog">
+      <form method="post" action="{% url 'cases:detail' conversation.id %}" class="template-dialog-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create_template">
+        <div class="template-dialog-head">
+          <h3>Nueva plantilla</h3>
+          <button type="button" class="template-dialog-close" id="template-dialog-close" aria-label="Cerrar">
+            {% icon 'x' size=18 %}
+          </button>
+        </div>
+        <label class="field-label" for="template_title">Título</label>
+        <input class="field-input" type="text" name="template_title" id="template_title" maxlength="120" required placeholder="Ej. Saludo inicial">
+        <label class="field-label" for="template_body">Texto</label>
+        <textarea class="field-textarea" name="template_body" id="template_body" rows="5" required placeholder="Mensaje que se insertará en el chat..."></textarea>
+        <div class="template-dialog-actions">
+          <button type="button" class="btn btn-ghost" id="template-dialog-cancel">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar plantilla</button>
+        </div>
+      </form>
+    </dialog>
 
     <aside class="profile-panel">
       <div class="profile-top">
         <div class="profile-avatar font-brand">{{ conversation.initials }}</div>
         <div class="profile-name font-brand">{{ conversation.name }}</div>
-        <div class="pill pill-info" style="padding:5px 14px;">{{ conversation.role }}</div>
+        <div class="ticket-chip">{{ conversation.ticket_number }}</div>
       </div>
       <div class="divider"></div>
 
       <div class="info-col">
-        <div class="section-title">INFORMACIÓN DE CONTACTO</div>
-        <div class="info-row">{% icon 'mail' size=15 %}<span>valentina.soto@correo.com</span></div>
-        <div class="info-row">{% icon 'phone' size=15 %}<span>+57 300 123 4567</span></div>
-        <div class="info-row">{% icon 'graduation-cap' size=15 %}<span>Ingeniería de Sistemas · 2022</span></div>
-        <div class="info-row">{% icon 'calendar' size=15 %}<span>Caso abierto: 24 ago, 08:58 a. m.</span></div>
+        <div class="section-title">INFORMACIÓN DEL USUARIO</div>
+        <div class="info-row">{% icon 'mail' size=15 %}<span>{{ contact.email }}</span></div>
+        <div class="info-row">{% icon 'phone' size=15 %}<span>{{ contact.phone }}</span></div>
+        <div class="info-row">{% icon 'graduation-cap' size=15 %}<span>{{ contact.academic_program }} · Semestre {{ contact.semester }}</span></div>
+        <div class="info-row">{% icon 'calendar' size=15 %}<span>Documento: {{ contact.document_number }}</span></div>
+        <div class="info-row">{% icon 'calendar' size=15 %}<span>Abierto: {{ conversation.opened_at|date:"d M Y, H:i" }}</span></div>
       </div>
       <div class="divider"></div>
 
-      <div class="info-col">
-        <div class="section-title">ACCIONES RÁPIDAS</div>
+      <form class="info-col case-actions-form" method="post" action="{% url 'cases:detail' conversation.id %}" id="case-actions-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update_case">
+        <div class="section-title">GESTIÓN DEL CASO</div>
+
         <div class="field-group">
-          <div class="field-label">Estado del caso</div>
-          <div class="field-select field-select-row">
-            <span style="color: var(--danger-text); font-weight: 600;">Escalado</span>
-            {% icon 'chevron-down' size=15 %}
-          </div>
+          <label class="field-label" for="assigned_to">Asesor asignado</label>
+          <select class="field-input" id="assigned_to" name="assigned_to">
+            <option value="">Sin asignar</option>
+            {% for advisor in advisors %}
+              <option value="{{ advisor.id }}" {% if conversation.assigned_to_id == advisor.id %}selected{% endif %}>
+                {{ advisor.get_full_name|default:advisor.username }}
+              </option>
+            {% endfor %}
+          </select>
         </div>
+
         <div class="field-group">
-          <div class="field-label">Clasificar por tema</div>
-          <div class="field-select field-select-row">
-            <span style="font-weight: 600;">{{ conversation.theme }}</span>
-            {% icon 'chevron-down' size=15 %}
-          </div>
+          <label class="field-label" for="status">Estado del caso</label>
+          <select class="field-input" id="status" name="status" required>
+            {% for value, label in status_choices %}
+              <option value="{{ value }}" {% if conversation.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
         </div>
+
+        <div class="field-group" id="escalated-to-group" {% if conversation.status != "escalado" %}hidden{% endif %}>
+          <label class="field-label" for="escalated_to">Escalado a (dependencia)</label>
+          <select class="field-input" id="escalated_to" name="escalated_to">
+            <option value="">Selecciona dependencia</option>
+            {% for dept in departments %}
+              <option value="{{ dept.id }}" {% if conversation.escalated_to_id == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         <div class="field-group">
-          <div class="field-label">Escalar a dependencia</div>
-          <div style="display:flex; gap:8px;">
-            <div class="field-select field-select-row" style="flex:1;">
-              <span>Registro Académico</span>
-              {% icon 'chevron-down' size=15 %}
-            </div>
-            <button class="btn btn-primary btn-icon-only" type="button" aria-label="Escalar">
-              {% icon 'corner-up-right' size=16 %}
-            </button>
-          </div>
+          <label class="field-label" for="department">Dependencia (clasificación)</label>
+          <select class="field-input" id="department" name="department">
+            <option value="">Sin dependencia</option>
+            {% for dept in departments %}
+              <option value="{{ dept.id }}" {% if conversation.department_id == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+            {% endfor %}
+          </select>
         </div>
-      </div>
+
+        <div class="field-group">
+          <label class="field-label" for="priority">Prioridad</label>
+          <select class="field-input" id="priority" name="priority" required>
+            {% for value, label in priority_choices %}
+              <option value="{{ value }}" {% if conversation.priority == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <button class="btn btn-primary btn-block" type="submit">Guardar cambios</button>
+      </form>
       <div class="divider"></div>
 
       <div class="notes-col">
-        <div class="section-title">NOTAS INTERNAS</div>
-        {% for note in notes %}
+        <div class="section-title">COMENTARIOS DEL CASO</div>
+        {% for comment in comments %}
           <div class="note-card">
             <div class="note-top">
-              <span class="note-author">{{ note.author }}</span>
-              <span class="note-time">{{ note.time }}</span>
+              <span class="note-author">
+                {% if comment.author %}
+                  {{ comment.author.get_full_name|default:comment.author.username }}
+                {% else %}
+                  Sistema
+                {% endif %}
+              </span>
+              <span class="note-time">{{ comment.created_at|date:"d M, H:i" }}</span>
             </div>
-            <div class="note-text">{{ note.text }}</div>
+            <div class="note-text">{{ comment.body }}</div>
           </div>
+        {% empty %}
+          <div class="note-text" style="color: var(--text-muted);">Sin comentarios internos aún.</div>
         {% endfor %}
-        <div class="note-input">Agregar una nota interna (solo visible para asesores)...</div>
-        <button class="add-note-btn" type="button">
-          {% icon 'plus' size=14 %}
-          Agregar nota
-        </button>
+
+        <form method="post" action="{% url 'cases:detail' conversation.id %}" class="comment-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_comment">
+          <textarea class="field-textarea" name="comment_body" rows="3" placeholder="Agregar comentario interno (solo asesores)..." required></textarea>
+          <button class="add-note-btn" type="submit">
+            {% icon 'plus' size=14 %}
+            Agregar comentario
+          </button>
+        </form>
       </div>
     </aside>
   </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'cases/js/conversation.js' %}"></script>
+  <script src="{% static 'cases/js/composer.js' %}"></script>
+  <script>
+    (function () {
+      const status = document.getElementById("status");
+      const group = document.getElementById("escalated-to-group");
+      const escalated = document.getElementById("escalated_to");
+      if (!status || !group) return;
+      function sync() {
+        const show = status.value === "escalado";
+        group.hidden = !show;
+        if (escalated) escalated.required = show;
+      }
+      status.addEventListener("change", sync);
+      sync();
+    })();
+  </script>
 {% endblock %}

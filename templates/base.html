@@ -13,13 +13,19 @@
 </head>
 <body>
   <div class="app-shell">
+    <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
     {% include 'partials/sidebar.html' %}
     <div class="main-column">
       {% block topbar %}
       <header class="topbar">
-        <div>
-          <div class="topbar-title font-brand">{% block page_title %}{% endblock %}</div>
-          <div class="topbar-subtitle">{% block page_subtitle %}{% endblock %}</div>
+        <div class="topbar-left">
+          <button class="nav-toggle" type="button" id="nav-toggle" aria-label="Abrir menú" aria-controls="app-sidebar" aria-expanded="false">
+            {% icon 'menu' size=20 %}
+          </button>
+          <div>
+            <div class="topbar-title font-brand">{% block page_title %}{% endblock %}</div>
+            <div class="topbar-subtitle">{% block page_subtitle %}{% endblock %}</div>
+          </div>
         </div>
         <div class="topbar-right">
           <div class="search-box">
@@ -31,7 +37,7 @@
           </button>
           <div class="user-row">
             <div class="avatar">LG</div>
-            <div>
+            <div class="user-meta">
               <div class="user-name">Laura Gómez</div>
               <div class="user-role">Asesora</div>
             </div>
@@ -46,6 +52,7 @@
       {% endblock %}
     </div>
   </div>
+  <script src="{% static 'js/app-shell.js' %}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

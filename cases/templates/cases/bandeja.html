@@ -1,23 +1,46 @@
 {% extends "base.html" %}
-{% load icons %}
+{% load icons static %}
 
 {% block title %}Bandeja — Punto TdeA{% endblock %}
 {% block page_title %}Bandeja de entrada{% endblock %}
 {% block page_subtitle %}Todos los canales centralizados en un solo lugar{% endblock %}
 
 {% block content %}
-  <div class="filters-bar">
-    <div class="chip">Estado {% icon 'chevron-down' size=14 %}</div>
-    <div class="chip">Canal {% icon 'chevron-down' size=14 %}</div>
-    <div class="chip">Asesor {% icon 'chevron-down' size=14 %}</div>
-    <div class="chip">Fecha {% icon 'chevron-down' size=14 %}</div>
-    <div class="chip">Tema {% icon 'chevron-down' size=14 %}</div>
-    <div class="result-count">{{ result_count }} conversaciones</div>
-  </div>
+  <form class="filters-bar" method="get">
+    <select class="chip" name="status" onchange="this.form.submit()">
+      <option value="">Estado</option>
+      <option value="pendiente" {% if filters.status == "pendiente" %}selected{% endif %}>Pendiente</option>
+      <option value="completado" {% if filters.status == "completado" %}selected{% endif %}>Completado</option>
+      <option value="rechazado" {% if filters.status == "rechazado" %}selected{% endif %}>Rechazado</option>
+      <option value="escalado" {% if filters.status == "escalado" %}selected{% endif %}>Escalado</option>
+      <option value="cerrado" {% if filters.status == "cerrado" %}selected{% endif %}>Cerrado</option>
+    </select>
+    <select class="chip" name="priority" onchange="this.form.submit()">
+      <option value="">Prioridad</option>
+      <option value="baja" {% if filters.priority == "baja" %}selected{% endif %}>Baja</option>
+      <option value="media" {% if filters.priority == "media" %}selected{% endif %}>Media</option>
+      <option value="alta" {% if filters.priority == "alta" %}selected{% endif %}>Alta</option>
+      <option value="urgente" {% if filters.priority == "urgente" %}selected{% endif %}>Urgente</option>
+    </select>
+    <select class="chip" name="department" onchange="this.form.submit()">
+      <option value="">Dependencia</option>
+      {% for dept in departments %}
+        <option value="{{ dept.id }}" {% if filters.department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.name }}</option>
+      {% endfor %}
+    </select>
+    <select class="chip" name="channel" onchange="this.form.submit()">
+      <option value="">Canal</option>
+      <option value="whatsapp" {% if filters.channel == "whatsapp" %}selected{% endif %}>WhatsApp</option>
+      <option value="facebook" {% if filters.channel == "facebook" %}selected{% endif %}>Facebook</option>
+      <option value="instagram" {% if filters.channel == "instagram" %}selected{% endif %}>Instagram</option>
+      <option value="web" {% if filters.channel == "web" %}selected{% endif %}>Web</option>
+    </select>
+    <div class="result-count"><span id="result-count">{{ result_count }}</span> conversaciones</div>
+  </form>
 
-  <div class="conversation-list">
+  <div class="conversation-list" id="conversation-list" data-ws-url="{% if request.is_secure %}wss{% else %}ws{% endif %}://{{ request.get_host }}/ws/bandeja/">
     {% for conv in conversations %}
-      <a class="conversation-row" href="{% url 'cases:detail' conv.id %}">
+      <a class="conversation-row" data-conversation-id="{{ conv.id }}" href="{% url 'cases:detail' conv.id %}">
         <div class="channel-wrap {{ conv.channel_class }}">
           {% icon conv.channel_icon size=16 %}
         </div>
@@ -25,11 +48,12 @@
         <div class="conversation-name-col">
           <div class="conversation-name-row">
             <span class="conversation-name">{{ conv.name }}</span>
-            <span class="conversation-role">{{ conv.role }}</span>
+            <span class="conversation-role">{{ conv.ticket_number }}</span>
           </div>
           <div class="conversation-message">{{ conv.last_message }}</div>
         </div>
-        <div class="tag">{{ conv.theme }}</div>
+        <div class="tag">{{ conv.department_name }}</div>
+        <div class="pill pill-priority-{{ conv.priority }}">{{ conv.priority_label }}</div>
         <div class="conversation-time">{{ conv.time }}</div>
         <div class="advisor-col">
           {% icon 'user-round' size=14 %}
@@ -37,16 +61,24 @@
         </div>
         {% if conv.status == "pendiente" %}
           <span class="pill pill-warning">Pendiente</span>
-        {% elif conv.status == "en_gestion" %}
-          <span class="pill pill-info">En gestión</span>
+        {% elif conv.status == "completado" %}
+          <span class="pill pill-success">Completado</span>
+        {% elif conv.status == "rechazado" %}
+          <span class="pill pill-danger">Rechazado</span>
         {% elif conv.status == "escalado" %}
           <span class="pill pill-danger">Escalado</span>
-        {% elif conv.status == "atendido" %}
-          <span class="pill pill-success">Atendido</span>
         {% else %}
           <span class="pill pill-neutral">Cerrado</span>
         {% endif %}
       </a>
+    {% empty %}
+      <div class="conversation-row" id="empty-bandeja" style="justify-content:center;color:var(--text-muted);">
+        No hay conversaciones aún. Usa el simulador o el widget web.
+      </div>
     {% endfor %}
   </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'cases/js/bandeja.js' %}"></script>
 {% endblock %}
