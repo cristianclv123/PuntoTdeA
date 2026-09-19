@@ -1,73 +1,366 @@
-{% extends "base.html" %}
-{% load icons %}
+{% extends "base.html" %} {% load icons %} {% block title %}Avisos — Punto
+TdeA{% endblock %} {% block page_title %}Avisos y novedades{% endblock %} {%
+block page_subtitle %}Publica anuncios visibles para toda la comunidad{%
+endblock %} {% block content %}
+<style>
+  /* Ocultar inputs nativos manteniendo funcionalidad CSS */
+  .segmented-radio input,
+  .segmented-check input,
+  #toggle-nuevo-cuadro {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
 
-{% block title %}Avisos — Punto TdeA{% endblock %}
-{% block page_title %}Avisos y novedades{% endblock %}
-{% block page_subtitle %}Publica anuncios visibles para toda la comunidad{% endblock %}
+  /* Estilos para las opciones dentro de los formularios */
+  .segmented-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: #f0f0f0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
 
-{% block content %}
-  <div class="two-col-layout">
-    <form class="card form-col" method="post">
-      {% csrf_token %}
-      <div class="card-title font-brand" style="margin-bottom:18px;">Nuevo aviso</div>
+  .segmented-radio input[value="urgente"]:checked + .segmented-label {
+    background-color: #fee2e2;
+    color: #dc2626;
+  }
 
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label">Título del aviso</div>
-        <input class="field-input" type="text" value="Suspensión de clases — 28 de agosto">
-      </div>
+  .segmented-radio input[value="informativo"]:checked + .segmented-label {
+    background-color: #e0f2fe;
+    color: #0369a1;
+  }
 
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label">Tipo de aviso</div>
-        <div class="segmented-row">
-          <div class="segmented-option active-danger">Urgente</div>
-          <div class="segmented-option">Informativo</div>
-        </div>
-      </div>
+  .segmented-check input:checked + .segmented-label {
+    background-color: #e6f4ea;
+    color: #137333;
+    border: 1px solid #137333;
+  }
 
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label">Contenido</div>
-        <textarea class="field-textarea" rows="4">Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto quedan suspendidas. Las actividades académicas continúan de forma virtual.</textarea>
-      </div>
+  .segmented-check input:not(:checked) + .segmented-label .icon-checked,
+  .segmented-check input:checked + .segmented-label .icon-unchecked {
+    display: none;
+  }
 
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label">Audiencia</div>
-        <div class="segmented-row">
-          <div class="segmented-option active">{% icon 'square-check' size=14 %} Estudiantes</div>
-          <div class="segmented-option active">{% icon 'square-check' size=14 %} Aspirantes</div>
-          <div class="segmented-option">{% icon 'square' size=14 %} Egresados</div>
-        </div>
-      </div>
+  /* Botón verde "+ Crear aviso" */
+  .btn-create-out {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #008744;
+    color: white;
+    padding: 10px 18px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 20px;
+    user-select: none;
+    transition: background-color 0.2s;
+  }
+  .btn-create-out:hover {
+    background-color: #006b36;
+  }
 
-      <button type="submit" class="btn btn-primary btn-block" style="margin-top:8px;">
-        {% icon 'megaphone' size=16 %}
-        Publicar aviso
-      </button>
-    </form>
+  /* Mostrar/Ocultar el nuevo cuadro al presionar "Crear aviso" */
+  .nuevo-cuadro-formulario {
+    display: none;
+  }
+  #toggle-nuevo-cuadro:checked ~ .two-col-layout .nuevo-cuadro-formulario {
+    display: block;
+  }
 
-    <div class="list-col">
-      <div class="list-head">
-        <div class="list-title font-brand">Avisos publicados</div>
-        <div class="list-count">{{ announcements|length }} avisos activos</div>
-      </div>
-      {% for a in announcements %}
-        <div class="list-card">
-          <div class="list-card-top">
-            <div class="list-card-name" style="flex:1;">{{ a.title }}</div>
-            {% if a.type == "urgente" %}
-              <span class="pill pill-danger" style="padding:5px 12px;">Urgente</span>
-            {% else %}
-              <span class="pill pill-info" style="padding:5px 12px;">Informativo</span>
-            {% endif %}
-          </div>
-          <div class="list-card-body">{{ a.body }}</div>
-          <div class="card-meta-row">
-            {% icon 'user-round' size=13 %}
-            <span>{{ a.author }}</span>
-            <span class="meta-dot">·</span>
-            <span>{{ a.date }}</span>
-          </div>
-        </div>
-      {% endfor %}
+  /* Botón de cerrar/quitar el cuadro antes de publicar */
+  .btn-close-card {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 1.1rem;
+    font-weight: bold;
+    line-height: 1;
+    padding: 4px;
+    border-radius: 4px;
+  }
+  .btn-close-card:hover {
+    color: #dc2626;
+    background-color: #fee2e2;
+  }
+
+  /* Botón de eliminar aviso publicado */
+  .btn-delete-published {
+    background: none;
+    border: none;
+    color: #dc2626;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn-delete-published:hover {
+    background-color: #fee2e2;
+  }
+</style>
+
+<!-- Checkbox invisible que controla la aparición del nuevo cuadro sin JS -->
+<input type="checkbox" id="toggle-nuevo-cuadro" />
+
+<!-- Botón verde por fuera del cuadro -->
+<div style="display: flex; justify-content: flex-start">
+  <label for="toggle-nuevo-cuadro" class="btn-create-out">
+    {% icon 'plus' size=16 %} Crear aviso
+  </label>
+</div>
+
+<div class="two-col-layout">
+  <!-- Formulario 1 (El cuadro original) -->
+  <form class="card form-col" method="post">
+    {% csrf_token %}
+    <div class="card-title font-brand" style="margin-bottom: 18px">
+      Nuevo aviso
     </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <label class="field-label" for="title1">Título del aviso</label>
+      <input
+        id="title1"
+        name="title"
+        class="field-input"
+        type="text"
+        value="Suspensión de clases — 28 de agosto"
+        required
+      />
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <div class="field-label">Tipo de aviso</div>
+      <div class="segmented-row">
+        <label class="segmented-radio">
+          <input type="radio" name="type" value="urgente" checked />
+          <span class="segmented-label">Urgente</span>
+        </label>
+        <label class="segmented-radio">
+          <input type="radio" name="type" value="informativo" />
+          <span class="segmented-label">Informativo</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <label class="field-label" for="body1">Contenido</label>
+      <textarea id="body1" name="body" class="field-textarea" rows="4" required>
+Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto quedan suspendidas. Las actividades académicas continúan de forma virtual.</textarea
+      >
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <div class="field-label">Audiencia</div>
+      <div class="segmented-row">
+        <label class="segmented-check">
+          <input type="checkbox" name="audience" value="Estudiantes" checked />
+          <span class="segmented-label">
+            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
+            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
+            Estudiantes
+          </span>
+        </label>
+
+        <label class="segmented-check">
+          <input type="checkbox" name="audience" value="Aspirantes" checked />
+          <span class="segmented-label">
+            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
+            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
+            Aspirantes
+          </span>
+        </label>
+
+        <label class="segmented-check">
+          <input type="checkbox" name="audience" value="Egresados" />
+          <span class="segmented-label">
+            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
+            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
+            Egresados
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <button
+      type="submit"
+      class="btn btn-primary btn-block"
+      style="margin-top: 8px"
+    >
+      {% icon 'megaphone' size=16 %} Publicar aviso
+    </button>
+  </form>
+
+  <!-- Formulario 2 (El nuevo cuadro que aparece y se puede quitar/cerrar con la "✕") -->
+  <form class="card form-col nuevo-cuadro-formulario" method="post">
+    {% csrf_token %}
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+      "
+    >
+      <div class="card-title font-brand" style="margin-bottom: 0">
+        Nuevo aviso
+      </div>
+      <!-- Botón para quitar/cerrar este cuadro -->
+      <label
+        for="toggle-nuevo-cuadro"
+        class="btn-close-card"
+        title="Quitar cuadro"
+        >✕</label
+      >
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <label class="field-label" for="title2">Título del aviso</label>
+      <input
+        id="title2"
+        name="title"
+        class="field-input"
+        type="text"
+        placeholder="Escribe el título..."
+        required
+      />
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <div class="field-label">Tipo de aviso</div>
+      <div class="segmented-row">
+        <label class="segmented-radio">
+          <input type="radio" name="type" value="urgente" checked />
+          <span class="segmented-label">Urgente</span>
+        </label>
+        <label class="segmented-radio">
+          <input type="radio" name="type" value="informativo" />
+          <span class="segmented-label">Informativo</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <label class="field-label" for="body2">Contenido</label>
+      <textarea
+        id="body2"
+        name="body"
+        class="field-textarea"
+        rows="4"
+        placeholder="Escribe el contenido..."
+        required
+      ></textarea>
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <div class="field-label">Audiencia</div>
+      <div class="segmented-row">
+        <label class="segmented-check">
+          <input type="checkbox" name="audience" value="Estudiantes" checked />
+          <span class="segmented-label">
+            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
+            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
+            Estudiantes
+          </span>
+        </label>
+
+        <label class="segmented-check">
+          <input type="checkbox" name="audience" value="Aspirantes" />
+          <span class="segmented-label">
+            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
+            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
+            Aspirantes
+          </span>
+        </label>
+
+        <label class="segmented-check">
+          <input type="checkbox" name="audience" value="Egresados" />
+          <span class="segmented-label">
+            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
+            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
+            Egresados
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <button
+      type="submit"
+      class="btn btn-primary btn-block"
+      style="margin-top: 8px"
+    >
+      {% icon 'megaphone' size=16 %} Publicar aviso
+    </button>
+  </form>
+
+  <!-- Lista de avisos publicados con opción de eliminar -->
+  <div class="list-col">
+    <div class="list-head">
+      <div class="list-title font-brand">Avisos publicados</div>
+      <div class="list-count">{{ announcements|length }} avisos activos</div>
+    </div>
+    {% for a in announcements %}
+    <div class="list-card">
+      <div class="list-card-top">
+        <div class="list-card-name" style="flex: 1">{{ a.title }}</div>
+        {% if a.type == "urgente" %}
+        <span class="pill pill-danger" style="padding: 5px 12px">Urgente</span>
+        {% else %}
+        <span class="pill pill-info" style="padding: 5px 12px"
+          >Informativo</span
+        >
+        {% endif %}
+      </div>
+      <div class="list-card-body">{{ a.body }}</div>
+      <div
+        class="card-meta-row"
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        "
+      >
+        <div>
+          {% icon 'user-round' size=13 %}
+          <span>{{ a.author }}</span>
+          <span class="meta-dot">·</span>
+          <span>{{ a.date }}</span>
+        </div>
+
+        <!-- Botón de eliminar aviso ya publicado -->
+        <form method="post" style="margin: 0; display: inline">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete" />
+          <input
+            type="hidden"
+            name="notice_id"
+            value="{{ a.id|default:forloop.counter0 }}"
+          />
+          <button type="submit" class="btn-delete-published">
+            {% icon 'trash-2' size=13 %} Eliminar
+          </button>
+        </form>
+      </div>
+    </div>
+    {% empty %}
+    <div style="padding: 24px; color: #888; font-size: 0.9rem">
+      No hay avisos activos. Presiona "Crear aviso" para publicar el primero.
+    </div>
+    {% endfor %}
   </div>
+</div>
 {% endblock %}
+

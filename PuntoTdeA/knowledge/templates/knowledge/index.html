@@ -1,23 +1,45 @@
 {% extends 'index.html' %}
 
+{% block title %}Asistente de conocimiento - Punto TdeA{% endblock %}
+
 {% block content %}
-<div class="container py-5">
+<main class="container py-5">
     <div class="row g-4 align-items-start">
         <div class="col-lg-8">
             <div class="card shadow-sm border-0 h-100">
                 <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="mb-4">
                         <div>
                             <p class="text-success fw-semibold mb-1">Módulo de conocimiento</p>
-                            <h1 class="h3 mb-0">Base de conocimiento institucional</h1>
+                            <h1 class="h3 mb-1">Asistente de conocimiento institucional</h1>
+                            <p class="text-muted mb-0">Pregunta por matrículas, trámites, programas y fechas oficiales.</p>
                         </div>
-                        <a href="{% url 'knowledge:ask' %}?q=Cu%C3%A1ndo%20es%20la%20matr%C3%ADcula" class="btn btn-success btn-sm">Probar consulta</a>
                     </div>
 
+                    <div class="knowledge-chat" data-ask-url="{% url 'knowledge:ask' %}">
+                        <div class="knowledge-chat__messages border rounded p-3 mb-3" data-chat-messages aria-live="polite">
+                            <div class="chat-message chat-message--bot">
+                                <span class="fw-semibold">Asistente:</span> Hola. ¿Qué información necesitas consultar?
+                            </div>
+                        </div>
+
+                        <form class="knowledge-chat__form" data-chat-form>
+                            <label class="visually-hidden" for="knowledge-question">Pregunta</label>
+                            <div class="input-group input-group-lg">
+                                <input id="knowledge-question" name="q" class="form-control" placeholder="Escribe tu pregunta..." autocomplete="off" required>
+                                <button class="btn btn-success" type="submit"><i class="bi bi-send me-1"></i>Preguntar</button>
+                            </div>
+                        </form>
+                        <div class="form-text">La respuesta se genera únicamente con información vigente de esta base.</div>
+                    </div>
+
+                    <hr class="my-4">
+
                     <form method="get" action="{% url 'knowledge:search' %}" class="mb-4">
-                        <div class="input-group input-group-lg">
-                            <input type="text" name="q" class="form-control" placeholder="Busque fechas, trámites, costos o programas..." aria-label="Buscar conocimiento">
-                            <button class="btn btn-success" type="submit">Buscar</button>
+                        <label class="form-label fw-semibold" for="knowledge-search">Buscar artículos y FAQs</label>
+                        <div class="input-group">
+                            <input id="knowledge-search" type="text" name="q" class="form-control" placeholder="Fechas, trámites, costos o programas...">
+                            <button class="btn btn-outline-success" type="submit">Buscar</button>
                         </div>
                     </form>
 
@@ -64,5 +86,5 @@
             </div>
         </div>
     </div>
-</div>
+</main>
 {% endblock %}

@@ -30,6 +30,7 @@ class KnowledgeArticleAdmin(admin.ModelAdmin):
 
 @admin.register(FAQ)
 class FAQAdmin(admin.ModelAdmin):
-    list_display = ('question', 'category', 'intent', 'is_active', 'order')
-    list_filter = ('is_active', 'category')
+    list_display = ('question', 'category', 'is_active', 'valid_from', 'valid_until', 'order')
+    list_filter = ('is_active', 'category', 'valid_from', 'valid_until')
     search_fields = ('question', 'answer')
+    fields = ('question', 'answer', 'category', 'intent', 'is_active', 'order', 'valid_from', 'valid_until', 'image')

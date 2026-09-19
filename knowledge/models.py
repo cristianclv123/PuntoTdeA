@@ -1,63 +1,126 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils.text import slugify
 
-from django.db import models
-from django.core.validators import MinValueValidator
-from decimal import Decimal
+try:
+    from pgvector.django import VectorField  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - optional dependency for PostgreSQL vector support
+    VectorField = None
 
 
-class Categoria(models.Model):
-    nombre = models.CharField(max_length=100, unique=True)
-    descripcion = models.TextField(blank=True, null=True)
+class BaseKnowledgeModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'categoria'
+        abstract = True
+
+
+class Category(BaseKnowledgeModel):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Categoría'
         verbose_name_plural = 'Categorías'
 
-    def __str__(self):
-        return self.nombre
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return str(self.name)
 
 
-class Producto(models.Model):
-    # Clave primaria implícita (id) o explícita
-    codigo_barras = models.CharField(max_length=50, unique=True, db_index=True)
-    nombre = models.CharField(max_length=150)
-    descripcion = models.TextField(blank=True, null=True)
-
-    # Mapeo a NUMERIC / DECIMAL en PostgreSQL para evitar errores de redondeo
-    precio_compra = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.00'))]
+class Intent(BaseKnowledgeModel):
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=140, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    confidence_threshold = models.FloatField(
+        default=0.75,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
     )
-    precio_venta = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-
-    stock = models.IntegerField(default=0)
-    stock_minimo = models.IntegerField(default=5)
-
-    # Relación ForeignKey (Clave foránea)
-    categoria = models.ForeignKey(
-        Categoria,
-        on_delete=models.PROTECT,
-        related_name='productos'
-    )
-
-    # Campos específicos útiles con PostgreSQL
-    activo = models.BooleanField(default=True)
-    creado_en = models.DateTimeField(auto_now_add=True)
-    actualizado_en = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'producto'  # Nombre exacto de la tabla en PostgreSQL
-        ordering = ['-creado_en']
+        ordering = ['name']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return str(self.name)
+
+
+class KnowledgeArticle(BaseKnowledgeModel):
+    STATUS_CHOICES = [
+        ('draft', 'Borrador'),
+        ('published', 'Publicado'),
+        ('archived', 'Archivado'),
+    ]
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    summary = models.TextField(blank=True)
+    content = models.TextField()
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='articles')
+    intent = models.ForeignKey(Intent, on_delete=models.SET_NULL, null=True, blank=True, related_name='articles')
+    tags = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    published = models.BooleanField(default=False)
+    published_at = models.DateTimeField(null=True, blank=True)
+    embedding = models.JSONField(default=list, blank=True)
+    if VectorField is not None:
+        embedding_vector = VectorField(dimensions=1536, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-published_at', '-created_at']
         indexes = [
-            # Índice compuesto optimizado para PostgreSQL
-            models.Index(fields=['nombre', 'activo']),
+            models.Index(fields=['title', 'status']),
+            models.Index(fields=['category', 'status']),
         ]
 
-    def __str__(self):
-        return f"{self.nombre} - ${self.precio_venta}"
-# Create your models here.
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        if self.published and not self.published_at:
+            from django.utils import timezone
+            self.published_at = timezone.now()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_published(self):
+        return self.published or self.status == 'published'
+
+    @property
+    def indexable_text(self):
+        return ' '.join(filter(None, [self.title, self.summary, self.content]))
+
+    def __str__(self) -> str:
+        return str(self.title)
+
+
+class FAQ(BaseKnowledgeModel):
+    question = models.CharField(max_length=255)
+    answer = models.TextField()
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='faqs')
+    intent = models.ForeignKey(Intent, on_delete=models.SET_NULL, null=True, blank=True, related_name='faqs')
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    valid_from = models.DateTimeField(null=True, blank=True, verbose_name='Válida desde')
+    valid_until = models.DateTimeField(null=True, blank=True, verbose_name='Válida hasta')
+    image = models.ImageField(upload_to='knowledge/faqs/', null=True, blank=True, verbose_name='Imagen')
+
+    class Meta:
+        ordering = ['order', '-created_at']
+        verbose_name = 'FAQ'
+        verbose_name_plural = 'FAQs'
+
+    def __str__(self) -> str:
+        return str(self.question)

@@ -11,5 +11,5 @@ urlpatterns = [
     path('announcements/', include('announcements.urls')),
     #path('cases/', include('cases.urls')),
     path('communications/', include('communications.urls')),
-    path('knowledge/', include('knowledge.urls')),
+    path('knowledge/', include('PuntoTdeA.knowledge.urls')),
 ]

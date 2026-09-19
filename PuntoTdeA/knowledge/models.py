@@ -113,6 +113,9 @@ class FAQ(BaseKnowledgeModel):
     intent = models.ForeignKey(Intent, on_delete=models.SET_NULL, null=True, blank=True, related_name='faqs')
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
+    valid_from = models.DateTimeField(null=True, blank=True, verbose_name='Válida desde')
+    valid_until = models.DateTimeField(null=True, blank=True, verbose_name='Válida hasta')
+    image = models.ImageField(upload_to='knowledge/faqs/', null=True, blank=True, verbose_name='Imagen')
 
     class Meta:
         ordering = ['order', '-created_at']

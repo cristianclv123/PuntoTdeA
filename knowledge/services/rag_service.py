@@ -6,14 +6,51 @@ from typing import Any
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models
-from django.utils.text import slugify
 from django.utils import timezone
+from django.utils.text import slugify
 
 from .. import models as knowledge_models
 
 
 def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", ' ', (text or '')).strip()
+
+
+def _normalize_token(token: str) -> str:
+    token = unicodedata.normalize('NFKD', (token or '').lower())
+    token = ''.join(character for character in token if not unicodedata.combining(character))
+    if not token:
+        return token
+
+    if token.isdigit():
+        return token
+
+    if len(token) <= 3:
+        return token
+
+    # Normalización simple de plurales para consultas del tipo "matriculas", "fechas", "respuestas"
+    if token.endswith('ses'):
+        candidate = token[:-2]
+        if len(candidate) > 2:
+            return candidate
+    if token.endswith('es') and not token.endswith(('ces', 'des', 'ges', 'ques')):
+        candidate = token[:-2]
+        if len(candidate) > 2:
+            return candidate
+    if token.endswith('as'):
+        candidate = token[:-1]
+        if len(candidate) > 2:
+            return candidate
+    if token.endswith('os'):
+        candidate = token[:-1]
+        if len(candidate) > 2:
+            return candidate
+    if token.endswith('s'):
+        candidate = token[:-1]
+        if len(candidate) > 2:
+            return candidate
+
+    return token
 
 
 def _tokenize(text: str):
@@ -24,10 +61,12 @@ def _tokenize(text: str):
         'este', 'estos', 'estas', 'una', 'uno', 'unos', 'unas', 'los', 'las',
         'del', 'por', 'con', 'que', 'hay', 'son', 'sobre', 'puedo', 'necesito',
     }
-    return [
-        token for token in re.findall(r"[a-z0-9]+", text)
-        if len(token) > 2 and token not in stopwords
-    ]
+    tokens = []
+    for token in re.findall(r"[a-z0-9]+", text):
+        token = _normalize_token(token)
+        if len(token) > 2 and token not in stopwords:
+            tokens.append(token)
+    return tokens
 
 
 def _vectorize(text: str):
