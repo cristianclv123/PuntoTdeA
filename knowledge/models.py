@@ -1,8 +1,24 @@
+<<<<<<< Updated upstream
+=======
+import uuid
+
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.conf import settings
+>>>>>>> Stashed changes
 from django.db import models
 
+<<<<<<< Updated upstream
 from django.db import models
 from django.core.validators import MinValueValidator
 from decimal import Decimal
+=======
+VectorField = None
+if getattr(settings, 'KNOWLEDGE_ENABLE_VECTOR', False):
+    try:
+        from pgvector.django import VectorField  # type: ignore[import-not-found]
+    except ImportError:  # pragma: no cover - optional dependency for PostgreSQL vector support
+        pass
+>>>>>>> Stashed changes
 
 
 class Categoria(models.Model):
@@ -58,6 +74,77 @@ class Producto(models.Model):
             models.Index(fields=['nombre', 'activo']),
         ]
 
+<<<<<<< Updated upstream
     def __str__(self):
         return f"{self.nombre} - ${self.precio_venta}"
 # Create your models here.
+=======
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        if self.published and not self.published_at:
+            from django.utils import timezone
+            self.published_at = timezone.now()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_published(self):
+        return self.published or self.status == 'published'
+
+    @property
+    def indexable_text(self):
+        return ' '.join(filter(None, [self.title, self.summary, self.content]))
+
+    def __str__(self) -> str:
+        return str(self.title)
+
+
+class FAQ(BaseKnowledgeModel):
+    question = models.CharField(max_length=255)
+    answer = models.TextField()
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='faqs')
+    intent = models.ForeignKey(Intent, on_delete=models.SET_NULL, null=True, blank=True, related_name='faqs')
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+    valid_from = models.DateTimeField(null=True, blank=True, verbose_name='Válida desde')
+    valid_until = models.DateTimeField(null=True, blank=True, verbose_name='Válida hasta')
+    image = models.ImageField(upload_to='knowledge/faqs/', null=True, blank=True, verbose_name='Imagen')
+
+    class Meta:
+        ordering = ['order', '-created_at']
+        verbose_name = 'FAQ'
+        verbose_name_plural = 'FAQs'
+
+    def __str__(self) -> str:
+        return str(self.question)
+
+
+class ChatConversation(BaseKnowledgeModel):
+    STATUS_ACTIVE = 'active'
+    STATUS_ENDED = 'ended'
+    STATUS_PENDING = 'pending'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Activa'),
+        (STATUS_ENDED, 'Finalizada'),
+        (STATUS_PENDING, 'Pendiente de asesor'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    channel = models.CharField(max_length=30, default='webchat', db_index=True)
+    external_user_id = models.CharField(max_length=120, blank=True, db_index=True)
+    flow_state = models.CharField(max_length=40, default='waiting_question')
+    last_question = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    messages = models.JSONField(default=list, blank=True)
+    escalation_reason = models.TextField(blank=True)
+    advisor_question = models.TextField(blank=True)
+    escalated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Conversación del chatbot'
+        verbose_name_plural = 'Conversaciones del chatbot'
+
+    def __str__(self) -> str:
+        return f'Conversación {self.pk}'
+>>>>>>> Stashed changes

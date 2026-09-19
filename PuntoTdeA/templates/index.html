@@ -164,6 +164,20 @@
                 </div>
             </div>
 
+            <!-- 6. Chatbot -->
+            <div class="col-12 col-sm-6 col-lg-4">
+                <div class="card module-card h-100 p-4 d-flex flex-column justify-content-between border-primary">
+                    <div>
+                        <div class="icon-box mb-3">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <h5 class="fw-bold">Chatbot de atención</h5>
+                        <p class="text-muted small">Consulta información institucional y solicita ayuda de un asesor.</p>
+                    </div>
+                    <a href="{% url 'knowledge:chatbot' %}" class="btn btn-entry w-100 mt-3">Abrir chatbot</a>
+                </div>
+            </div>
+
         </div>
     </main>
     {% endblock %}
