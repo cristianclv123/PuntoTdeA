@@ -1,10 +1,6 @@
-import hashlib
-import hmac
-import json
-
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase, override_settings
+from django.test import Client, TestCase
 from django.urls import reverse
 
 from cases.models import (
@@ -19,12 +15,11 @@ from cases.models import (
 )
 from cases.services.attachments import detect_kind, validate_uploaded_file
 from cases.services.ingestion import InboundPayload, create_outbound_message, ingest_inbound_message
-from cases.services.meta import parse_meta_webhook, validate_meta_signature, verify_meta_token
 
 
 class ModelTests(TestCase):
     def test_channel_seed_and_contact_fields(self):
-        self.assertTrue(Channel.objects.filter(code="whatsapp").exists())
+        self.assertTrue(Channel.objects.filter(code="web").exists())
         contact = Contact.objects.create(
             full_name="Ana Pérez",
             document_number="123",
@@ -39,10 +34,10 @@ class ModelTests(TestCase):
 class IngestionTests(TestCase):
     def test_ingest_is_idempotent_by_external_id(self):
         payload = InboundPayload(
-            channel_code="whatsapp",
-            external_thread_id="573001112233",
+            channel_code="web",
+            external_thread_id="web-573001112233",
             body="Hola",
-            external_message_id="wamid.1",
+            external_message_id="web-msg-1",
             contact_full_name="Ana Pérez",
             contact_document_number="DOC-1",
             contact_email="ana@tdea.edu.co",
@@ -56,96 +51,6 @@ class IngestionTests(TestCase):
         self.assertEqual(msg1.id, msg2.id)
         self.assertEqual(Message.objects.count(), 1)
         self.assertEqual(Conversation.objects.count(), 1)
-
-
-class MetaWebhookTests(TestCase):
-    def test_verify_token(self):
-        challenge = verify_meta_token("subscribe", "puntotdea-dev-verify", "12345")
-        self.assertEqual(challenge, "12345")
-        self.assertIsNone(verify_meta_token("subscribe", "wrong", "12345"))
-
-    @override_settings(META_APP_SECRET="secret")
-    def test_signature_validation(self):
-        body = b'{"object":"whatsapp_business_account"}'
-        digest = hmac.new(b"secret", body, hashlib.sha256).hexdigest()
-        self.assertTrue(validate_meta_signature(body, f"sha256={digest}"))
-        self.assertFalse(validate_meta_signature(body, "sha256=bad"))
-
-    def test_parse_whatsapp_payload(self):
-        payload = {
-            "object": "whatsapp_business_account",
-            "entry": [
-                {
-                    "changes": [
-                        {
-                            "value": {
-                                "contacts": [
-                                    {"profile": {"name": "Ana"}, "wa_id": "57300"}
-                                ],
-                                "messages": [
-                                    {
-                                        "from": "57300",
-                                        "id": "wamid.abc",
-                                        "type": "text",
-                                        "text": {"body": "Hola Punto TdeA"},
-                                    }
-                                ],
-                            }
-                        }
-                    ]
-                }
-            ],
-        }
-        items = parse_meta_webhook(payload)
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0].body, "Hola Punto TdeA")
-        self.assertEqual(items[0].channel_code, "whatsapp")
-
-    def test_meta_webhook_get_and_post(self):
-        client = Client()
-        url = reverse("meta-webhook")
-        ok = client.get(
-            url,
-            {
-                "hub.mode": "subscribe",
-                "hub.verify_token": "puntotdea-dev-verify",
-                "hub.challenge": "challenge-token",
-            },
-        )
-        self.assertEqual(ok.status_code, 200)
-        self.assertEqual(ok.content.decode(), "challenge-token")
-
-        body = {
-            "object": "whatsapp_business_account",
-            "entry": [
-                {
-                    "changes": [
-                        {
-                            "value": {
-                                "contacts": [
-                                    {"profile": {"name": "Ana"}, "wa_id": "57300"}
-                                ],
-                                "messages": [
-                                    {
-                                        "from": "57300",
-                                        "id": "wamid.post1",
-                                        "type": "text",
-                                        "text": {"body": "Desde Meta"},
-                                    }
-                                ],
-                            }
-                        }
-                    ]
-                }
-            ],
-        }
-        response = client.post(
-            url,
-            data=json.dumps(body),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(Message.objects.count(), 1)
 
 
 class WidgetApiTests(TestCase):

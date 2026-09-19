@@ -1,7 +1,4 @@
-import json
-
 from django.conf import settings
-from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from django.views.decorators.csrf import csrf_exempt
@@ -16,7 +13,6 @@ from cases.services.ingestion import (
     create_outbound_message,
     ingest_inbound_message,
 )
-from cases.services.meta import parse_meta_webhook, validate_meta_signature, verify_meta_token
 from cases.api.serializers import (
     ContactSerializer,
     ConversationSerializer,
@@ -25,37 +21,6 @@ from cases.api.serializers import (
     WebContactCreateSerializer,
     WebMessageCreateSerializer,
 )
-
-
-@csrf_exempt
-@api_view(["GET", "POST"])
-@permission_classes([AllowAny])
-def meta_webhook(request):
-    if request.method == "GET":
-        mode = request.GET.get("hub.mode", "")
-        token = request.GET.get("hub.verify_token", "")
-        challenge = request.GET.get("hub.challenge", "")
-        verified = verify_meta_token(mode, token, challenge)
-        if verified is None:
-            return HttpResponseForbidden("Verification failed")
-        return HttpResponse(verified, content_type="text/plain")
-
-    raw_body = request.body
-    signature = request.META.get("HTTP_X_HUB_SIGNATURE_256")
-    if not validate_meta_signature(raw_body, signature):
-        return HttpResponseForbidden("Invalid signature")
-
-    try:
-        payload = json.loads(raw_body.decode("utf-8") or "{}")
-    except json.JSONDecodeError:
-        return Response({"detail": "Invalid JSON"}, status=status.HTTP_400_BAD_REQUEST)
-
-    created = 0
-    for inbound in parse_meta_webhook(payload):
-        _, _, was_created = ingest_inbound_message(inbound)
-        if was_created:
-            created += 1
-    return Response({"ok": True, "created": created})
 
 
 @csrf_exempt
@@ -175,5 +140,4 @@ def advisor_reply(request, conversation_id: int):
     if not body:
         return Response({"detail": "body requerido"}, status=status.HTTP_400_BAD_REQUEST)
     message = create_outbound_message(conversation, body, user=request.user if request.user.is_authenticated else None)
-    # Stub Meta send: real delivery requires META_ACCESS_TOKEN + Graph API call.
     return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)

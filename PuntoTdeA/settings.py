@@ -64,7 +64,6 @@ TEMPLATES = [
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [
             BASE_DIR / "templates",
-            BASE_DIR / "PuntoTdeA" / "templates",
         ],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -134,9 +133,6 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(",") if o.strip()
 CORS_ALLOW_CREDENTIALS = True
 
 
-META_VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "puntotdea-dev-verify")
-META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
-META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
 ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "ALLOW_WEBHOOK_SIMULATOR",
     "true" if DEBUG else "false",
@@ -160,7 +156,6 @@ STATIC_URL = '/static/'
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
-    BASE_DIR / "PuntoTdeA" / "static",
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
