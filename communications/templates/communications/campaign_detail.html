@@ -6,12 +6,12 @@
 {% block page_lead %}Métricas de envío, lectura, clics y respuestas.{% endblock %}
 
 {% block hero_actions %}
-<a href="{% url 'communications:campaigns' %}" class="btn btn-outline-light rounded-pill">
+<a href="{% url 'communications:campaigns' %}" class="btn btn-outline-success rounded-pill">
     <i class="bi bi-arrow-left me-1"></i> Volver al listado
 </a>
 {% endblock %}
 
-{% block content %}
+{% block outbound_content %}
 <div id="campaignDetailRoot">
     <div class="d-flex align-items-center gap-2 text-muted py-4">
         <div class="spinner-border spinner-border-sm text-success" role="status">

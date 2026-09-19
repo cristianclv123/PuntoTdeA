@@ -138,6 +138,10 @@ ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "true" if DEBUG else "false",
 ).lower() in {"1", "true", "yes"}
 
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -166,6 +170,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ImageField models exist; silence check when Pillow is not installed in local/CI.
+SILENCED_SYSTEM_CHECKS = ["fields.E210"]
 
 KNOWLEDGE_SETTINGS = {
     'MIN_CONFIDENCE': 0.7,

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}Mi perfil — Punto TdeA{% endblock %}
+{% block page_title %}Mi perfil{% endblock %}
+{% block page_subtitle %}Datos de tu cuenta de asesor{% endblock %}
+
+{% block content %}
+  {% if messages %}
+    <div class="profile-alerts">
+      {% for message in messages %}
+        <div class="profile-alert {% if message.tags %}profile-alert-{{ message.tags }}{% endif %}" role="status">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="profile-layout">
+    <section class="card profile-summary">
+      <div class="profile-summary-top">
+        <div class="profile-summary-avatar font-brand">{{ initials }}</div>
+        <div>
+          <h2 class="profile-summary-name font-brand">{{ profile_user.get_full_name|default:profile_user.username }}</h2>
+          <p class="profile-summary-role">Asesor · @{{ profile_user.username }}</p>
+          {% if profile_user.email %}
+            <p class="profile-summary-email">{{ profile_user.email }}</p>
+          {% endif %}
+        </div>
+      </div>
+      <div class="profile-stats">
+        <div class="profile-stat">
+          <div class="profile-stat-value font-brand">{{ stats.assigned_open }}</div>
+          <div class="profile-stat-label">Chats abiertos</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-value font-brand">{{ stats.assigned_total }}</div>
+          <div class="profile-stat-label">Asignados totales</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card profile-form-card">
+      <h3 class="card-title">Información personal</h3>
+      {% if error %}
+        <div class="login-error" role="alert">{{ error }}</div>
+      {% endif %}
+      <form method="post" class="profile-form" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="profile">
+        <div class="profile-form-grid">
+          <div class="field-group">
+            <label class="field-label" for="first_name">Nombre</label>
+            <input class="field-input" id="first_name" name="first_name" type="text" value="{{ profile_user.first_name }}" maxlength="150" autocomplete="given-name">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="last_name">Apellido</label>
+            <input class="field-input" id="last_name" name="last_name" type="text" value="{{ profile_user.last_name }}" maxlength="150" autocomplete="family-name">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="username">Usuario</label>
+            <input class="field-input" id="username" type="text" value="{{ profile_user.username }}" disabled>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="email">Correo</label>
+            <input class="field-input" id="email" name="email" type="email" value="{{ profile_user.email }}" maxlength="254" autocomplete="email">
+          </div>
+        </div>
+        <div class="profile-form-actions">
+          <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card profile-form-card">
+      <h3 class="card-title">Cambiar contraseña</h3>
+      {% if password_error %}
+        <div class="login-error" role="alert">{{ password_error }}</div>
+      {% endif %}
+      <form method="post" class="profile-form" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="password">
+        <div class="profile-form-grid profile-form-grid-1">
+          <div class="field-group">
+            <label class="field-label" for="current_password">Contraseña actual</label>
+            <input class="field-input" id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="new_password">Nueva contraseña</label>
+            <input class="field-input" id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="confirm_password">Confirmar nueva contraseña</label>
+            <input class="field-input" id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
+          </div>
+        </div>
+        <div class="profile-form-actions">
+          <button type="submit" class="btn btn-outline">Actualizar contraseña</button>
+        </div>
+      </form>
+    </section>
+  </div>
+{% endblock %}

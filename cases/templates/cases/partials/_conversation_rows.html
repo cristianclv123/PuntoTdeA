@@ -1,0 +1,37 @@
+{% load icons %}
+{% for conv in conversations %}
+  <a
+    class="conversation-row wa-chat-card {% if selected_id == conv.id %}active{% endif %}"
+    data-conversation-id="{{ conv.id }}"
+    data-assigned-to-id="{{ conv.assigned_to_id|default:'' }}"
+    data-search="{{ conv.name }} {{ conv.phone }} {{ conv.last_message }} {{ conv.ticket_number }}"
+    href="{% url 'cases:detail' conv.id %}{% if filter_query %}?{{ filter_query }}{% endif %}"
+  >
+    <div class="wa-avatar">{{ conv.initials }}</div>
+    <div class="wa-card-body">
+      <div class="wa-card-top">
+        <span class="wa-card-name">{{ conv.name }}</span>
+        <span class="wa-card-time">{{ conv.time }}</span>
+      </div>
+      <div class="wa-card-preview">{{ conv.last_message|default:"Sin mensajes" }}</div>
+      <div class="wa-card-bottom">
+        <span class="wa-status-tag wa-status-tag--{{ conv.status_tag_class }}">{{ conv.status_badge }}</span>
+        <span class="wa-channel-icon {{ conv.channel_class }}" title="{{ conv.channel_label }}">
+          {% icon conv.channel_icon size=14 %}
+        </span>
+      </div>
+    </div>
+  </a>
+{% empty %}
+  <div class="conversation-row empty-row" id="empty-bandeja">
+    {% if active_tab == "mine" %}
+      Aún no tienes chats asignados.
+    {% elif active_tab == "unanswered" %}
+      No hay chats esperando respuesta.
+    {% elif active_tab == "unassigned" %}
+      No hay chats sin asesor.
+    {% else %}
+      No hay conversaciones de WhatsApp aún.
+    {% endif %}
+  </div>
+{% endfor %}

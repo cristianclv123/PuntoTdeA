@@ -4,7 +4,7 @@ from django.utils.crypto import get_random_string
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from cases.models import Channel, Contact, Conversation, Message
@@ -133,11 +133,18 @@ def web_list_messages(request, conversation_id: int):
 
 
 @api_view(["POST"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def advisor_reply(request, conversation_id: int):
+    from cases.services.assignment import advisor_can_reply
+
     conversation = get_object_or_404(Conversation, pk=conversation_id)
+    if not advisor_can_reply(conversation, request.user):
+        return Response(
+            {"detail": "Debes tomar el chat antes de responder."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
     body = (request.data.get("body") or "").strip()
     if not body:
         return Response({"detail": "body requerido"}, status=status.HTTP_400_BAD_REQUEST)
-    message = create_outbound_message(conversation, body, user=request.user if request.user.is_authenticated else None)
+    message = create_outbound_message(conversation, body, user=request.user)
     return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)

@@ -1,57 +1,90 @@
 (function () {
   const list = document.getElementById("conversation-list");
+  const searchInput = document.getElementById("wa-search-input");
   if (!list) return;
 
   const wsUrl = list.dataset.wsUrl;
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function updateCount() {
+    const countEl = document.getElementById("result-count");
+    if (!countEl) return;
+    const visible = list.querySelectorAll(".conversation-row.wa-chat-card:not(.hidden-by-search)").length;
+    countEl.textContent = String(visible);
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      const q = searchInput.value.trim().toLowerCase();
+      list.querySelectorAll(".conversation-row.wa-chat-card").forEach((row) => {
+        const hay = (row.dataset.search || row.textContent || "").toLowerCase();
+        row.classList.toggle("hidden-by-search", Boolean(q) && !hay.includes(q));
+      });
+      updateCount();
+    });
+  }
+
   if (!wsUrl) return;
 
-  const statusLabel = {
-    pendiente: ["Pendiente", "pill-warning"],
-    completado: ["Completado", "pill-success"],
-    rechazado: ["Rechazado", "pill-danger"],
-    escalado: ["Escalado", "pill-danger"],
-    cerrado: ["Cerrado", "pill-neutral"],
-  };
-
   function upsertRow(conv) {
+    let row = list.querySelector(`[data-conversation-id="${conv.id}"]`);
+
+    // Casos cerrados salen de la cola
+    if (conv.status === "cerrado") {
+      if (row) row.remove();
+      updateCount();
+      return;
+    }
+
     const empty = document.getElementById("empty-bandeja");
     if (empty) empty.remove();
 
-    let row = list.querySelector(`[data-conversation-id="${conv.id}"]`);
-    const [label, pillClass] = statusLabel[conv.status] || statusLabel.pendiente;
+    const badge =
+      conv.status_badge ||
+      (conv.unassigned ? "Esperando asesor" : (conv.status_label || conv.status || "Pendiente"));
+    const tagClass =
+      conv.status_tag_class ||
+      (conv.unassigned ? "waiting" : (conv.status || "pendiente"));
     const html = `
-      <div class="channel-wrap ${conv.channel_class || ""}"></div>
-      <div class="avatar avatar-soft">${conv.initials || "?"}</div>
-      <div class="conversation-name-col">
-        <div class="conversation-name-row">
-          <span class="conversation-name">${conv.name || ""}</span>
-          <span class="conversation-role">${conv.role || ""}</span>
+      <div class="wa-avatar">${escapeHtml(conv.initials || "?")}</div>
+      <div class="wa-card-body">
+        <div class="wa-card-top">
+          <span class="wa-card-name">${escapeHtml(conv.name || "")}</span>
+          <span class="wa-card-time">${escapeHtml(conv.time || "")}</span>
         </div>
-        <div class="conversation-message">${conv.last_message || ""}</div>
+        <div class="wa-card-preview">${escapeHtml(conv.last_message || "Sin mensajes")}</div>
+        <div class="wa-card-bottom">
+          <span class="wa-status-tag wa-status-tag--${escapeHtml(tagClass)}">${escapeHtml(badge)}</span>
+          <span class="wa-channel-icon ${escapeHtml(conv.channel_class || "")}"></span>
+        </div>
       </div>
-      <div class="tag">${conv.theme || "General"}</div>
-      <div class="conversation-time">${conv.time || ""}</div>
-      <div class="advisor-col"><span>${conv.advisor || "Sin asignar"}</span></div>
-      <span class="pill ${pillClass}">${label}</span>
     `;
 
     if (!row) {
       row = document.createElement("a");
-      row.className = "conversation-row";
+      row.className = "conversation-row wa-chat-card";
       row.dataset.conversationId = conv.id;
-      row.href = conv.detail_url || `/bandeja/${conv.id}/`;
+      const fq = list.dataset.filterQuery || "";
+      row.href = (conv.detail_url || `/bandeja/${conv.id}/`) + (fq ? `?${fq}` : "");
       list.prepend(row);
-      const countEl = document.getElementById("result-count");
-      if (countEl) countEl.textContent = String(Number(countEl.textContent || "0") + 1);
     } else {
       list.prepend(row);
     }
+    row.dataset.search = `${conv.name || ""} ${conv.phone || ""} ${conv.last_message || ""} ${conv.ticket_number || ""}`;
+    row.dataset.assignedToId = conv.assigned_to_id || "";
     row.innerHTML = html;
+    updateCount();
   }
 
-  let socket;
   function connect() {
-    socket = new WebSocket(wsUrl);
+    const socket = new WebSocket(wsUrl);
     socket.addEventListener("message", (event) => {
       try {
         const data = JSON.parse(event.data);

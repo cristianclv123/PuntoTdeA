@@ -12,7 +12,7 @@ CAMPAIGNS = [
     },
     {
         "name": "Fechas de matrícula financiera",
-        "channel": "facebook",
+        "channel": "whatsapp",
         "meta": "Aspirantes · 22 ago, 3:00 p. m.",
         "status": "enviada",
         "sent": 1840,
@@ -21,7 +21,7 @@ CAMPAIGNS = [
     },
     {
         "name": "Ceremonia de grados — invitación",
-        "channel": "instagram",
+        "channel": "whatsapp",
         "meta": "Egresados · 30 ago, 10:00 a. m.",
         "status": "programada",
     },
