@@ -64,7 +64,6 @@ TEMPLATES = [
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [
             BASE_DIR / "templates",
-            BASE_DIR / "PuntoTdeA" / "templates",
         ],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -134,13 +133,14 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(",") if o.strip()
 CORS_ALLOW_CREDENTIALS = True
 
 
-META_VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "puntotdea-dev-verify")
-META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
-META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
 ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "ALLOW_WEBHOOK_SIMULATOR",
     "true" if DEBUG else "false",
 ).lower() in {"1", "true", "yes"}
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -160,7 +160,6 @@ STATIC_URL = '/static/'
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
-    BASE_DIR / "PuntoTdeA" / "static",
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
@@ -171,6 +170,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ImageField models exist; silence check when Pillow is not installed in local/CI.
+SILENCED_SYSTEM_CHECKS = ["fields.E210"]
 
 KNOWLEDGE_SETTINGS = {
     'MIN_CONFIDENCE': 0.7,

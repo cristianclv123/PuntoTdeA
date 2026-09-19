@@ -3,15 +3,15 @@
 
 {% block title %}Nueva campaña{% endblock %}
 {% block page_heading %}Nueva campaña{% endblock %}
-{% block page_lead %}Un canal por campaña. Elige audiencia, plantilla y momento de envío.{% endblock %}
+{% block page_lead %}Canal WhatsApp. Elige audiencia, plantilla y momento de envío.{% endblock %}
 
 {% block hero_actions %}
-<a href="{% url 'communications:campaigns' %}" class="btn btn-outline-light rounded-pill">
+<a href="{% url 'communications:campaigns' %}" class="btn btn-outline-success rounded-pill">
     <i class="bi bi-arrow-left me-1"></i> Volver al listado
 </a>
 {% endblock %}
 
-{% block content %}
+{% block outbound_content %}
 <div class="wizard-steps mb-4" id="wizardSteps">
     <button type="button" class="wizard-step is-active" data-step="1">1. Canal y detalles</button>
     <button type="button" class="wizard-step" data-step="2">2. Plantilla</button>
@@ -87,7 +87,7 @@
                     <p class="small text-muted mb-0" id="costEstimate"></p>
                 </section>
             </div>
-            <div class="card-footer bg-white d-flex justify-content-between py-3 px-4">
+            <div class="card-footer d-flex justify-content-between py-3 px-4" style="background: var(--surface-2); border-top: 1px solid var(--border);">
                 <button type="button" class="btn btn-outline-secondary" id="wizardBack" disabled>Atrás</button>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-outline-success d-none" id="wizardTest">Enviar prueba</button>

@@ -1,7 +1,7 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
-from cases.constants import channel_ui
+from cases.constants import channel_ui, status_tag_class
 
 
 def _conversation_payload(conversation, last_message_body: str = "") -> dict:
@@ -16,7 +16,11 @@ def _conversation_payload(conversation, last_message_body: str = "") -> dict:
     )
     body = last_message_body
     if not body:
-        last = conversation.messages.order_by("-sent_at", "-id").first()
+        last = (
+            conversation.messages.exclude(direction="system")
+            .order_by("-sent_at", "-id")
+            .first()
+        )
         body = last.body if last else ""
     return {
         "id": conversation.id,
@@ -31,7 +35,25 @@ def _conversation_payload(conversation, last_message_body: str = "") -> dict:
         "priority_label": conversation.get_priority_display(),
         "time": conversation.last_message_at.strftime("%H:%M"),
         "advisor": advisor,
+        "assigned_to_id": conversation.assigned_to_id,
+        "unassigned": conversation.assigned_to_id is None,
         "status": conversation.status,
+        "status_label": conversation.get_status_display(),
+        "status_badge": (
+            "Esperando asesor"
+            if (
+                conversation.assigned_to_id is None
+                and conversation.status != "cerrado"
+            )
+            else conversation.get_status_display()
+        ),
+        "status_tag_class": status_tag_class(
+            status=conversation.status,
+            unassigned=(
+                conversation.assigned_to_id is None
+                and conversation.status != "cerrado"
+            ),
+        ),
         "detail_url": f"/bandeja/{conversation.id}/",
         **ui,
     }
@@ -53,11 +75,27 @@ def _message_payload(message) -> dict:
         "direction": message.direction,
         "body": message.body,
         "from_agent": message.direction == "outbound",
+        "is_system": message.direction == "system",
         "text": message.body,
         "time": message.sent_at.strftime("%H:%M"),
         "sent_at": message.sent_at.isoformat(),
         "attachments": attachments,
     }
+
+
+def broadcast_conversation_update(conversation) -> None:
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        return
+    conversation_payload = _conversation_payload(conversation)
+    async_to_sync(channel_layer.group_send)(
+        "bandeja",
+        {
+            "type": "bandeja.event",
+            "event": "conversation.upsert",
+            "conversation": conversation_payload,
+        },
+    )
 
 
 def broadcast_new_message(message) -> None:
@@ -66,7 +104,8 @@ def broadcast_new_message(message) -> None:
         return
 
     conversation = message.conversation
-    conversation_payload = _conversation_payload(conversation, last_message_body=message.body)
+    preview = "" if message.direction == "system" else message.body
+    conversation_payload = _conversation_payload(conversation, last_message_body=preview)
     message_payload = _message_payload(message)
 
     async_to_sync(channel_layer.group_send)(

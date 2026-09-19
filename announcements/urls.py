@@ -6,4 +6,5 @@ app_name = "announcements"
 
 urlpatterns = [
     path("", views.index, name="index"),
+    
 ]

@@ -169,9 +169,6 @@ def create_outbound_message(
 
     updates = ["last_message_at", "updated_at"]
     conversation.last_message_at = sent_at
-    if user and conversation.assigned_to_id is None:
-        conversation.assigned_to = user
-        updates.append("assigned_to")
     conversation.save(update_fields=updates)
     broadcast_new_message(message)
     return message

@@ -17,7 +17,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.home, name='home'),
     path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('perfil/', views.profile_view, name='profile'),
 
     path('api/cases/', include('cases.api.urls')),
 

@@ -1,0 +1,195 @@
+{% load icons %}
+<div class="chat-column">
+  <div class="chat-header wa-chat-header">
+    <div class="chat-header-left">
+      <a class="chat-back" href="{% url 'cases:bandeja' %}{% if filter_query %}?{{ filter_query }}{% endif %}" aria-label="Volver a la lista">
+        {% icon 'arrow-left' size=19 %}
+      </a>
+      <div class="wa-avatar wa-avatar-lg">{{ conversation.initials }}</div>
+      <div>
+        <div class="chat-header-name-row">
+          <span class="chat-header-name font-brand">{{ conversation.name }}</span>
+        </div>
+        <div class="chat-header-meta">
+          <span class="channel-inline">
+            {% icon conversation.channel_icon size=12 %}
+            {{ conversation.channel_label }}
+          </span>
+          {% if conversation.ticket_number %}
+            <span>·</span>
+            <span>{{ conversation.ticket_number }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="chat-header-actions">
+      {% if contact.phone %}
+        <span class="wa-phone-chip">
+          {% icon 'phone' size=14 %}
+          {{ contact.phone }}
+        </span>
+      {% endif %}
+      <button
+        type="button"
+        class="wa-case-toggle"
+        id="wa-case-toggle"
+        aria-pressed="true"
+        aria-controls="wa-case-panel"
+        title="Gestionar caso"
+      >
+        {% icon 'settings' size=15 %}
+        <span>Gestionar caso</span>
+      </button>
+    </div>
+  </div>
+
+  <div
+    class="message-area"
+    id="message-area"
+    data-conversation-id="{{ conversation.id }}"
+    data-ws-url="{% if request.is_secure %}wss{% else %}ws{% endif %}://{{ request.get_host }}/ws/conversations/{{ conversation.id }}/"
+  >
+    {% for m in chat_messages %}
+      {% if m.is_system %}
+        <div class="message-row system" data-message-id="{{ m.id }}">
+          <div class="chat-system-event">
+            <span class="chat-system-text">{{ m.text }}</span>
+            <span class="chat-system-time">{{ m.time }}</span>
+          </div>
+        </div>
+      {% else %}
+      <div class="message-row {% if m.from_agent %}from-agent{% endif %}" data-message-id="{{ m.id }}">
+        <div class="message-col">
+          <div class="bubble">
+            {% if m.from_agent %}
+              <div class="bubble-sender">Asesor</div>
+            {% endif %}
+            {% if m.text %}<div class="bubble-text">{{ m.text }}</div>{% endif %}
+            {% if m.attachments %}
+              <div class="bubble-attachments">
+                {% for att in m.attachments %}
+                  {% if att.kind == "image" %}
+                    <a class="att-preview att-image" href="{{ att.file.url }}" target="_blank" rel="noopener">
+                      <img src="{{ att.file.url }}" alt="{{ att.original_name }}">
+                    </a>
+                  {% elif att.kind == "video" %}
+                    <video class="att-preview att-video" controls preload="metadata" src="{{ att.file.url }}"></video>
+                  {% else %}
+                    <a class="att-file" href="{{ att.file.url }}" target="_blank" rel="noopener" download="{{ att.original_name }}">
+                      {% icon 'file-text' size=16 %}
+                      <span>{{ att.original_name }}</span>
+                    </a>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+            <div class="bubble-meta">
+              <span class="bubble-time">{{ m.time }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    {% empty %}
+      <div class="date-sep"><div class="date-chip">Sin mensajes aún</div></div>
+    {% endfor %}
+  </div>
+
+  {% if case_is_closed %}
+    <div class="wa-claim-bar locked">
+      <p class="wa-claim-text">Caso cerrado. Solo consulta; no se pueden enviar mensajes ni editar la gestión.</p>
+    </div>
+  {% elif needs_claim %}
+    <div class="wa-claim-bar">
+      <p class="wa-claim-text">Esta conversación no está siendo atendida</p>
+      <form method="post" action="{% url 'cases:claim' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}">
+        {% csrf_token %}
+        <button class="wa-claim-btn" type="submit">Tomar conversación</button>
+      </form>
+    </div>
+  {% elif assigned_to_other %}
+    <div class="wa-claim-bar locked">
+      <p class="wa-claim-text">Asignado a {{ conversation.advisor }}. Solo ese asesor puede responder.</p>
+    </div>
+  {% else %}
+  <form
+    class="composer"
+    method="post"
+    action="{% url 'cases:detail' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}"
+    enctype="multipart/form-data"
+    id="reply-form"
+  >
+    {% csrf_token %}
+    <input type="hidden" name="action" value="reply">
+    <div class="composer-previews" id="attachment-previews" hidden></div>
+    <div class="composer-row">
+      <div class="clip-menu" id="clip-menu">
+        <button class="composer-clip" type="button" id="clip-toggle" aria-label="Adjuntar o plantillas" aria-expanded="false" aria-haspopup="true">
+          {% icon 'paperclip' size=19 %}
+        </button>
+        <div class="clip-dropdown" id="clip-dropdown" hidden role="menu">
+          <button type="button" class="clip-item" id="clip-attach" role="menuitem">
+            {% icon 'file' size=16 %}
+            Adjuntar archivo
+          </button>
+          <div class="clip-divider"></div>
+          <div class="clip-section-label">Plantillas</div>
+          {% for tpl in reply_templates %}
+            <button
+              type="button"
+              class="clip-item clip-template"
+              role="menuitem"
+              data-template-body="{{ tpl.body|escape }}"
+            >
+              {% icon 'layout-template' size=16 %}
+              {{ tpl.title }}
+            </button>
+          {% empty %}
+            <div class="clip-empty">Sin plantillas aún</div>
+          {% endfor %}
+          <div class="clip-divider"></div>
+          <button type="button" class="clip-item clip-item-accent" id="clip-create-template" role="menuitem">
+            {% icon 'plus' size=16 %}
+            Crear plantilla
+          </button>
+        </div>
+      </div>
+      <input
+        class="composer-file-input"
+        type="file"
+        name="attachments"
+        id="attachment-input"
+        accept="{{ attachment_accept }}"
+        multiple
+        hidden
+      >
+      <input class="composer-field" type="text" name="body" id="reply-body" placeholder="Escribe tu respuesta..." autocomplete="off">
+      <button class="composer-send" type="submit" aria-label="Enviar">
+        {% icon 'send' size=18 %}
+      </button>
+    </div>
+    <p class="composer-hint">Imágenes, video u ofimática (PDF, Word, Excel, PowerPoint…). Máx. 25 MB por archivo.</p>
+  </form>
+  {% endif %}
+</div>
+
+<dialog class="template-dialog" id="template-dialog">
+  <form method="post" action="{% url 'cases:detail' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}" class="template-dialog-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="create_template">
+    <div class="template-dialog-head">
+      <h3>Nueva plantilla</h3>
+      <button type="button" class="template-dialog-close" id="template-dialog-close" aria-label="Cerrar">
+        {% icon 'x' size=18 %}
+      </button>
+    </div>
+    <label class="field-label" for="template_title">Título</label>
+    <input class="field-input" type="text" name="template_title" id="template_title" maxlength="120" required placeholder="Ej. Saludo inicial">
+    <label class="field-label" for="template_body">Texto</label>
+    <textarea class="field-textarea" name="template_body" id="template_body" rows="5" required placeholder="Mensaje que se insertará en el chat..."></textarea>
+    <div class="template-dialog-actions">
+      <button type="button" class="btn btn-ghost" id="template-dialog-cancel">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Guardar plantilla</button>
+    </div>
+  </form>
+</dialog>

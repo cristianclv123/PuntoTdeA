@@ -57,18 +57,33 @@
 
     const text = message.text || message.body || "";
     const row = document.createElement("div");
-    row.className = "message-row" + (message.from_agent ? " from-agent" : "");
     row.dataset.messageId = message.id;
-    row.innerHTML =
-      '<div class="message-col">' +
-      '<div class="bubble">' +
-      (text ? '<div class="bubble-text">' + escapeHtml(text) + "</div>" : "") +
-      renderAttachments(message.attachments) +
-      "</div>" +
-      '<div class="bubble-time">' +
-      escapeHtml(message.time || "") +
-      "</div>" +
-      "</div>";
+
+    if (message.is_system || message.direction === "system") {
+      row.className = "message-row system";
+      row.innerHTML =
+        '<div class="chat-system-event">' +
+        '<span class="chat-system-text">' +
+        escapeHtml(text) +
+        "</span>" +
+        '<span class="chat-system-time">' +
+        escapeHtml(message.time || "") +
+        "</span>" +
+        "</div>";
+    } else {
+      row.className = "message-row" + (message.from_agent ? " from-agent" : "");
+      row.innerHTML =
+        '<div class="message-col">' +
+        '<div class="bubble">' +
+        (message.from_agent ? '<div class="bubble-sender">Asesor</div>' : "") +
+        (text ? '<div class="bubble-text">' + escapeHtml(text) + "</div>" : "") +
+        renderAttachments(message.attachments) +
+        '<div class="bubble-meta"><span class="bubble-time">' +
+        escapeHtml(message.time || "") +
+        "</span></div>" +
+        "</div>" +
+        "</div>";
+    }
     area.appendChild(row);
     area.scrollTop = area.scrollHeight;
   }

@@ -29,7 +29,6 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
-      - META_VERIFY_TOKEN=puntotdea-dev-verify
       - WIDGET_ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
     depends_on:
       - db

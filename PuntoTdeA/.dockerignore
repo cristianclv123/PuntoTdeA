@@ -1,7 +1,0 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.git
-.venv
-db.sqlite3

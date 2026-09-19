@@ -1,121 +1,18 @@
-{% extends "base.html" %} {% load icons %} {% block title %}Avisos — Punto
-TdeA{% endblock %} {% block page_title %}Avisos y novedades{% endblock %} {%
-block page_subtitle %}Publica anuncios visibles para toda la comunidad{%
-endblock %} {% block content %}
-<style>
-  /* Ocultar inputs nativos manteniendo funcionalidad CSS */
-  .segmented-radio input,
-  .segmented-check input,
-  #toggle-nuevo-cuadro {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
+{% extends "base.html" %} 
+{% load icons %} 
+{% load static %}
 
-  /* Estilos para las opciones dentro de los formularios */
-  .segmented-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border-radius: 8px;
-    background: #f0f0f0;
-    cursor: pointer;
-    user-select: none;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-  }
+{% block title %}Avisos — Punto TdeA{% endblock %} 
+{% block page_title %}Avisos y novedades{% endblock %} 
+{% block page_subtitle %}Publica anuncios visibles para toda la comunidad{% endblock %} 
 
-  .segmented-radio input[value="urgente"]:checked + .segmented-label {
-    background-color: #fee2e2;
-    color: #dc2626;
-  }
+{% block content %}
+<link rel="stylesheet" href="{% static 'announcements/avisos.css' %}?v=3">
 
-  .segmented-radio input[value="informativo"]:checked + .segmented-label {
-    background-color: #e0f2fe;
-    color: #0369a1;
-  }
-
-  .segmented-check input:checked + .segmented-label {
-    background-color: #e6f4ea;
-    color: #137333;
-    border: 1px solid #137333;
-  }
-
-  .segmented-check input:not(:checked) + .segmented-label .icon-checked,
-  .segmented-check input:checked + .segmented-label .icon-unchecked {
-    display: none;
-  }
-
-  /* Botón verde "+ Crear aviso" */
-  .btn-create-out {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background-color: #008744;
-    color: white;
-    padding: 10px 18px;
-    font-size: 0.9rem;
-    font-weight: 600;
-    border-radius: 8px;
-    cursor: pointer;
-    margin-bottom: 20px;
-    user-select: none;
-    transition: background-color 0.2s;
-  }
-  .btn-create-out:hover {
-    background-color: #006b36;
-  }
-
-  /* Mostrar/Ocultar el nuevo cuadro al presionar "Crear aviso" */
-  .nuevo-cuadro-formulario {
-    display: none;
-  }
-  #toggle-nuevo-cuadro:checked ~ .two-col-layout .nuevo-cuadro-formulario {
-    display: block;
-  }
-
-  /* Botón de cerrar/quitar el cuadro antes de publicar */
-  .btn-close-card {
-    background: none;
-    border: none;
-    color: #888;
-    cursor: pointer;
-    font-size: 1.1rem;
-    font-weight: bold;
-    line-height: 1;
-    padding: 4px;
-    border-radius: 4px;
-  }
-  .btn-close-card:hover {
-    color: #dc2626;
-    background-color: #fee2e2;
-  }
-
-  /* Botón de eliminar aviso publicado */
-  .btn-delete-published {
-    background: none;
-    border: none;
-    color: #dc2626;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 4px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .btn-delete-published:hover {
-    background-color: #fee2e2;
-  }
-</style>
-
-<!-- Checkbox invisible que controla la aparición del nuevo cuadro sin JS -->
+<!-- Checkbox invisible que controla la aparición/desaparición del segundo cuadro -->
 <input type="checkbox" id="toggle-nuevo-cuadro" />
 
-<!-- Botón verde por fuera del cuadro -->
+<!-- Botón verde para abrir el cuadro -->
 <div style="display: flex; justify-content: flex-start">
   <label for="toggle-nuevo-cuadro" class="btn-create-out">
     {% icon 'plus' size=16 %} Crear aviso
@@ -123,8 +20,8 @@ endblock %} {% block content %}
 </div>
 
 <div class="two-col-layout">
-  <!-- Formulario 1 (El cuadro original) -->
-  <form class="card form-col" method="post">
+  <!-- Formulario 1 (El cuadro principal fijo) -->
+  <form class="card form-col" method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="card-title font-brand" style="margin-bottom: 18px">
       Nuevo aviso
@@ -158,9 +55,18 @@ endblock %} {% block content %}
 
     <div class="field-group" style="margin-bottom: 8px">
       <label class="field-label" for="body1">Contenido</label>
-      <textarea id="body1" name="body" class="field-textarea" rows="4" required>
-Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto quedan suspendidas. Las actividades académicas continúan de forma virtual.</textarea
-      >
+      <textarea id="body1" name="body" class="field-textarea" rows="4" required>Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto quedan suspendidas. Las actividades académicas continúan de forma virtual.</textarea>
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
+      <label class="field-label" for="image1">Imagen (opcional)</label>
+      <input
+        id="image1"
+        name="image"
+        class="field-input"
+        type="file"
+        accept="image/*"
+      />
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
@@ -204,8 +110,8 @@ Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto q
     </button>
   </form>
 
-  <!-- Formulario 2 (El nuevo cuadro que aparece y se puede quitar/cerrar con la "✕") -->
-  <form class="card form-col nuevo-cuadro-formulario" method="post">
+  <!-- Formulario 2 (El cuadro oculto que aparece y se puede cerrar con la "✕") -->
+  <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div
       style="
@@ -218,7 +124,7 @@ Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto q
       <div class="card-title font-brand" style="margin-bottom: 0">
         Nuevo aviso
       </div>
-      <!-- Botón para quitar/cerrar este cuadro -->
+      <!-- Botón para cerrar/quitar este cuadro -->
       <label
         for="toggle-nuevo-cuadro"
         class="btn-close-card"
@@ -266,6 +172,17 @@ Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto q
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
+      <label class="field-label" for="image2">Imagen (opcional)</label>
+      <input
+        id="image2"
+        name="image"
+        class="field-input"
+        type="file"
+        accept="image/*"
+      />
+    </div>
+
+    <div class="field-group" style="margin-bottom: 8px">
       <div class="field-label">Audiencia</div>
       <div class="segmented-row">
         <label class="segmented-check">
@@ -306,7 +223,7 @@ Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto q
     </button>
   </form>
 
-  <!-- Lista de avisos publicados con opción de eliminar -->
+  <!-- Lista de avisos publicados -->
   <div class="list-col">
     <div class="list-head">
       <div class="list-title font-brand">Avisos publicados</div>
@@ -316,15 +233,20 @@ Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto q
     <div class="list-card">
       <div class="list-card-top">
         <div class="list-card-name" style="flex: 1">{{ a.title }}</div>
-        {% if a.type == "urgente" %}
+        {% if a.is_urgent %}
         <span class="pill pill-danger" style="padding: 5px 12px">Urgente</span>
         {% else %}
-        <span class="pill pill-info" style="padding: 5px 12px"
-          >Informativo</span
-        >
+        <span class="pill pill-info" style="padding: 5px 12px">Informativo</span>
         {% endif %}
       </div>
-      <div class="list-card-body">{{ a.body }}</div>
+      <div class="list-card-body">{{ a.content }}</div>
+
+      {% if a.image %}
+      <div style="margin-top: 10px; margin-bottom: 10px;">
+          <img src="{{ a.image.url }}" alt="{{ a.title }}" style="max-width: 100%; border-radius: 8px; max-height: 250px; object-fit: cover;" />
+      </div>
+      {% endif %}
+
       <div
         class="card-meta-row"
         style="
@@ -335,19 +257,18 @@ Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto q
       >
         <div>
           {% icon 'user-round' size=13 %}
-          <span>{{ a.author }}</span>
+          <span>{{ a.author|default:"Admin" }}</span>
           <span class="meta-dot">·</span>
-          <span>{{ a.date }}</span>
+          <span>{{ a.created_at|date:"d M Y" }}</span>
         </div>
 
-        <!-- Botón de eliminar aviso ya publicado -->
         <form method="post" style="margin: 0; display: inline">
           {% csrf_token %}
           <input type="hidden" name="action" value="delete" />
           <input
             type="hidden"
             name="notice_id"
-            value="{{ a.id|default:forloop.counter0 }}"
+            value="{{ a.id }}"
           />
           <button type="submit" class="btn-delete-published">
             {% icon 'trash-2' size=13 %} Eliminar
@@ -363,4 +284,3 @@ Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto q
   </div>
 </div>
 {% endblock %}
-
