@@ -22,8 +22,8 @@ class Categoria(models.Model):
         db_table = 'categoria'
         verbose_name_plural = 'Categorías'
 
-    def __str__(self):
-        return self.nombre
+    def __str__(self) -> str:
+        return str(self.nombre)
 
 
 class Producto(models.Model):
