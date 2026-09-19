@@ -1,8 +1,5 @@
 from django.contrib import admin
 
-<<<<<<< Updated upstream
-# Register your models here.
-=======
 from .models import Category, ChatConversation, FAQ, Intent, KnowledgeArticle
 
 
@@ -41,4 +38,3 @@ class ChatConversationAdmin(admin.ModelAdmin):
     search_fields = ('external_user_id', 'last_question', 'escalation_reason')
     list_filter = ('channel', 'status', 'flow_state')
     readonly_fields = ('created_at', 'updated_at', 'messages')
->>>>>>> Stashed changes

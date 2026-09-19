@@ -89,10 +89,8 @@ DATABASES = {
 }
 
 
-<<<<<<< Updated upstream
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
-=======
 _cors_origins = os.environ.get("WIDGET_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
@@ -108,8 +106,6 @@ ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "ALLOW_WEBHOOK_SIMULATOR",
     "true" if DEBUG else "false",
 ).lower() in {"1", "true", "yes"}
-
->>>>>>> Stashed changes
 
 AUTH_PASSWORD_VALIDATORS = [
     {

@@ -2,9 +2,6 @@ from datetime import datetime, time, timezone as datetime_timezone
 
 from django.test import TestCase
 
-<<<<<<< Updated upstream
-# Create your tests here.
-=======
 from .chatbot.schedule import BusinessSchedule
 from .chatbot.workflow import ChatbotWorkflow
 from .models import Category, ChatConversation, KnowledgeArticle
@@ -98,4 +95,3 @@ class ChatbotWorkflowTests(TestCase):
         )
         self.assertFalse(result['within_business_hours'])
         self.assertIn('fuera del horario', result['message'])
->>>>>>> Stashed changes

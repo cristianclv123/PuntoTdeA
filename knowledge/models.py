@@ -1,24 +1,17 @@
-<<<<<<< Updated upstream
-=======
+from decimal import Decimal
 import uuid
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.conf import settings
->>>>>>> Stashed changes
 from django.db import models
+from django.utils.text import slugify
 
-<<<<<<< Updated upstream
-from django.db import models
-from django.core.validators import MinValueValidator
-from decimal import Decimal
-=======
 VectorField = None
 if getattr(settings, 'KNOWLEDGE_ENABLE_VECTOR', False):
     try:
         from pgvector.django import VectorField  # type: ignore[import-not-found]
     except ImportError:  # pragma: no cover - optional dependency for PostgreSQL vector support
         pass
->>>>>>> Stashed changes
 
 
 class Categoria(models.Model):
@@ -74,11 +67,88 @@ class Producto(models.Model):
             models.Index(fields=['nombre', 'activo']),
         ]
 
-<<<<<<< Updated upstream
     def __str__(self):
         return f"{self.nombre} - ${self.precio_venta}"
-# Create your models here.
-=======
+
+
+class BaseKnowledgeModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class Category(BaseKnowledgeModel):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Categoría'
+        verbose_name_plural = 'Categorías'
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return str(self.name)
+
+
+class Intent(BaseKnowledgeModel):
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=140, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    confidence_threshold = models.FloatField(
+        default=0.75,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return str(self.name)
+
+
+class KnowledgeArticle(BaseKnowledgeModel):
+    STATUS_CHOICES = [
+        ('draft', 'Borrador'),
+        ('published', 'Publicado'),
+        ('archived', 'Archivado'),
+    ]
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    summary = models.TextField(blank=True)
+    content = models.TextField()
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='articles')
+    intent = models.ForeignKey(Intent, on_delete=models.SET_NULL, null=True, blank=True, related_name='articles')
+    tags = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    published = models.BooleanField(default=False)
+    published_at = models.DateTimeField(null=True, blank=True)
+    embedding = models.JSONField(default=list, blank=True)
+    if VectorField is not None:
+        embedding_vector = VectorField(dimensions=1536, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-published_at', '-created_at']
+        indexes = [
+            models.Index(fields=['title', 'status']),
+            models.Index(fields=['category', 'status']),
+        ]
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.title)
@@ -147,4 +217,3 @@ class ChatConversation(BaseKnowledgeModel):
 
     def __str__(self) -> str:
         return f'Conversación {self.pk}'
->>>>>>> Stashed changes

@@ -1,9 +1,3 @@
-<<<<<<< Updated upstream
-from django.shortcuts import render
-
-# Create your views here.
-from django.http import HttpResponse
-=======
 import json
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -18,16 +12,11 @@ from .models import FAQ, KnowledgeArticle
 from .services.indexing_service import index_academic_calendar
 from .services.rag_service import answer_query, search_knowledge
 
->>>>>>> Stashed changes
-
 def _manager(model):
     return getattr(model, '_default_manager')
 
 
 def index(request):
-<<<<<<< Updated upstream
-    return HttpResponse("<h1>Módulo de Conocimiento</h1><p>En construcción</p>")
-=======
     articles = _manager(KnowledgeArticle).filter(published=True, status='published')[:10]
     faqs = _manager(FAQ).filter(is_active=True)[:5]
     return render(request, 'knowledge/index.html', {'articles': articles, 'faqs': faqs})
@@ -115,4 +104,3 @@ def whatsapp_webhook(request):
 def reindex_academic_calendar(_request):
     payload = index_academic_calendar()
     return JsonResponse({'status': 'ok', 'payload': payload})
->>>>>>> Stashed changes
