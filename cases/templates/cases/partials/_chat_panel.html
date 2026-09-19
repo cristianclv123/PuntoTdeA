@@ -95,7 +95,11 @@
     {% endfor %}
   </div>
 
-  {% if needs_claim %}
+  {% if case_is_closed %}
+    <div class="wa-claim-bar locked">
+      <p class="wa-claim-text">Caso cerrado. Solo consulta; no se pueden enviar mensajes ni editar la gestión.</p>
+    </div>
+  {% elif needs_claim %}
     <div class="wa-claim-bar">
       <p class="wa-claim-text">Esta conversación no está siendo atendida</p>
       <form method="post" action="{% url 'cases:claim' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}">

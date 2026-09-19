@@ -18,11 +18,17 @@ from cases.services.realtime import broadcast_conversation_update
 User = get_user_model()
 
 
+def _whatsapp_channel_qs():
+    return Conversation.objects.filter(channel__code="whatsapp")
+
+
 def _whatsapp_base_qs():
     """Cola activa de WhatsApp: excluye casos cerrados."""
-    return Conversation.objects.filter(channel__code="whatsapp").exclude(
-        status=Conversation.Status.CERRADO
-    )
+    return _whatsapp_channel_qs().exclude(status=Conversation.Status.CERRADO)
+
+
+def _whatsapp_closed_qs():
+    return _whatsapp_channel_qs().filter(status=Conversation.Status.CERRADO)
 
 
 def _unanswered_q():
@@ -43,6 +49,8 @@ def _filter_query_for_tab(active_tab: str) -> str:
         return "unanswered=1"
     if active_tab == "unassigned":
         return "unassigned=1"
+    if active_tab == "closed":
+        return "closed=1"
     return ""
 
 
@@ -85,12 +93,18 @@ def _serialize_conversation(conversation: Conversation) -> dict:
         "status_label": conversation.get_status_display(),
         "status_badge": (
             "Esperando asesor"
-            if conversation.assigned_to_id is None
+            if (
+                conversation.assigned_to_id is None
+                and conversation.status != Conversation.Status.CERRADO
+            )
             else conversation.get_status_display()
         ),
         "status_tag_class": status_tag_class(
             status=conversation.status,
-            unassigned=conversation.assigned_to_id is None,
+            unassigned=(
+                conversation.assigned_to_id is None
+                and conversation.status != Conversation.Status.CERRADO
+            ),
         ),
         "contact": contact,
         "opened_at": conversation.created_at,
@@ -117,9 +131,34 @@ def _advisors_queryset():
 
 
 def _bandeja_list_context(request, selected_id=None):
+    status_filter = request.GET.get("status")
+    assigned = request.GET.get("assigned_to")
+    unanswered = request.GET.get("unanswered")
+    unassigned = request.GET.get("unassigned") or request.GET.get("queue")
+    closed = request.GET.get("closed")
+    priority_filter = request.GET.get("priority")
+    department_filter = request.GET.get("department")
+
+    active_tab = "all"
+    if closed == "1" or status_filter == Conversation.Status.CERRADO:
+        qs = _whatsapp_closed_qs()
+        active_tab = "closed"
+    elif assigned == "me":
+        qs = _whatsapp_base_qs().filter(assigned_to=request.user)
+        active_tab = "mine"
+    elif unanswered == "1":
+        qs = _whatsapp_base_qs().annotate(**_unanswered_q()).filter(
+            _last_direction=Message.Direction.INBOUND
+        )
+        active_tab = "unanswered"
+    elif unassigned == "1" or assigned == "none":
+        qs = _whatsapp_base_qs().filter(assigned_to__isnull=True)
+        active_tab = "unassigned"
+    else:
+        qs = _whatsapp_base_qs()
+
     qs = (
-        _whatsapp_base_qs()
-        .select_related(
+        qs.select_related(
             "channel",
             "contact",
             "assigned_to",
@@ -134,31 +173,10 @@ def _bandeja_list_context(request, selected_id=None):
                 queryset=Message.objects.order_by("-sent_at", "-id"),
             )
         )
+        .order_by("-last_message_at", "-id")
     )
 
-    status_filter = request.GET.get("status")
-    assigned = request.GET.get("assigned_to")
-    unanswered = request.GET.get("unanswered")
-    unassigned = request.GET.get("unassigned") or request.GET.get("queue")
-    priority_filter = request.GET.get("priority")
-    department_filter = request.GET.get("department")
-
-    active_tab = "all"
-    if assigned == "me":
-        qs = qs.filter(assigned_to=request.user)
-        active_tab = "mine"
-    elif unanswered == "1":
-        qs = qs.annotate(**_unanswered_q()).filter(
-            _last_direction=Message.Direction.INBOUND
-        )
-        active_tab = "unanswered"
-    elif unassigned == "1" or assigned == "none":
-        qs = qs.filter(assigned_to__isnull=True)
-        active_tab = "unassigned"
-
-    qs = qs.order_by("-last_message_at", "-id")
-
-    if status_filter:
+    if status_filter and active_tab != "closed":
         qs = qs.filter(status=status_filter)
     if priority_filter:
         qs = qs.filter(priority=priority_filter)
@@ -166,6 +184,29 @@ def _bandeja_list_context(request, selected_id=None):
         qs = qs.filter(department_id=department_filter)
 
     conversations = [_serialize_conversation(c) for c in qs]
+
+    # Si estás viendo un caso cerrado fuera de la pestaña Cerrados, mantenlo visible.
+    if (
+        selected_id
+        and active_tab != "closed"
+        and not any(c["id"] == selected_id for c in conversations)
+    ):
+        selected = (
+            _whatsapp_closed_qs()
+            .filter(pk=selected_id)
+            .select_related(
+                "channel",
+                "contact",
+                "assigned_to",
+                "department",
+                "escalated_to",
+                "claimed_by",
+                "closed_by",
+            )
+            .first()
+        )
+        if selected:
+            conversations.insert(0, _serialize_conversation(selected))
 
     base = _whatsapp_base_qs()
     mine_count = base.filter(assigned_to=request.user).count()
@@ -175,6 +216,7 @@ def _bandeja_list_context(request, selected_id=None):
         .filter(_last_direction=Message.Direction.INBOUND)
         .count()
     )
+    closed_count = _whatsapp_closed_qs().count()
     filter_query = _filter_query_for_tab(active_tab)
 
     return {
@@ -184,6 +226,7 @@ def _bandeja_list_context(request, selected_id=None):
         "mine_count": mine_count,
         "unanswered_count": unanswered_count,
         "unassigned_count": unassigned_count,
+        "closed_count": closed_count,
         "active_tab": active_tab,
         "selected_id": selected_id,
         "filter_query": filter_query,
@@ -194,6 +237,7 @@ def _bandeja_list_context(request, selected_id=None):
             "assigned_to": "me" if active_tab == "mine" else "",
             "unanswered": "1" if active_tab == "unanswered" else "",
             "unassigned": "1" if active_tab == "unassigned" else "",
+            "closed": "1" if active_tab == "closed" else "",
             "priority": priority_filter or "",
             "department": department_filter or "",
         },
@@ -389,6 +433,12 @@ def caso_detail(request, case_id):
 
     if request.method == "POST":
         action = (request.POST.get("action") or "reply").strip()
+        is_closed = conversation.status == Conversation.Status.CERRADO
+
+        if is_closed and action != "close_case":
+            messages.error(request, "Este caso está cerrado. Solo puedes consultarlo.")
+            return _redirect_with_filters(request, "cases:detail", case_id=conversation.id)
+
         if action == "claim":
             try:
                 claim_conversation(conversation.id, request.user)
@@ -398,9 +448,10 @@ def caso_detail(request, case_id):
         elif action == "update_case":
             _handle_update_case(request, conversation)
         elif action == "close_case":
-            closed = _handle_close_case(request, conversation)
-            if closed:
-                return _redirect_with_filters(request, "cases:bandeja")
+            if is_closed:
+                messages.info(request, "El caso ya estaba cerrado.")
+            else:
+                _handle_close_case(request, conversation)
         elif action == "add_comment":
             _handle_add_comment(request, conversation)
         elif action == "create_template":
@@ -449,10 +500,14 @@ def caso_detail(request, case_id):
             "attachment_accept": ACCEPT_ATTR,
             "can_reply": can_reply,
             "is_owner": is_owner,
-            "needs_claim": conversation.assigned_to_id is None,
+            "needs_claim": (
+                conversation.assigned_to_id is None
+                and conversation.status != Conversation.Status.CERRADO
+            ),
             "assigned_to_other": bool(
                 conversation.assigned_to_id
                 and conversation.assigned_to_id != request.user.id
+                and conversation.status != Conversation.Status.CERRADO
             ),
         }
     )

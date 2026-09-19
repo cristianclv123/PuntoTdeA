@@ -1,39 +1,13 @@
-from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.contrib import messages
+from django.db.models import Count, Q
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from cases.models import Conversation
-
-METRIC_CARDS = [
-    {"label": "Casos pendientes", "value": "34", "sub": "requieren atención", "icon": "inbox", "bg": "var(--warning-bg)", "fg": "var(--warning-text)"},
-    {"label": "Casos escalados", "value": "7", "sub": "a otras dependencias", "icon": "arrow-up-right", "bg": "var(--danger-bg)", "fg": "var(--danger-text)"},
-    {"label": "Cerrados hoy", "value": "52", "sub": "resueltos en el día", "icon": "circle-check", "bg": "var(--success-bg)", "fg": "var(--success-text)"},
-    {"label": "Tiempo prom. respuesta", "value": "6m 40s", "sub": "últimas 24 horas", "icon": "clock-4", "bg": "var(--blue-soft)", "fg": "var(--blue)"},
-]
-
-CHANNEL_BARS = [
-    {"label": "WhatsApp", "value": 58, "icon": "message-circle", "color": "var(--green)"},
-    {"label": "Facebook", "value": 34, "icon": "facebook", "color": "var(--facebook)"},
-    {"label": "Instagram", "value": 22, "icon": "instagram", "color": "var(--instagram)"},
-    {"label": "Web", "value": 14, "icon": "globe", "color": "var(--web)"},
-]
-
-ADVISOR_LOAD = [
-    {"name": "Laura Gómez", "value": 42},
-    {"name": "Karen Ruiz", "value": 36},
-    {"name": "Julián Torres", "value": 29},
-    {"name": "Sin asignar", "value": 15},
-]
-
-WORKLOAD_ROWS = [
-    {"initials": "LG", "name": "Laura Gómez", "assigned": 42, "pending": 9, "closed_today": 14, "state": "Disponible", "state_class": "pill-success"},
-    {"initials": "KR", "name": "Karen Ruiz", "assigned": 36, "pending": 12, "closed_today": 10, "state": "En llamada", "state_class": "pill-info"},
-    {"initials": "JT", "name": "Julián Torres", "assigned": 29, "pending": 4, "closed_today": 18, "state": "Disponible", "state_class": "pill-success"},
-    {"initials": "CO", "name": "Camila Ortiz", "assigned": 24, "pending": 7, "closed_today": 11, "state": "Ausente", "state_class": "pill-neutral"},
-]
+from communications.mock_data import ACTIVITY_LOGS, campaign_kpis, recent_campaigns
 
 User = get_user_model()
 
@@ -99,24 +73,150 @@ def logout_view(request):
     return redirect("login")
 
 
+def _whatsapp_conversations():
+    return Conversation.objects.filter(channel__code="whatsapp")
+
+
+def _dashboard_case_metrics():
+    qs = _whatsapp_conversations()
+    open_qs = qs.exclude(status=Conversation.Status.CERRADO)
+    today = timezone.localdate()
+
+    pendientes = open_qs.filter(status=Conversation.Status.PENDIENTE).count()
+    escalados = open_qs.filter(status=Conversation.Status.ESCALADO).count()
+    sin_asesor = open_qs.filter(assigned_to__isnull=True).count()
+    abiertos = open_qs.count()
+    cerrados_hoy = qs.filter(
+        status=Conversation.Status.CERRADO,
+        closed_at__date=today,
+    ).count()
+    # Fallback si closed_at aún no está poblado en casos viejos
+    if cerrados_hoy == 0:
+        cerrados_hoy = qs.filter(
+            status=Conversation.Status.CERRADO,
+            updated_at__date=today,
+        ).count()
+
+    return [
+        {
+            "label": "Casos abiertos",
+            "value": str(abiertos),
+            "sub": "WhatsApp en cola",
+            "icon": "message-circle",
+            "bg": "var(--blue-soft)",
+            "fg": "var(--blue)",
+        },
+        {
+            "label": "Pendientes",
+            "value": str(pendientes),
+            "sub": "requieren atención",
+            "icon": "inbox",
+            "bg": "var(--warning-bg)",
+            "fg": "var(--warning-text)",
+        },
+        {
+            "label": "Sin asesor",
+            "value": str(sin_asesor),
+            "sub": "esperando asignación",
+            "icon": "user-round",
+            "bg": "var(--info-bg)",
+            "fg": "var(--info-text)",
+        },
+        {
+            "label": "Escalados",
+            "value": str(escalados),
+            "sub": "a dependencias",
+            "icon": "arrow-up-right",
+            "bg": "var(--danger-bg)",
+            "fg": "var(--danger-text)",
+        },
+        {
+            "label": "Cerrados hoy",
+            "value": str(cerrados_hoy),
+            "sub": "resueltos en el día",
+            "icon": "circle-check",
+            "bg": "var(--success-bg)",
+            "fg": "var(--success-text)",
+        },
+    ]
+
+
+def _dashboard_advisor_workload():
+    today = timezone.localdate()
+    open_qs = _whatsapp_conversations().exclude(status=Conversation.Status.CERRADO)
+
+    by_advisor = (
+        open_qs.filter(assigned_to__isnull=False)
+        .values("assigned_to_id", "assigned_to__first_name", "assigned_to__last_name", "assigned_to__username")
+        .annotate(
+            assigned=Count("id"),
+            pending=Count("id", filter=Q(status=Conversation.Status.PENDIENTE)),
+            escalated=Count("id", filter=Q(status=Conversation.Status.ESCALADO)),
+        )
+        .order_by("-assigned")
+    )
+
+    closed_today = {
+        row["closed_by_id"]: row["total"]
+        for row in _whatsapp_conversations()
+        .filter(status=Conversation.Status.CERRADO, closed_at__date=today)
+        .values("closed_by_id")
+        .annotate(total=Count("id"))
+        if row["closed_by_id"]
+    }
+
+    rows = []
+    for row in by_advisor:
+        first = (row["assigned_to__first_name"] or "").strip()
+        last = (row["assigned_to__last_name"] or "").strip()
+        username = row["assigned_to__username"] or ""
+        name = f"{first} {last}".strip() or username
+        initials = (
+            f"{first[:1]}{last[:1]}".upper()
+            if first or last
+            else (username[:2] or "?").upper()
+        )
+        advisor_id = row["assigned_to_id"]
+        rows.append(
+            {
+                "initials": initials,
+                "name": name,
+                "assigned": row["assigned"],
+                "pending": row["pending"],
+                "escalated": row["escalated"],
+                "closed_today": closed_today.get(advisor_id, 0),
+            }
+        )
+
+    unassigned = open_qs.filter(assigned_to__isnull=True).count()
+    if unassigned:
+        rows.append(
+            {
+                "initials": "—",
+                "name": "Sin asignar",
+                "assigned": unassigned,
+                "pending": open_qs.filter(
+                    assigned_to__isnull=True, status=Conversation.Status.PENDIENTE
+                ).count(),
+                "escalated": open_qs.filter(
+                    assigned_to__isnull=True, status=Conversation.Status.ESCALADO
+                ).count(),
+                "closed_today": 0,
+            }
+        )
+
+    return rows
+
+
 @login_required
 def dashboard(request):
-    max_channel_value = max(bar["value"] for bar in CHANNEL_BARS)
-    channel_bars = [
-        {**bar, "height_pct": round(bar["value"] / max_channel_value * 100)}
-        for bar in CHANNEL_BARS
-    ]
-    max_advisor_value = max(row["value"] for row in ADVISOR_LOAD)
-    advisor_load = [
-        {**row, "width_pct": round(row["value"] / max_advisor_value * 100)}
-        for row in ADVISOR_LOAD
-    ]
     context = {
         "active_nav": "dashboard",
-        "metric_cards": METRIC_CARDS,
-        "channel_bars": channel_bars,
-        "advisor_load": advisor_load,
-        "workload_rows": WORKLOAD_ROWS,
+        "metric_cards": _dashboard_case_metrics(),
+        "workload_rows": _dashboard_advisor_workload(),
+        "campaign_metrics": campaign_kpis(),
+        "recent_campaigns": recent_campaigns(),
+        "campaign_activity": ACTIVITY_LOGS[:4],
     }
     return render(request, "dashboard.html", context)
 
@@ -170,8 +270,12 @@ def profile_view(request):
 
     assigned_open = Conversation.objects.filter(
         assigned_to=user,
-    ).exclude(status__in=["cerrado", "completado"]).count()
-    assigned_total = Conversation.objects.filter(assigned_to=user).count()
+        channel__code="whatsapp",
+    ).exclude(status=Conversation.Status.CERRADO).count()
+    assigned_total = Conversation.objects.filter(
+        assigned_to=user,
+        channel__code="whatsapp",
+    ).count()
 
     return render(
         request,

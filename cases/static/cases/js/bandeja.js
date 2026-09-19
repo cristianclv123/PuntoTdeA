@@ -36,8 +36,19 @@
   function upsertRow(conv) {
     let row = list.querySelector(`[data-conversation-id="${conv.id}"]`);
 
-    // Casos cerrados salen de la cola
+    // Casos cerrados: solo en pestaña Cerrados (o si estás viendo ese chat).
     if (conv.status === "cerrado") {
+      const onClosedTab = list.dataset.activeTab === "closed";
+      const viewing =
+        window.location.pathname === `/bandeja/${conv.id}/` ||
+        window.location.pathname === `/bandeja/${conv.id}`;
+      if (!onClosedTab && !viewing) {
+        if (row) row.remove();
+        updateCount();
+        return;
+      }
+    } else if (list.dataset.activeTab === "closed") {
+      // En Cerrados no mostrar chats abiertos.
       if (row) row.remove();
       updateCount();
       return;

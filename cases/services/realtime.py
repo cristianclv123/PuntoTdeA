@@ -41,12 +41,18 @@ def _conversation_payload(conversation, last_message_body: str = "") -> dict:
         "status_label": conversation.get_status_display(),
         "status_badge": (
             "Esperando asesor"
-            if conversation.assigned_to_id is None
+            if (
+                conversation.assigned_to_id is None
+                and conversation.status != "cerrado"
+            )
             else conversation.get_status_display()
         ),
         "status_tag_class": status_tag_class(
             status=conversation.status,
-            unassigned=conversation.assigned_to_id is None,
+            unassigned=(
+                conversation.assigned_to_id is None
+                and conversation.status != "cerrado"
+            ),
         ),
         "detail_url": f"/bandeja/{conversation.id}/",
         **ui,

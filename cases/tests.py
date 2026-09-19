@@ -275,6 +275,7 @@ class CaseActionsTests(TestCase):
             },
         )
         self.assertEqual(res.status_code, 302)
+        self.assertIn(f"/bandeja/{self.conversation.id}/", res.url)
         self.conversation.refresh_from_db()
         self.assertEqual(self.conversation.status, Conversation.Status.CERRADO)
         self.assertEqual(self.conversation.assigned_to_id, self.user.id)
@@ -337,6 +338,13 @@ class CaseActionsTests(TestCase):
         ids = {c["id"] for c in res.context["conversations"]}
         self.assertIn(open_conv.id, ids)
         self.assertNotIn(closed_conv.id, ids)
+
+        closed_res = self.client.get(reverse("cases:bandeja"), {"closed": "1"})
+        self.assertEqual(closed_res.status_code, 200)
+        self.assertEqual(closed_res.context["active_tab"], "closed")
+        closed_ids = {c["id"] for c in closed_res.context["conversations"]}
+        self.assertIn(closed_conv.id, closed_ids)
+        self.assertNotIn(open_conv.id, closed_ids)
 
 
 class AttachmentAndTemplateTests(TestCase):

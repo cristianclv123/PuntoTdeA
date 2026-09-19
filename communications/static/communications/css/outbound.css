@@ -63,31 +63,55 @@
 }
 
 .outbound-table {
-    color: var(--text, #fafafa);
+    --bs-table-bg: #141414 !important;
+    --bs-table-color: #fafafa !important;
+    --bs-table-striped-bg: #1c1c1c !important;
+    --bs-table-striped-color: #fafafa !important;
+    --bs-table-hover-bg: #242424 !important;
+    --bs-table-hover-color: #fafafa !important;
+    --bs-table-border-color: #333333 !important;
+    background-color: #141414 !important;
+    color: #fafafa !important;
 }
 
 .outbound-table thead th {
     font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--text-muted, #a3a3a3);
+    color: #a3a3a3 !important;
     font-weight: 700;
-    border-bottom-color: var(--border, #333) !important;
+    background-color: #141414 !important;
+    border-bottom-color: #333333 !important;
 }
 
 .outbound-table tbody tr {
     cursor: pointer;
-    border-color: var(--border, #333);
+    border-color: #333333 !important;
+    background-color: #141414 !important;
+    color: #fafafa !important;
 }
 
 .outbound-table tbody tr:hover {
-    background: var(--surface-2, #1c1c1c);
+    background-color: #1c1c1c !important;
+    color: #fafafa !important;
 }
 
 .outbound-table td,
 .outbound-table th {
-    color: inherit;
-    border-color: var(--border, #333) !important;
+    color: #fafafa !important;
+    background-color: transparent !important;
+    border-color: #333333 !important;
+}
+
+.outbound-table .channel-chip {
+    color: #fafafa !important;
+}
+
+.outbound-card .card-body,
+.outbound-card .h5,
+.outbound-card .h6,
+.outbound-card strong {
+    color: #fafafa !important;
 }
 
 .kpi-card {
@@ -396,3 +420,43 @@
   color: inherit !important;
   stroke: currentColor !important;
 }
+
+/* Bootstrap form controls — dark panel */
+.outbound-panel .form-control,
+.outbound-panel .form-select,
+.outbound-panel .input-group-text {
+    background-color: #1c1c1c !important;
+    border-color: #333333 !important;
+    color: #fafafa !important;
+}
+
+.outbound-panel .form-control::placeholder {
+    color: #737373 !important;
+}
+
+.outbound-panel .form-control:focus,
+.outbound-panel .form-select:focus {
+    border-color: #3dff8a !important;
+    box-shadow: 0 0 0 0.2rem rgba(61, 255, 138, 0.15) !important;
+    background-color: #1c1c1c !important;
+    color: #fafafa !important;
+}
+
+.outbound-panel .form-label,
+.outbound-panel .text-muted,
+.outbound-panel .small.text-muted {
+    color: #a3a3a3 !important;
+}
+
+.outbound-panel .btn-outline-success {
+    color: #3dff8a !important;
+    border-color: #00873e !important;
+    background: transparent !important;
+}
+
+.outbound-panel .btn-check:checked + .btn-outline-success {
+    background: #00873e !important;
+    border-color: #00873e !important;
+    color: #fff !important;
+}
+

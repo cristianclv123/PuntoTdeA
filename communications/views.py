@@ -9,15 +9,6 @@ CHANNEL_META = {
 
 
 @login_required
-def index(request):
-    return render(
-        request,
-        "communications/index.html",
-        {"nav_section": "dashboard", "active_nav": "campaigns"},
-    )
-
-
-@login_required
 def campaigns(request):
     enriched = []
     for c in CAMPAIGNS:

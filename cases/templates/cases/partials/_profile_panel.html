@@ -90,6 +90,8 @@
         </button>
       </div>
       <p class="case-close-hint">Para cerrar el caso debe estar gestionado: asesor asignado y dependencia de clasificación.</p>
+    {% else %}
+      <p class="case-close-hint">Caso cerrado — gestión en solo lectura.</p>
     {% endif %}
   </form>
   <div class="divider"></div>
@@ -106,7 +108,9 @@
               Sistema
             {% endif %}
           </span>
-          <span class="note-time">{{ comment.created_at|date:"d M, H:i" }}</span>
+          <time class="note-time" datetime="{{ comment.created_at|date:'c' }}">
+            {{ comment.created_at|date:"d/m/Y" }} · {{ comment.created_at|date:"H:i" }}
+          </time>
         </div>
         <div class="note-text">{{ comment.body }}</div>
       </div>

@@ -51,4 +51,5 @@ def advisor_can_reply(conversation: Conversation, user) -> bool:
         user
         and getattr(user, "is_authenticated", False)
         and conversation.assigned_to_id == user.id
+        and conversation.status != Conversation.Status.CERRADO
     )

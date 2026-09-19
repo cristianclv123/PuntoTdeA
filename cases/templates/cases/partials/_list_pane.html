@@ -46,6 +46,15 @@
       >
         Todos
       </a>
+      <a
+        role="tab"
+        class="wa-scope-tab {% if active_tab == 'closed' %}active{% endif %}"
+        href="{% url 'cases:bandeja' %}?closed=1"
+        aria-selected="{% if active_tab == 'closed' %}true{% else %}false{% endif %}"
+      >
+        Cerrados
+        {% if closed_count %}<span class="wa-chip-count">{{ closed_count }}</span>{% endif %}
+      </a>
     </div>
 
     <div class="wa-search">
