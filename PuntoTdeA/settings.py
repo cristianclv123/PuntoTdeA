@@ -135,6 +135,14 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/",
+    "ENUM_NAME_OVERRIDES": {
+        "ConversationStatusEnum": "cases.models.Conversation.Status",
+        "MessageTemplateStatusEnum": "communications.models.MessageTemplate.Status",
+        "CampaignStatusEnum": "communications.models.Campaign.Status",
+        "BroadcastRecipientStatusEnum": "communications.models.BroadcastRecipient.Status",
+        "KnowledgeArticleStatusEnum": "knowledge.models.KnowledgeArticle.STATUS_CHOICES",
+        "ChatConversationStatusEnum": "knowledge.models.ChatConversation.STATUS_CHOICES",
+    },
 }
 
 
