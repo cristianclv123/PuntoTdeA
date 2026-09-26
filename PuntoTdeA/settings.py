@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "corsheaders",
     "channels",
     # Aplicaciones del proyecto PuntoTdeA
@@ -64,7 +65,6 @@ TEMPLATES = [
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [
             BASE_DIR / "templates",
-            BASE_DIR / "PuntoTdeA" / "templates",
         ],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -126,6 +126,15 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Punto TdeA API",
+    "DESCRIPTION": "Documentación de las APIs del sistema Punto TdeA (casos, comunicaciones, base de conocimiento y avisos).",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": "/api/",
 }
 
 
@@ -135,12 +144,20 @@ CORS_ALLOW_CREDENTIALS = True
 
 
 META_VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "puntotdea-dev-verify")
+META_APP_ID = os.environ.get("META_APP_ID", "1090920187024593")
 META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "1371800496011297")
+WHATSAPP_API_VERSION = os.environ.get("WHATSAPP_API_VERSION", "v21.0")
+
 ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "ALLOW_WEBHOOK_SIMULATOR",
     "true" if DEBUG else "false",
 ).lower() in {"1", "true", "yes"}
+
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -160,7 +177,6 @@ STATIC_URL = '/static/'
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
-    BASE_DIR / "PuntoTdeA" / "static",
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
@@ -171,6 +187,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ImageField models exist; silence check when Pillow is not installed in local/CI.
+SILENCED_SYSTEM_CHECKS = ["fields.E210"]
 
 KNOWLEDGE_SETTINGS = {
     'MIN_CONFIDENCE': 0.7,

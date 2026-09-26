@@ -1,0 +1,79 @@
+{% load icons %}
+<div class="wa-list-pane">
+  <div class="wa-list-header">
+    <button class="nav-toggle" type="button" id="nav-toggle" aria-label="Abrir menú" aria-controls="app-sidebar" aria-expanded="false">
+      {% icon 'menu' size=20 %}
+    </button>
+    <div class="wa-list-title">
+      <div class="wa-list-heading font-brand">Bandeja</div>
+    </div>
+  </div>
+
+  <div class="wa-filters-block">
+    <div class="wa-filter-group wa-scope-grid" role="tablist" aria-label="Filtros de bandeja">
+      <a
+        role="tab"
+        class="wa-scope-tab {% if active_tab == 'mine' %}active{% endif %}"
+        href="{% url 'cases:bandeja' %}?assigned_to=me"
+        aria-selected="{% if active_tab == 'mine' %}true{% else %}false{% endif %}"
+      >
+        Mis chats
+        {% if mine_count %}<span class="wa-chip-count">{{ mine_count }}</span>{% endif %}
+      </a>
+      <a
+        role="tab"
+        class="wa-scope-tab {% if active_tab == 'unanswered' %}active{% endif %}"
+        href="{% url 'cases:bandeja' %}?unanswered=1"
+        aria-selected="{% if active_tab == 'unanswered' %}true{% else %}false{% endif %}"
+      >
+        Sin respuesta
+        {% if unanswered_count %}<span class="wa-chip-count">{{ unanswered_count }}</span>{% endif %}
+      </a>
+      <a
+        role="tab"
+        class="wa-scope-tab {% if active_tab == 'unassigned' %}active{% endif %}"
+        href="{% url 'cases:bandeja' %}?unassigned=1"
+        aria-selected="{% if active_tab == 'unassigned' %}true{% else %}false{% endif %}"
+      >
+        Sin asesor
+        {% if unassigned_count %}<span class="wa-chip-count">{{ unassigned_count }}</span>{% endif %}
+      </a>
+      <a
+        role="tab"
+        class="wa-scope-tab {% if active_tab == 'all' %}active{% endif %}"
+        href="{% url 'cases:bandeja' %}"
+        aria-selected="{% if active_tab == 'all' %}true{% else %}false{% endif %}"
+      >
+        Todos
+      </a>
+      <a
+        role="tab"
+        class="wa-scope-tab {% if active_tab == 'closed' %}active{% endif %}"
+        href="{% url 'cases:bandeja' %}?closed=1"
+        aria-selected="{% if active_tab == 'closed' %}true{% else %}false{% endif %}"
+      >
+        Cerrados
+        {% if closed_count %}<span class="wa-chip-count">{{ closed_count }}</span>{% endif %}
+      </a>
+    </div>
+
+    <div class="wa-search">
+      {% icon 'search' size=16 %}
+      <input type="search" id="wa-search-input" placeholder="Buscar por nombre, teléfono o mensaje" autocomplete="off" aria-label="Buscar conversaciones">
+    </div>
+  </div>
+
+  <div
+    class="conversation-list wa-conversation-list"
+    id="conversation-list"
+    data-ws-url="{% if request.is_secure %}wss{% else %}ws{% endif %}://{{ request.get_host }}/ws/bandeja/"
+    data-active-tab="{{ active_tab }}"
+    data-filter-query="{{ filter_query }}"
+  >
+    {% include "cases/partials/_conversation_rows.html" %}
+  </div>
+
+  <div class="wa-list-footer">
+    <span id="result-count">{{ result_count }}</span> chats
+  </div>
+</div>

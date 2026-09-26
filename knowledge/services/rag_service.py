@@ -53,6 +53,22 @@ def _normalize_token(token: str) -> str:
     return token
 
 
+KEYWORD_ROOTS = {
+    'pagar': 'pag',
+    'pago': 'pag',
+    'pagos': 'pag',
+    'matricula': 'matricul',
+    'matricular': 'matricul',
+    'matricule': 'matricul',
+    'inscripcion': 'inscrip',
+    'inscribir': 'inscrip',
+    'inscribirme': 'inscrip',
+    'solicitud': 'solicit',
+    'solicitar': 'solicit',
+    'solicito': 'solicit',
+}
+
+
 def _tokenize(text: str):
     text = unicodedata.normalize('NFKD', _normalize_text(text).lower())
     text = ''.join(character for character in text if not unicodedata.combining(character))
@@ -60,12 +76,13 @@ def _tokenize(text: str):
         'para', 'como', 'donde', 'cuando', 'quien', 'cual', 'cuanto', 'esta',
         'este', 'estos', 'estas', 'una', 'uno', 'unos', 'unas', 'los', 'las',
         'del', 'por', 'con', 'que', 'hay', 'son', 'sobre', 'puedo', 'necesito',
+        'quiero', 'saber', 'informacion', 'información',
     }
     tokens = []
     for token in re.findall(r"[a-z0-9]+", text):
         token = _normalize_token(token)
         if len(token) > 2 and token not in stopwords:
-            tokens.append(token)
+            tokens.append(KEYWORD_ROOTS.get(token, token))
     return tokens
 
 
@@ -95,18 +112,20 @@ def _cosine_similarity(left: str, right: str) -> float:
     return numerator / (left_norm * right_norm)
 
 
-def _relevance_score(query: str, title: str, body: str) -> float:
+def _relevance_score(query: str, title: str, body: str, keywords: str = '') -> float:
     query_tokens = set(_tokenize(query))
     if not query_tokens:
         return 0.0
 
     title_tokens = set(_tokenize(title))
     body_tokens = set(_tokenize(body))
+    keyword_tokens = set(_tokenize(keywords))
     title_overlap = len(query_tokens & title_tokens) / len(query_tokens)
     body_overlap = len(query_tokens & body_tokens) / len(query_tokens)
+    keyword_overlap = len(query_tokens & keyword_tokens) / len(query_tokens)
     phrase_boost = 0.15 if _normalize_text(query).lower() in _normalize_text(body).lower() else 0.0
     cosine = _cosine_similarity(query, f'{title} {body}')
-    return min(1.0, (title_overlap * 0.55) + (body_overlap * 0.25) + (cosine * 0.2) + phrase_boost)
+    return min(1.0, (title_overlap * 0.5) + (body_overlap * 0.2) + (keyword_overlap * 0.15) + (cosine * 0.15) + phrase_boost)
 
 
 def search_knowledge(query: str, limit: int | None = None):
@@ -123,9 +142,14 @@ def search_knowledge(query: str, limit: int | None = None):
     articles = getattr(knowledge_models.KnowledgeArticle, 'objects').filter(
         status='published', published=True
     ).select_related('category', 'intent')
+    article_meta = getattr(knowledge_models.KnowledgeArticle, '_meta')
+    article_field_names = {field.name for field in article_meta.get_fields()}
+    if 'embedding_vector' in article_field_names:
+        articles = articles.defer('embedding_vector')
     results = []
     for article in articles:
-        score = _relevance_score(query, article.title, article.indexable_text)
+        article_keywords = ' '.join(str(tag) for tag in (article.tags or []))
+        score = _relevance_score(query, article.title, article.indexable_text, article_keywords)
         if score <= 0:
             continue
         results.append({
@@ -147,7 +171,7 @@ def search_knowledge(query: str, limit: int | None = None):
         models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=now),
     ).select_related('category', 'intent')
     for faq in faq_queryset:
-        score = _relevance_score(query, faq.question, f'{faq.question} {faq.answer}')
+        score = _relevance_score(query, faq.question, f'{faq.question} {faq.answer}', faq.category.name)
         if score <= 0:
             continue
         results.append({
@@ -191,8 +215,7 @@ def answer_query(question: str) -> dict[str, Any]:
 
     results = search_knowledge(question, limit=5)
     if results:
-        faq_results = [result for result in results if result.get('source_type') == 'faq']
-        best_result = faq_results[0] if faq_results else results[0]
+        best_result = max(results, key=lambda result: float(result.get('score', 0.0)))
         confidence = evaluate_confidence(question, best_result)
         answer = best_result.get('summary') or best_result.get('content') or 'No encontré una respuesta formulada.'
         return {

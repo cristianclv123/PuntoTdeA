@@ -6,19 +6,19 @@
 {% block page_lead %}Envía al público correcto, por el canal correcto, con el contenido correcto.{% endblock %}
 
 {% block hero_actions %}
-<a href="{% url 'communications:campaign_new' %}" class="btn btn-light fw-semibold rounded-pill px-4">
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-success fw-semibold rounded-pill px-4">
     <i class="bi bi-plus-lg me-1"></i> Iniciar campaña
 </a>
 {% endblock %}
 
-{% block content %}
+{% block outbound_content %}
 <div class="card outbound-card shadow-sm">
     <div class="card-body p-4">
         <div class="row g-3 align-items-end mb-4">
             <div class="col-md-4">
                 <label class="form-label small fw-semibold" for="filterSearch">Buscar</label>
                 <div class="input-group">
-                    <span class="input-group-text bg-light text-muted"><i class="bi bi-search"></i></span>
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
                     <input id="filterSearch" class="form-control" type="search" placeholder="Nombre o audiencia">
                 </div>
             </div>
@@ -27,10 +27,6 @@
                 <select id="filterChannel" class="form-select">
                     <option value="">Todos</option>
                     <option value="whatsapp">WhatsApp</option>
-                    <option value="sms">SMS</option>
-                    <option value="email">Correo</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="instagram">Instagram</option>
                 </select>
             </div>
             <div class="col-md-3">

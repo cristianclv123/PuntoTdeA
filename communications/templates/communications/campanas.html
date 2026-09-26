@@ -6,12 +6,12 @@
 {% block page_lead %}Mensajería masiva y programación de envíos por canal institucional.{% endblock %}
 
 {% block hero_actions %}
-<a href="{% url 'communications:campaign_new' %}" class="btn btn-light fw-semibold rounded-pill px-4">
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-success fw-semibold rounded-pill px-4">
     <i class="bi bi-plus-lg me-1"></i> Nueva campaña asistida
 </a>
 {% endblock %}
 
-{% block content %}
+{% block outbound_content %}
 <div class="row g-4">
     <!-- Columna del Formulario de Creación Rápida -->
     <div class="col-lg-5">
@@ -42,21 +42,13 @@
 
                 <div class="mb-3">
                     <label class="form-label small fw-semibold">Canal de envío</label>
-                    <div class="btn-group w-100" role="group">
-                        <input type="radio" class="btn-check" name="channel" id="chanWp" value="whatsapp" checked>
-                        <label class="btn btn-outline-secondary btn-sm" for="chanWp">
-                            <i class="bi bi-whatsapp me-1 text-success"></i> WhatsApp
-                        </label>
-
-                        <input type="radio" class="btn-check" name="channel" id="chanFb" value="facebook">
-                        <label class="btn btn-outline-secondary btn-sm" for="chanFb">
-                            <i class="bi bi-facebook me-1 text-primary"></i> Facebook
-                        </label>
-
-                        <input type="radio" class="btn-check" name="channel" id="chanIg" value="instagram">
-                        <label class="btn btn-outline-secondary btn-sm" for="chanIg">
-                            <i class="bi bi-instagram me-1 text-danger"></i> Instagram
-                        </label>
+                    <input type="hidden" name="channel" value="whatsapp">
+                    <div class="channel-row">
+                        <span class="channel-icon whatsapp"><i class="bi bi-whatsapp"></i></span>
+                        <div>
+                            <div class="fw-semibold">WhatsApp</div>
+                            <div class="small text-muted">Único canal disponible para campañas</div>
+                        </div>
                     </div>
                 </div>
 
@@ -89,58 +81,21 @@
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                     <h2 class="h5 fw-bold mb-0">Campañas programadas y enviadas</h2>
-                    <span class="badge bg-light text-dark border">{{ campaigns|length }} campañas</span>
+                    <span id="campaignsCount" class="badge rounded-pill px-3 py-1" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">Cargando…</span>
                 </div>
 
-                <div class="d-flex flex-column gap-3">
-                    {% for c in campaigns %}
-                        <div class="border rounded p-3 bg-light-subtle">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="rounded-circle p-2 bg-white shadow-sm d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
-                                        {% if c.channel == 'whatsapp' %}
-                                            <i class="bi bi-whatsapp text-success fs-5"></i>
-                                        {% elif c.channel == 'facebook' %}
-                                            <i class="bi bi-facebook text-primary fs-5"></i>
-                                        {% elif c.channel == 'instagram' %}
-                                            <i class="bi bi-instagram text-danger fs-5"></i>
-                                        {% else %}
-                                            <i class="bi bi-envelope text-secondary fs-5"></i>
-                                        {% endif %}
-                                    </div>
-                                    <div>
-                                        <h3 class="h6 fw-bold mb-0">{{ c.name }}</h3>
-                                        <span class="small text-muted">{{ c.meta }}</span>
-                                    </div>
-                                </div>
-                                {% if c.status == "enviada" %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1">Enviada</span>
-                                {% else %}
-                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill px-3 py-1">Programada</span>
-                                {% endif %}
-                            </div>
-
-                            {% if c.status == "enviada" %}
-                                <div class="row text-center g-2 pt-2 mt-2 border-top">
-                                    <div class="col-4">
-                                        <div class="fw-bold text-dark">{{ c.sent }}</div>
-                                        <div class="small text-muted" style="font-size: 0.75rem;">Enviados</div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="fw-bold text-dark">{{ c.delivered }}</div>
-                                        <div class="small text-muted" style="font-size: 0.75rem;">Entregados</div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="fw-bold text-dark">{{ c.read }}</div>
-                                        <div class="small text-muted" style="font-size: 0.75rem;">Leídos</div>
-                                    </div>
-                                </div>
-                            {% endif %}
+                <div id="campaignsList" class="d-flex flex-column gap-3" aria-live="polite">
+                    <div class="text-center py-4" style="color: var(--text-muted);">
+                        <div class="spinner-border spinner-border-sm text-success me-2" role="status">
+                            <span class="visually-hidden">Cargando...</span>
                         </div>
-                    {% empty %}
-                        <p class="text-muted text-center py-4 mb-0">No hay campañas registradas hasta el momento.</p>
-                    {% endfor %}
+                        Cargando listado de campañas…
+                    </div>
                 </div>
+                <p id="campaignsEmpty" class="text-center py-4 mb-0 d-none" style="color: var(--text-muted);">
+                    No hay campañas registradas hasta el momento.
+                </p>
+                <div id="campaignsError" class="alert alert-danger d-none mb-0" role="alert"></div>
             </div>
         </div>
     </div>
@@ -150,8 +105,10 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initQuickCampaignForm === 'function') {
-            OutboundUI.initQuickCampaignForm();
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.renderCampaignCards === 'function') {
+            OutboundUI.renderCampaignCards();
+        } else {
+            console.error('El módulo OutboundUI o la función renderCampaignCards no están disponibles.');
         }
     });
 </script>

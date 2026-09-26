@@ -3,7 +3,6 @@ from django.urls import path
 from cases.api import views
 
 urlpatterns = [
-    path("webhooks/meta/", views.meta_webhook, name="meta-webhook"),
     path("webhooks/web/", views.web_webhook, name="web-webhook"),
     path("webhooks/simulate/", views.simulate_webhook, name="simulate-webhook"),
     path("web/contacts/", views.web_create_contact, name="web-contacts"),

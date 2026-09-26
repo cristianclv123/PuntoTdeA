@@ -1,58 +1,44 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+{% load icons %}
 
+{% block title %}Avisos — Punto TdeA{% endblock %}
+{% block page_title %}Avisos y novedades{% endblock %}
+{% block page_subtitle %}Publicaciones visibles para la comunidad{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-10">
-        
-        <h1 class="mb-4 fw-bold text-dark">Módulo de Anuncios</h1>
-
-        <!-- Sección específica para la HU-08: Avisos Urgentes -->
-        <div class="mb-5">
-            <h3 class="text-danger mb-3">
-                <i class="bi bi-exclamation-triangle-fill"></i> Avisos Urgentes
-            </h3>
-            {% if urgent_announcements %}
-                {% for announcement in urgent_announcements %}
-                    <div class="card border-danger mb-3 shadow-sm">
-                        <div class="card-body">
-                            <h4 class="card-title text-danger fw-bold">{{ announcement.title }}</h4>
-                            <p class="card-text">{{ announcement.content }}</p>
-                            <p class="card-text"><small class="text-muted">Publicado el: {{ announcement.created_at }}</small></p>
-                        </div>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="alert alert-light border shadow-sm" role="alert">
-                    No hay avisos urgentes en este momento.
-                </div>
-            {% endif %}
+  <div class="profile-layout">
+    <section class="card">
+      <h2 class="card-title">Avisos urgentes</h2>
+      {% if urgent_announcements %}
+        <div class="knowledge-faq-list" style="margin-top: 14px;">
+          {% for announcement in urgent_announcements %}
+            <div class="knowledge-faq" style="border-color: rgba(252,165,165,0.35);">
+              <div class="knowledge-list-title" style="color: #fca5a5;">{{ announcement.title }}</div>
+              <p style="margin: 8px 0 0; color: var(--text-secondary);">{{ announcement.content }}</p>
+              <div class="knowledge-list-meta">Publicado el {{ announcement.created_at }}</div>
+            </div>
+          {% endfor %}
         </div>
+      {% else %}
+        <p class="knowledge-empty">No hay avisos urgentes en este momento.</p>
+      {% endif %}
+    </section>
 
-        <hr class="my-4">
-
-        <!-- Todos los anuncios generales -->
-        <div>
-            <h3 class="mb-3 text-secondary">
-                <i class="bi bi-megaphone-fill"></i> Todos los Anuncios
-            </h3>
-            {% if announcements %}
-                {% for announcement in announcements %}
-                    <div class="card mb-3 shadow-sm">
-                        <div class="card-body">
-                            <h5 class="card-title fw-bold">{{ announcement.title }}</h5>
-                            <p class="card-text">{{ announcement.content }}</p>
-                            <p class="card-text"><small class="text-muted">Publicado el: {{ announcement.created_at }}</small></p>
-                        </div>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="alert alert-light border shadow-sm" role="alert">
-                    No hay anuncios registrados.
-                </div>
-            {% endif %}
+    <section class="card">
+      <h2 class="card-title">Todos los anuncios</h2>
+      {% if announcements %}
+        <div class="knowledge-faq-list" style="margin-top: 14px;">
+          {% for announcement in announcements %}
+            <div class="knowledge-faq">
+              <div class="knowledge-list-title">{{ announcement.title }}</div>
+              <p style="margin: 8px 0 0; color: var(--text-secondary);">{{ announcement.content }}</p>
+              <div class="knowledge-list-meta">Publicado el {{ announcement.created_at }}</div>
+            </div>
+          {% endfor %}
         </div>
-
-    </div>
-</div>
+      {% else %}
+        <p class="knowledge-empty">No hay anuncios registrados.</p>
+      {% endif %}
+    </section>
+  </div>
 {% endblock %}
