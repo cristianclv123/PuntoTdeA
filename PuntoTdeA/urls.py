@@ -23,7 +23,6 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
-    path('dashboard/', views.dashboard, name='dashboard'),
     path('perfil/', views.profile_view, name='profile'),
 
     path('api/cases/', include('cases.api.urls')),
@@ -34,6 +33,7 @@ urlpatterns = [
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # Rutas principales de los módulos
+    path('dashboard/', include('dashboard.urls')),
     path('bandeja/', include('cases.urls')),
     path('base-de-conocimiento/', include('knowledge.urls')),
     path('campanas/', include('communications.urls')),
