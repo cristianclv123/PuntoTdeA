@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from cases.models import Conversation
-from communications.mock_data import ACTIVITY_LOGS, campaign_kpis, recent_campaigns
+from communications.services import dashboard_service
 
 User = get_user_model()
 
@@ -235,9 +235,9 @@ def dashboard(request):
         "active_nav": "dashboard",
         "metric_cards": _dashboard_case_metrics(),
         "workload_rows": _dashboard_advisor_workload(),
-        "campaign_metrics": campaign_kpis(),
-        "recent_campaigns": recent_campaigns(),
-        "campaign_activity": ACTIVITY_LOGS[:4],
+        "campaign_metrics": dashboard_service.campaign_kpis(),
+        "recent_campaigns": dashboard_service.recent_campaigns(),
+        "campaign_activity": dashboard_service.recent_activity(),
     }
     return render(request, "dashboard.html", context)
 
