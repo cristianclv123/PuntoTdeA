@@ -9,8 +9,6 @@ from django.views.decorators.csrf import csrf_exempt
 from .chatbot import workflow as chatbot_workflow
 from .chatbot.whatsapp import parse_json, process_webhook, validate_signature, verify_webhook
 from .models import ChatConversation, FAQ, KnowledgeArticle
-from .services.indexing_service import index_academic_calendar
-from .services.rag_service import answer_query, search_knowledge
 
 
 def _manager(model):
@@ -31,20 +29,6 @@ def index(request):
 @login_required
 def faq_list(request):
     return index(request)
-
-
-@login_required
-def search(request):
-    query = request.GET.get('q', '').strip()
-    results = search_knowledge(query) if query else []
-    return JsonResponse({'results': results, 'query': query})
-
-
-@login_required
-def ask(request):
-    query = request.GET.get('q', '').strip()
-    response = answer_query(query)
-    return JsonResponse(response)
 
 
 @csrf_exempt
@@ -108,9 +92,3 @@ def whatsapp_webhook(request):
     except (UnicodeDecodeError, ValueError):
         return JsonResponse({'error': 'El cuerpo debe ser JSON válido.'}, status=400)
     return JsonResponse({'ok': True, 'processed': process_webhook(payload)})
-
-
-@login_required
-def reindex_academic_calendar(_request):
-    payload = index_academic_calendar()
-    return JsonResponse({'status': 'ok', 'payload': payload})
