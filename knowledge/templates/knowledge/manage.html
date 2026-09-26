@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% load icons static %}
+
+{% block title %}Gestión de conocimiento — Punto TdeA{% endblock %}
+{% block page_title %}Base de conocimiento{% endblock %}
+{% block page_subtitle %}Gestionar preguntas frecuentes y artículos{% endblock %}
+
+{% block content %}
+  <div class="knowledge-manage">
+    <div class="section-head">
+      <div class="km-tabs" role="tablist">
+        <button type="button" class="km-tab active" data-tab="faqs" role="tab">Preguntas frecuentes</button>
+        <button type="button" class="km-tab" data-tab="articles" role="tab">Artículos</button>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <label class="btn btn-outline" style="cursor:pointer;">
+          {% icon 'file-text' size=16 %}
+          Importar Excel
+          <input type="file" accept=".xlsx" data-import-input hidden>
+        </label>
+        <button class="btn btn-primary" type="button" data-open-create>
+          {% icon 'plus' size=16 %}
+          <span data-create-label>Nueva pregunta</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="km-import-result" data-import-result hidden></div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:12px;">
+      <div class="search-box" style="width:320px; background: var(--white); outline: 1px solid var(--border); outline-offset: -1px;">
+        {% icon 'search' size=16 %}
+        <input type="text" placeholder="Buscar..." data-search>
+      </div>
+    </div>
+
+    <div class="category-row" data-category-filter>
+      <div class="category-tab active" data-category="">Todas</div>
+      {% for category in categories %}
+        <div class="category-tab" data-category="{{ category.id }}">{{ category.name }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="data-table km-panel" data-panel="faqs">
+      <div class="data-table-head">
+        <div class="col-flex">Pregunta</div>
+        <div class="col-fixed-160">Categoría</div>
+        <div class="col-fixed-110">Estado</div>
+        <div style="width:80px; flex-shrink:0;"></div>
+      </div>
+      <div data-list="faqs"></div>
+    </div>
+
+    <div class="data-table km-panel" data-panel="articles" hidden>
+      <div class="data-table-head">
+        <div class="col-flex">Título</div>
+        <div class="col-fixed-160">Categoría</div>
+        <div class="col-fixed-110">Estado</div>
+        <div style="width:80px; flex-shrink:0;"></div>
+      </div>
+      <div data-list="articles"></div>
+    </div>
+  </div>
+
+  <datalist id="category-options"></datalist>
+
+  <dialog class="template-dialog" id="faq-dialog">
+    <form class="template-dialog-form" data-form="faqs">
+      <div class="template-dialog-head">
+        <h3 data-dialog-title>Nueva pregunta</h3>
+        <button type="button" class="template-dialog-close" data-close-dialog aria-label="Cerrar">
+          {% icon 'x' size=18 %}
+        </button>
+      </div>
+      <input type="hidden" name="id">
+      <label class="field-label" for="faq_question">Pregunta</label>
+      <input class="field-input" type="text" name="question" id="faq_question" required>
+      <label class="field-label" for="faq_answer">Respuesta</label>
+      <textarea class="field-textarea" name="answer" id="faq_answer" rows="4" required></textarea>
+      <label class="field-label" for="faq_category">Categoría</label>
+      <input class="field-input" type="text" name="category_name" id="faq_category" list="category-options" placeholder="Ej. Matrículas" required>
+      <label class="field-label" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" name="is_active" checked> Activa
+      </label>
+      <p class="form-error" data-form-error hidden></p>
+      <div class="template-dialog-actions">
+        <button type="button" class="btn btn-ghost" data-close-dialog>Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="template-dialog" id="article-dialog">
+    <form class="template-dialog-form" data-form="articles">
+      <div class="template-dialog-head">
+        <h3 data-dialog-title>Nuevo artículo</h3>
+        <button type="button" class="template-dialog-close" data-close-dialog aria-label="Cerrar">
+          {% icon 'x' size=18 %}
+        </button>
+      </div>
+      <input type="hidden" name="id">
+      <label class="field-label" for="article_title">Título</label>
+      <input class="field-input" type="text" name="title" id="article_title" required>
+      <label class="field-label" for="article_summary">Resumen</label>
+      <input class="field-input" type="text" name="summary" id="article_summary">
+      <label class="field-label" for="article_content">Contenido</label>
+      <textarea class="field-textarea" name="content" id="article_content" rows="5" required></textarea>
+      <label class="field-label" for="article_category">Categoría</label>
+      <input class="field-input" type="text" name="category_name" id="article_category" list="category-options" placeholder="Ej. Matrículas" required>
+      <label class="field-label" for="article_tags">Etiquetas (separadas por coma)</label>
+      <input class="field-input" type="text" name="tags" id="article_tags">
+      <label class="field-label" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" name="published" checked> Publicado
+      </label>
+      <p class="form-error" data-form-error hidden></p>
+      <div class="template-dialog-actions">
+        <button type="button" class="btn btn-ghost" data-close-dialog>Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'knowledge/js/manage.js' %}"></script>
+{% endblock %}
