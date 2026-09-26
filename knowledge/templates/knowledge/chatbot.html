@@ -1,0 +1,91 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat Punto TdeA</title>
+  <style>
+    :root { --ink: #17202a; --muted: #65717d; --line: #dce4e8; --blue: #1167b1; --mint: #e7f5ef; --paper: #f6f8f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: var(--ink); background: linear-gradient(135deg, #eef7f4, #f5f1ea); font-family: Georgia, 'Times New Roman', serif; }
+    .chat-page { width: min(920px, calc(100% - 32px)); margin: 32px auto; }
+    .chat-window { overflow: hidden; background: #fff; border: 1px solid var(--line); box-shadow: 0 18px 45px rgba(23, 32, 42, .12); }
+    .chat-header { display: flex; align-items: center; gap: 14px; padding: 22px 26px; color: #fff; background: #153f59; }
+    .mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #153f59; background: #bfe8d5; font: 700 20px Georgia, serif; }
+    h1 { margin: 0; font-size: 24px; } .status { margin-top: 4px; color: #cbe7dc; font: 14px Arial, sans-serif; }
+    .messages { display: flex; flex-direction: column; gap: 14px; min-height: 430px; max-height: 56vh; padding: 26px; overflow-y: auto; background: var(--paper); }
+    .bubble { max-width: min(78%, 620px); padding: 13px 16px; border-radius: 4px 16px 16px 16px; line-height: 1.45; font-size: 17px; white-space: pre-wrap; }
+    .bot { align-self: flex-start; background: #fff; border: 1px solid var(--line); } .user { align-self: flex-end; color: #fff; background: var(--blue); border-radius: 16px 4px 16px 16px; }
+    .controls { padding: 18px 22px 22px; border-top: 1px solid var(--line); background: #fff; }
+    .quick-actions { display: flex; gap: 10px; margin-bottom: 12px; } button { cursor: pointer; border: 0; font: 600 15px Arial, sans-serif; }
+    .quick-actions[hidden] { display: none !important; }
+    .quick-actions button { padding: 10px 16px; color: var(--blue); border: 1px solid #a9cbe3; background: #f1f8fd; }
+    .quick-actions .advisor { color: #8b4d21; border-color: #e4c7a9; background: #fff8ef; }
+    .composer { display: flex; gap: 10px; } input { flex: 1; min-width: 0; padding: 14px 16px; border: 1px solid #b9c8cf; border-radius: 3px; font: 16px Arial, sans-serif; } .send { padding: 0 22px; color: #fff; background: var(--blue); border-radius: 3px; }
+    .hint { margin: 10px 0 0; color: var(--muted); font: 12px Arial, sans-serif; }
+    @media (max-width: 600px) { .chat-page { width: 100%; margin: 0; } .chat-window { min-height: 100vh; border: 0; } .messages { min-height: calc(100vh - 225px); } .bubble { max-width: 88%; } .composer { flex-wrap: wrap; } .send { min-height: 46px; width: 100%; } }
+  </style>
+</head>
+<body>
+  <main class="chat-page">
+    <section class="chat-window" aria-label="Chat de Punto TdeA">
+      <header class="chat-header"><div class="mark">T</div><div><h1>Chat Punto TdeA</h1><div class="status">Asistente de conocimiento · En línea</div></div></header>
+      <div class="messages" id="messages"><div class="bubble bot">{{ greeting.message }}</div></div>
+      <div class="controls">
+        <div class="quick-actions" id="confirmation-actions" hidden>
+          <button type="button" data-help="yes">Sí, necesito más ayuda</button>
+          <button type="button" data-help="no">No, gracias</button>
+        </div>
+        <div class="quick-actions" id="help-actions" hidden>
+          <button type="button" id="new-question-button">Ingresar una nueva pregunta</button>
+          <button type="button" class="advisor" id="advisor-button">Hablar con un asesor</button>
+        </div>
+        <form class="composer" id="chat-form"><input id="question" autocomplete="off" placeholder="Escribe tu pregunta..." aria-label="Pregunta"><button class="send" type="submit">Enviar</button></form>
+        <p class="hint">Puedes preguntar sobre matrículas, calendario, trámites y servicios.</p>
+      </div>
+    </section>
+  </main>
+  <script>
+    const messages = document.getElementById('messages');
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('question');
+    const confirmationActions = document.getElementById('confirmation-actions');
+    const helpActions = document.getElementById('help-actions');
+    const addMessage = (text, author) => { const bubble = document.createElement('div'); bubble.className = `bubble ${author}`; bubble.textContent = text; messages.appendChild(bubble); messages.scrollTop = messages.scrollHeight; };
+    const showActionsFor = (state) => {
+      const showConfirmation = state === 'waiting_confirmation';
+      const showHelp = state === 'help_options';
+      confirmationActions.hidden = !showConfirmation;
+      helpActions.hidden = !showHelp;
+      confirmationActions.style.display = showConfirmation ? 'flex' : 'none';
+      helpActions.style.display = showHelp ? 'flex' : 'none';
+    };
+    const send = async (payload, visibleText = '') => {
+      if (visibleText) addMessage(visibleText, 'user');
+      const response = await fetch('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await response.json();
+      if (!response.ok) { addMessage(data.error || 'No fue posible procesar tu mensaje.', 'bot'); return; }
+      if (data.message) addMessage(data.message, 'bot');
+      showActionsFor(data.state);
+      if (data.state === 'ended') {
+        form.hidden = true;
+        confirmationActions.hidden = true;
+        helpActions.hidden = true;
+        window.setTimeout(() => { window.location.href = '/'; }, 900);
+      }
+      if (data.state === 'pending') { form.hidden = true; confirmationActions.hidden = true; helpActions.hidden = true; }
+    };
+    form.addEventListener('submit', (event) => { event.preventDefault(); const value = input.value.trim(); if (!value) return; input.value = ''; send({ action: 'question', question: value }, value); });
+    document.querySelectorAll('[data-help]').forEach((button) => button.addEventListener('click', () => {
+      showActionsFor('');
+      send({ action: 'confirm', needs_more_help: button.dataset.help === 'yes' }, button.textContent);
+    }));
+    document.getElementById('new-question-button').addEventListener('click', () => { showActionsFor(''); input.focus(); });
+    document.getElementById('advisor-button').addEventListener('click', () => {
+      showActionsFor('');
+      send({ action: 'escalate', reason: 'Solicitud desde el chat web' }, 'Hablar con un asesor');
+    });
+  </script>
+</body>
+</html>

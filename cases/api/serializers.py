@@ -84,10 +84,10 @@ class MessageSerializer(serializers.ModelSerializer):
             "external_id",
         ]
 
-    def get_from_agent(self, obj):
+    def get_from_agent(self, obj) -> bool:
         return obj.direction == Message.Direction.OUTBOUND
 
-    def get_time(self, obj):
+    def get_time(self, obj) -> str:
         return obj.sent_at.strftime("%H:%M")
 
 

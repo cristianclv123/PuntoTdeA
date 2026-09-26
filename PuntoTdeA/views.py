@@ -13,8 +13,29 @@ User = get_user_model()
 
 
 def home(request):
-    """Vista principal (Landing Page) para el proyecto Punto TdeA."""
-    return render(request, "index.html")
+    """Landing pública alineada al estilo de la app."""
+    qs = Conversation.objects.filter(channel__code="whatsapp")
+    today = timezone.localdate()
+    open_cases = qs.exclude(status=Conversation.Status.CERRADO).count()
+    closed_today = qs.filter(
+        status=Conversation.Status.CERRADO,
+        closed_at__date=today,
+    ).count()
+    if closed_today == 0:
+        closed_today = qs.filter(
+            status=Conversation.Status.CERRADO,
+            updated_at__date=today,
+        ).count()
+    return render(
+        request,
+        "index.html",
+        {
+            "stats": {
+                "open_cases": open_cases,
+                "closed_today": closed_today,
+            },
+        },
+    )
 
 
 def _resolve_user(identifier: str):

@@ -13,6 +13,7 @@ from .models import (
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
+        ref_name = "CommunicationsContact"
         fields = [
             "id", "full_name", "document_number", "email", "phone",
             "academic_program", "semester", "role", "whatsapp_opt_in",

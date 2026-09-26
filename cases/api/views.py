@@ -2,7 +2,8 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils.crypto import get_random_string
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework import status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -23,6 +24,18 @@ from cases.api.serializers import (
 )
 
 
+@extend_schema(
+    request=WebMessageCreateSerializer,
+    responses=inline_serializer(
+        name="WebWebhookResponse",
+        fields={
+            "created": serializers.BooleanField(),
+            "conversation": ConversationSerializer(),
+            "message": MessageSerializer(),
+        },
+    ),
+    tags=["cases"],
+)
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -60,6 +73,18 @@ def web_webhook(request):
     )
 
 
+@extend_schema(
+    request=SimulateWebhookSerializer,
+    responses=inline_serializer(
+        name="SimulateWebhookResponse",
+        fields={
+            "created": serializers.BooleanField(),
+            "conversation_id": serializers.IntegerField(),
+            "message_id": serializers.IntegerField(),
+        },
+    ),
+    tags=["cases"],
+)
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -99,6 +124,11 @@ def simulate_webhook(request):
     )
 
 
+@extend_schema(
+    request=WebContactCreateSerializer,
+    responses=ContactSerializer,
+    tags=["cases"],
+)
 @csrf_exempt
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -115,6 +145,25 @@ def web_create_contact(request):
     )
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="after_id",
+            type=int,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description="Sólo devuelve mensajes con id mayor a este valor.",
+        ),
+    ],
+    responses=inline_serializer(
+        name="WebListMessagesResponse",
+        fields={
+            "conversation_id": serializers.IntegerField(),
+            "messages": MessageSerializer(many=True),
+        },
+    ),
+    tags=["cases"],
+)
 @csrf_exempt
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -132,6 +181,14 @@ def web_list_messages(request, conversation_id: int):
     )
 
 
+@extend_schema(
+    request=inline_serializer(
+        name="AdvisorReplyRequest",
+        fields={"body": serializers.CharField()},
+    ),
+    responses=MessageSerializer,
+    tags=["cases"],
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def advisor_reply(request, conversation_id: int):

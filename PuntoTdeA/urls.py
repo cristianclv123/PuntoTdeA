@@ -10,6 +10,11 @@ from django.contrib import admin
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.shortcuts import redirect
 from django.urls import include, path
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
 
 from . import views
 
@@ -22,6 +27,11 @@ urlpatterns = [
     path('perfil/', views.profile_view, name='profile'),
 
     path('api/cases/', include('cases.api.urls')),
+
+    # Documentación de la API (Swagger / Redoc)
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # Rutas principales de los módulos
     path('bandeja/', include('cases.urls')),

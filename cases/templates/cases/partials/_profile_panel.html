@@ -18,10 +18,10 @@
     <div class="info-row">{% icon 'calendar' size=15 %}<span>Documento: {{ contact.document_number }}</span></div>
     <div class="info-row">{% icon 'calendar' size=15 %}<span>Abierto: {{ conversation.opened_at|date:"d M Y, H:i" }}</span></div>
     {% if conversation.claimed_at %}
-      <div class="info-row">{% icon 'user-round' size=15 %}<span>Tomado: {{ conversation.claimed_by_name }} · {{ conversation.claimed_at|date:"d M Y, H:i" }}</span></div>
+      <div class="info-row">{% icon 'user-round' size=15 %}<span>Tomado: {{ conversation.claimed_by_name }} · {{ conversation.claimed_at|date:"d/m/Y · H:i" }}</span></div>
     {% endif %}
     {% if conversation.closed_at %}
-      <div class="info-row">{% icon 'circle-check' size=15 %}<span>Cerrado: {{ conversation.closed_by_name }} · {{ conversation.closed_at|date:"d M Y, H:i" }}</span></div>
+      <div class="info-row">{% icon 'circle-check' size=15 %}<span>Cerrado: {{ conversation.closed_by_name }} · {{ conversation.closed_at|date:"d/m/Y · H:i" }}</span></div>
     {% endif %}
   </div>
   <div class="divider"></div>
