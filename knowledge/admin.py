@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, FAQ, Intent, KnowledgeArticle
+from .models import Category, ChatConversation, FAQ, Intent, KnowledgeArticle
 
 
 @admin.register(Category)
@@ -30,3 +30,11 @@ class FAQAdmin(admin.ModelAdmin):
     list_display = ('question', 'category', 'is_active', 'order')
     search_fields = ('question', 'answer')
     list_filter = ('is_active', 'category')
+
+
+@admin.register(ChatConversation)
+class ChatConversationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'channel', 'external_user_id', 'status', 'flow_state', 'created_at')
+    search_fields = ('external_user_id', 'last_question', 'escalation_reason')
+    list_filter = ('channel', 'status', 'flow_state')
+    readonly_fields = ('created_at', 'updated_at', 'messages')
