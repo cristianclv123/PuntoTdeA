@@ -1,4 +1,14 @@
 const OutboundUI = (() => {
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) {
+            return parts.pop().split(';').shift();
+        }
+        return null;
+    }
+
     const { CHANNELS, SEGMENTS, TEMPLATES, SEED_LOGS, loadCampaigns, saveCampaigns } = window.OutboundDemo;
 
     function toast(message) {
@@ -23,8 +33,110 @@ const OutboundUI = (() => {
         return `<span class="status-pill status-${status}">${status}</span>`;
     }
 
+    const CAMPAIGN_STATUS_LABELS = {
+        draft: 'Borrador',
+        scheduled: 'Programada',
+        sending: 'Enviando',
+        sent: 'Enviada',
+        paused: 'Pausada',
+        cancelled: 'Cancelada',
+        failed: 'Fallida',
+    };
+
+    const CAMPAIGN_STATUS_CLASSES = {
+        draft: 'borrador',
+        scheduled: 'programada',
+        sent: 'enviada',
+        cancelled: 'cancelada',
+    };
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;',
+        }[character]));
+    }
+
+    async function fetchCampaigns() {
+        const response = await fetch('/campanas/api/campaigns/', {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) {
+            throw new Error(`No se pudieron cargar las campañas (${response.status}).`);
+        }
+        const payload = await response.json();
+        return Array.isArray(payload) ? payload : (payload.results || []);
+    }
+
+    function renderCampaignCard(campaign) {
+        const statusLabel = CAMPAIGN_STATUS_LABELS[campaign.status] || campaign.status;
+        const statusClass = CAMPAIGN_STATUS_CLASSES[campaign.status] || campaign.status;
+        const metadata = [
+            campaign.template_name && `Plantilla: ${campaign.template_name}`,
+            campaign.segment_name && `Audiencia: ${campaign.segment_name}`,
+            campaign.scheduled_at && `Programada: ${campaign.scheduled_at}`,
+        ].filter(Boolean).join(' · ');
+
+        return `
+            <a class="campaign-item d-block text-decoration-none" href="${campaignUrl(campaign.id)}">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="campaign-item-icon">
+                            <i class="bi bi-whatsapp text-success fs-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="h6 fw-bold mb-0 text-light">${escapeHtml(campaign.name)}</h3>
+                            <span class="small" style="color: var(--text-muted);">${escapeHtml(metadata || 'Sin audiencia o plantilla')}</span>
+                        </div>
+                    </div>
+                    <span class="status-pill status-${escapeHtml(statusClass)}">${escapeHtml(statusLabel)}</span>
+                </div>
+                ${campaign.sent_count > 0 || campaign.delivered_count > 0 || campaign.read_count > 0 ? `
+                    <div class="row text-center g-2 pt-2 mt-2 border-top border-secondary">
+                        <div class="col-4">
+                            <div class="fw-bold text-light">${Number(campaign.sent_count || 0).toLocaleString('es-CO')}</div>
+                            <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Enviados</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fw-bold text-light">${Number(campaign.delivered_count || 0).toLocaleString('es-CO')}</div>
+                            <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Entregados</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fw-bold text-light">${Number(campaign.read_count || 0).toLocaleString('es-CO')}</div>
+                            <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Leídos</div>
+                        </div>
+                    </div>
+                ` : ''}
+            </a>
+        `;
+    }
+
+    async function renderCampaignCards() {
+        const list = document.getElementById('campaignsList');
+        const empty = document.getElementById('campaignsEmpty');
+        const error = document.getElementById('campaignsError');
+        const count = document.getElementById('campaignsCount');
+        if (!list || !empty || !error || !count) return;
+
+        try {
+            const campaigns = await fetchCampaigns();
+            count.textContent = `${campaigns.length} campaña${campaigns.length === 1 ? '' : 's'}`;
+            list.innerHTML = campaigns.map(renderCampaignCard).join('');
+            empty.classList.toggle('d-none', campaigns.length > 0);
+        } catch (requestError) {
+            list.innerHTML = '';
+            count.textContent = 'Error';
+            error.textContent = requestError.message;
+            error.classList.remove('d-none');
+        }
+    }
+
     function campaignUrl(id) {
-        return `/communications/campanas/detalle/?id=${encodeURIComponent(id)}`;
+        return `/campanas/detalle/?id=${encodeURIComponent(id)}`;
     }
 
     function renderDashboard() {
@@ -118,53 +230,151 @@ const OutboundUI = (() => {
         draw();
     }
 
-    function renderCampaignDetail() {
+    async function renderCampaignDetail() {
         const id = new URLSearchParams(window.location.search).get('id');
-        const campaign = loadCampaigns().find((c) => c.id === id);
         const root = document.getElementById('campaignDetailRoot');
+
+        if (!root) {
+            console.error('No se encontró campaignDetailRoot.');
+            return;
+        }
+
+        if (!id) {
+            root.innerHTML = '<div class="alert alert-warning">No se especificó una campaña.</div>';
+            return;
+        }
+
+        let campaign = null;
+
+        /*
+         * 1. Primero intentamos obtener la campaña desde Django.
+         */
+        try {
+            const response = await fetch(`/campanas/api/campaigns/${id}/`);
+
+            if (response.ok) {
+                const data = await response.json();
+
+                /*
+                 * Adaptamos los nombres del backend al formato
+                 * que ya utiliza el frontend.
+                 */
+                campaign = {
+                    id: String(data.id),
+                    name: data.name,
+                    channel: data.channel,
+
+                    templateId: data.template,
+                    templateName: data.template_name,
+
+                    segments: data.segment
+                        ? [data.segment_name || data.segment]
+                        : [],
+
+                    executedAt: data.scheduled_at || '-',
+
+                    type: data.type || 'Campaña',
+
+                    status: data.status,
+
+                    sent: data.sent ?? 0,
+                    delivered: data.delivered ?? 0,
+                    read: data.read ?? 0,
+                    clicks: data.clicks ?? 0,
+                    replies: data.replies ?? 0
+                };
+
+                console.log('Campaña cargada desde Django:', campaign);
+            }
+        } catch (error) {
+            console.warn('No fue posible consultar la campaña en Django:', error);
+        }
+
+        /*
+         * 2. Si no se encontró en el backend, conservamos
+         *    el funcionamiento anterior con loadCampaigns().
+         */
+        if (!campaign) {
+            campaign = loadCampaigns().find((c) => String(c.id) === String(id));
+        }
+
+        /*
+         * 3. Si tampoco existe localmente, mostramos el mensaje anterior.
+         */
         if (!campaign) {
             root.innerHTML = '<div class="alert alert-warning">No se encontró la campaña. Vuelve al listado.</div>';
             return;
         }
+
+        /*
+         * 4. Desde aquí mantenemos prácticamente intacta
+         *    la lógica visual que ya tenías.
+         */
         const templates = TEMPLATES[campaign.channel] || [];
-        const tpl = templates.find((t) => t.id === campaign.templateId) || templates[0];
+        const tpl =
+            templates.find((t) => t.id === campaign.templateId) ||
+            templates[0];
+
         root.innerHTML = `
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-                <div>
-                    <h2 class="h4 mb-1">${campaign.name}</h2>
-                    <div class="d-flex flex-wrap gap-2">${channelBadge(campaign.channel)} ${statusPill(campaign.status)}</div>
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <h2 class="h4 mb-1">${campaign.name}</h2>
+                <div class="d-flex flex-wrap gap-2">
+                    ${channelBadge(campaign.channel)}
+                    ${statusPill(campaign.status)}
                 </div>
             </div>
-            <div class="row g-3 mb-4">
-                ${[
-                    ['Enviados', campaign.sent],
-                    ['Entregados', campaign.delivered],
-                    ['Lectura', pct(campaign.read, campaign.delivered)],
-                    ['Clics', pct(campaign.clicks, campaign.delivered)],
-                    ['Respuestas', campaign.replies],
-                ].map(([label, value]) => `<div class="col"><div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div></div></div>`).join('')}
+        </div>
+
+        <div class="row g-3 mb-4">
+            ${[
+                ['Enviados', campaign.sent],
+                ['Entregados', campaign.delivered],
+                ['Lectura', pct(campaign.read, campaign.delivered)],
+                ['Clics', pct(campaign.clicks, campaign.delivered)],
+                ['Respuestas', campaign.replies],
+            ].map(([label, value]) => `
+                <div class="col">
+                    <div class="kpi-card">
+                        <div class="kpi-label">${label}</div>
+                        <div class="kpi-value">${value}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card outbound-card">
+                    <div class="card-body">
+                        <h3 class="h6">Audiencias</h3>
+                        <p>${campaign.segments.join(', ')}</p>
+
+                        <h3 class="h6">Ejecución</h3>
+                        <p class="mb-0">
+                            ${campaign.executedAt} · tipo ${campaign.type}
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="row g-4">
-                <div class="col-lg-7">
-                    <div class="card outbound-card">
-                        <div class="card-body">
-                            <h3 class="h6">Audiencias</h3>
-                            <p>${campaign.segments.join(', ')}</p>
-                            <h3 class="h6">Ejecución</h3>
-                            <p class="mb-0">${campaign.executedAt} · tipo ${campaign.type}</p>
+
+            <div class="col-lg-5">
+                <div class="card outbound-card">
+                    <div class="card-body">
+                        <h3 class="h6 text-uppercase text-muted">
+                            Plantilla
+                        </h3>
+
+                        <div class="phone-frame">
+                            <div class="phone-screen">
+                                ${previewHtml(campaign.channel, tpl)}
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-lg-5">
-                    <div class="card outbound-card">
-                        <div class="card-body">
-                            <h3 class="h6 text-uppercase text-muted">Plantilla</h3>
-                            <div class="phone-frame"><div class="phone-screen">${previewHtml(campaign.channel, tpl)}</div></div>
-                        </div>
-                    </div>
-                </div>
             </div>
-        `;
+        </div>
+    `;
     }
 
     function previewHtml(channel, tpl, vars = {}) {
@@ -344,31 +554,107 @@ const OutboundUI = (() => {
             btn.addEventListener('click', () => showStep(Number(btn.dataset.step)));
         });
 
-        function launch() {
+        async function launch() {
             const sendMode = document.getElementById('sendMode').value;
             const scheduleAt = document.getElementById('scheduleAt').value;
-            const list = loadCampaigns();
-            const includeNames = SEGMENTS.filter((s) => state.include.includes(s.id)).map((s) => s.name);
-            const size = SEGMENTS.filter((s) => state.include.includes(s.id)).reduce((a, s) => a + s.size, 0);
-            const campaign = {
-                id: `c${Date.now()}`,
-                name: document.getElementById('campaignName').value.trim(),
-                channel: state.channel,
-                type: document.getElementById('campaignType').value,
-                segments: includeNames,
-                executedAt: sendMode === 'later' && scheduleAt ? scheduleAt.replace('T', ' ') : new Date().toISOString().slice(0, 16).replace('T', ' '),
-                status: sendMode === 'later' ? 'programada' : 'enviada',
-                sent: sendMode === 'later' ? 0 : size,
-                delivered: sendMode === 'later' ? 0 : Math.round(size * 0.98),
-                read: sendMode === 'later' ? 0 : Math.round(size * 0.72),
-                clicks: sendMode === 'later' ? 0 : Math.round(size * 0.18),
-                replies: sendMode === 'later' ? 0 : Math.round(size * 0.09),
-                templateId: state.templateId,
+
+            const name = document.getElementById('campaignName').value.trim();
+
+            const segmentMap = {
+                'est-activos': 1,
+                'docentes': 2,
+                'egresados': 3,
             };
-            list.unshift(campaign);
-            saveCampaigns(list);
-            toast(sendMode === 'later' ? 'Campaña programada (demostración).' : 'Campaña lanzada (demostración).');
-            window.location.href = campaignUrl(campaign.id);
+
+            const templateMap = {
+                'wa-matricula': 1,
+                'wa-cita': 1,
+                'wa-bienestar': 2,
+                'wa-aviso': 3,
+            };
+
+            const selectedSegment = state.include.find((id) => segmentMap[id]);
+            const templateId = templateMap[state.templateId];
+
+            if (!selectedSegment) {
+                toast('La audiencia seleccionada no tiene un segmento disponible en el backend.');
+                return;
+            }
+
+            if (!templateId) {
+                toast('La plantilla seleccionada no está disponible en el backend.');
+                return;
+            }
+
+            const payload = {
+                name: name,
+                template: templateId,
+                segment: segmentMap[selectedSegment],
+                default_params: state.vars,
+            };
+
+            if (sendMode === 'later' && scheduleAt) {
+                payload.scheduled_at = scheduleAt;
+            }
+
+            try {
+                const response = await fetch('/campanas/api/campaigns/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error('Error al crear campaña:', error);
+                    toast('No se pudo crear la campaña en el backend.');
+                    return;
+                }
+
+                const backendCampaign = await response.json();
+
+                const list = loadCampaigns();
+                const includeNames = SEGMENTS
+                    .filter((s) => state.include.includes(s.id))
+                    .map((s) => s.name);
+
+                const size = SEGMENTS
+                    .filter((s) => state.include.includes(s.id))
+                    .reduce((a, s) => a + s.size, 0);
+
+                const campaign = {
+                    id: `c${backendCampaign.id}`,
+                    backendId: backendCampaign.id,
+                    name: backendCampaign.name,
+                    channel: state.channel,
+                    type: document.getElementById('campaignType').value,
+                    segments: includeNames,
+                    executedAt: sendMode === 'later' && scheduleAt
+                        ? scheduleAt.replace('T', ' ')
+                        : new Date().toISOString().slice(0, 16).replace('T', ' '),
+                    status: sendMode === 'later' ? 'programada' : 'borrador',
+                    sent: 0,
+                    delivered: 0,
+                    read: 0,
+                    clicks: 0,
+                    replies: 0,
+                    templateId: state.templateId,
+                };
+
+                list.unshift(campaign);
+                saveCampaigns(list);
+
+                toast('Campaña creada correctamente en el backend.');
+
+                window.location.href = `/campanas/detalle/?id=${encodeURIComponent(campaign.id)}`;
+
+            } catch (error) {
+                console.error('Error de conexión:', error);
+                toast('No se pudo conectar con el backend.');
+            }
         }
 
         const preset = new URLSearchParams(window.location.search).get('segment');
@@ -388,7 +674,7 @@ const OutboundUI = (() => {
                         <h2 class="h5">${s.name}</h2>
                         <p class="text-muted small mb-2">Origen: ${s.source}</p>
                         <p class="fw-bold text-success mb-3">${s.size.toLocaleString('es-CO')} personas</p>
-                        <a class="btn btn-entry mt-auto" href="/communications/campanas/nueva/?segment=${s.id}">Iniciar campaña</a>
+                        <a class="btn btn-entry mt-auto" href="/campanas/nueva/?segment=${s.id}">Iniciar campaña</a>
                     </div>
                 </div>
             </div>
@@ -420,5 +706,5 @@ const OutboundUI = (() => {
         draw();
     }
 
-    return { renderDashboard, renderCampaignsPage, renderCampaignDetail, initWizard, renderSegments, renderLogs };
+    return { renderDashboard, renderCampaignCards, renderCampaignsPage, renderCampaignDetail, initWizard, renderSegments, renderLogs };
 })();

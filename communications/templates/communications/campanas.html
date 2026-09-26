@@ -81,50 +81,21 @@
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                     <h2 class="h5 fw-bold mb-0">Campañas programadas y enviadas</h2>
-                    <span class="badge rounded-pill px-3 py-1" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">{{ campaigns|length }} campañas</span>
+                    <span id="campaignsCount" class="badge rounded-pill px-3 py-1" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">Cargando…</span>
                 </div>
 
-                <div class="d-flex flex-column gap-3">
-                    {% for c in campaigns %}
-                        <div class="campaign-item">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="campaign-item-icon">
-                                        <i class="bi bi-whatsapp text-success fs-5"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="h6 fw-bold mb-0 text-light">{{ c.name }}</h3>
-                                        <span class="small" style="color: var(--text-muted);">{{ c.meta }}</span>
-                                    </div>
-                                </div>
-                                {% if c.status == "enviada" %}
-                                    <span class="status-pill status-enviada">Enviada</span>
-                                {% else %}
-                                    <span class="status-pill status-programada">Programada</span>
-                                {% endif %}
-                            </div>
-
-                            {% if c.status == "enviada" %}
-                                <div class="row text-center g-2 pt-2 mt-2 border-top border-secondary">
-                                    <div class="col-4">
-                                        <div class="fw-bold text-light">{{ c.sent }}</div>
-                                        <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Enviados</div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="fw-bold text-light">{{ c.delivered }}</div>
-                                        <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Entregados</div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="fw-bold text-light">{{ c.read }}</div>
-                                        <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Leídos</div>
-                                    </div>
-                                </div>
-                            {% endif %}
+                <div id="campaignsList" class="d-flex flex-column gap-3" aria-live="polite">
+                    <div class="text-center py-4" style="color: var(--text-muted);">
+                        <div class="spinner-border spinner-border-sm text-success me-2" role="status">
+                            <span class="visually-hidden">Cargando...</span>
                         </div>
-                    {% empty %}
-                        <p class="text-center py-4 mb-0" style="color: var(--text-muted);">No hay campañas registradas hasta el momento.</p>
-                    {% endfor %}
+                        Cargando listado de campañas…
+                    </div>
                 </div>
+                <p id="campaignsEmpty" class="text-center py-4 mb-0 d-none" style="color: var(--text-muted);">
+                    No hay campañas registradas hasta el momento.
+                </p>
+                <div id="campaignsError" class="alert alert-danger d-none mb-0" role="alert"></div>
             </div>
         </div>
     </div>
@@ -134,8 +105,10 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initQuickCampaignForm === 'function') {
-            OutboundUI.initQuickCampaignForm();
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.renderCampaignCards === 'function') {
+            OutboundUI.renderCampaignCards();
+        } else {
+            console.error('El módulo OutboundUI o la función renderCampaignCards no están disponibles.');
         }
     });
 </script>
