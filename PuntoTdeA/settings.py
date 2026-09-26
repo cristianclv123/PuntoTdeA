@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "channels",
     # Aplicaciones del proyecto PuntoTdeA
+    "dashboard",
     "cases",
     "knowledge",
     "communications",
