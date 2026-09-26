@@ -1,0 +1,93 @@
+{% extends "communications/base.html" %}
+{% load static %}
+
+{% block title %}Campañas{% endblock %}
+{% block page_heading %}Campañas{% endblock %}
+{% block page_lead %}Envía al público correcto, por el canal correcto, con el contenido correcto.{% endblock %}
+
+{% block hero_actions %}
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-success fw-semibold rounded-pill px-4">
+    <i class="bi bi-plus-lg me-1"></i> Iniciar campaña
+</a>
+{% endblock %}
+
+{% block outbound_content %}
+<div class="card outbound-card shadow-sm">
+    <div class="card-body p-4">
+        <div class="row g-3 align-items-end mb-4">
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold" for="filterSearch">Buscar</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input id="filterSearch" class="form-control" type="search" placeholder="Nombre o audiencia">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold" for="filterChannel">Canal</label>
+                <select id="filterChannel" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="whatsapp">WhatsApp</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold" for="filterStatus">Estado</label>
+                <select id="filterStatus" class="form-select">
+                    <option value="">Todos</option>
+                    <option value="enviada">Enviada</option>
+                    <option value="programada">Programada</option>
+                    <option value="borrador">Borrador</option>
+                    <option value="cancelada">Cancelada</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button id="clearFilters" class="btn btn-outline-secondary w-100" type="button">
+                    <i class="bi bi-x-circle me-1"></i> Limpiar
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table align-middle outbound-table mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Campaña</th>
+                        <th scope="col">Canal</th>
+                        <th scope="col">Audiencias</th>
+                        <th scope="col">Ejecución</th>
+                        <th scope="col">Lectura</th>
+                        <th scope="col">Clics</th>
+                        <th scope="col">Respuestas</th>
+                        <th scope="col">Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="campaignsTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm text-success me-2" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            Cargando listado de campañas…
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <p id="campaignsEmpty" class="text-muted text-center py-4 mb-0 d-none">
+            <i class="bi bi-inbox fs-4 d-block mb-2"></i> No se encontraron campañas con los filtros aplicados.
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.renderCampaignsPage === 'function') {
+            OutboundUI.renderCampaignsPage();
+        } else {
+            console.error('El módulo OutboundUI o la función renderCampaignsPage no están disponibles.');
+        }
+    });
+</script>
+{% endblock %}

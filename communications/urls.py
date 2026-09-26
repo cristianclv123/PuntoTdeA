@@ -1,8 +1,29 @@
-from django.urls import path
-from . import views
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
-app_name = 'communications'
+from . import views, viewsets
+
+app_name = "communications"
+
+router = DefaultRouter()
+router.register("contacts", viewsets.ContactViewSet, basename="api-contacts")
+router.register("templates", viewsets.MessageTemplateViewSet, basename="api-templates")
+router.register("segments", viewsets.AudienceSegmentViewSet, basename="api-segments")
+router.register("campaigns", viewsets.CampaignViewSet, basename="api-campaigns")
 
 urlpatterns = [
-    path('', views.index, name='index'),
+    path("", views.campaigns, name="campaigns"),
+    path("", views.campaigns, name="index"),
+    path("nueva/", views.campaign_new, name="campaign_new"),
+    path("detalle/", views.campaign_detail, name="campaign_detail"),
+    path("audiencias/", views.segments, name="segments"),
+    path("interacciones/", views.interactions, name="interactions"),
+
+    # Compatibilidad con rutas anteriores
+    path("campanas/", views.campaigns),
+    path("campanas/nueva/", views.campaign_new),
+    path("campanas/detalle/", views.campaign_detail),
+
+    # API interna, consumida por el BFF
+    path("api/", include(router.urls)),
 ]

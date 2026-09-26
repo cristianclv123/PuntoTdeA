@@ -1,0 +1,133 @@
+{% load icons %}
+<aside class="profile-panel" id="wa-case-panel">
+  <div class="profile-top">
+    <div class="profile-avatar font-brand">{{ conversation.initials }}</div>
+    <div class="profile-name font-brand">{{ conversation.name }}</div>
+    <div class="ticket-chip">{{ conversation.ticket_number }}</div>
+    {% if case_is_closed %}
+      <span class="pill pill-neutral">Cerrado</span>
+    {% endif %}
+  </div>
+  <div class="divider"></div>
+
+  <div class="info-col">
+    <div class="section-title">INFORMACIÓN DEL USUARIO</div>
+    <div class="info-row">{% icon 'mail' size=15 %}<span>{{ contact.email }}</span></div>
+    <div class="info-row">{% icon 'phone' size=15 %}<span>{{ contact.phone }}</span></div>
+    <div class="info-row">{% icon 'graduation-cap' size=15 %}<span>{{ contact.academic_program }} · Semestre {{ contact.semester }}</span></div>
+    <div class="info-row">{% icon 'calendar' size=15 %}<span>Documento: {{ contact.document_number }}</span></div>
+    <div class="info-row">{% icon 'calendar' size=15 %}<span>Abierto: {{ conversation.opened_at|date:"d M Y, H:i" }}</span></div>
+    {% if conversation.claimed_at %}
+      <div class="info-row">{% icon 'user-round' size=15 %}<span>Tomado: {{ conversation.claimed_by_name }} · {{ conversation.claimed_at|date:"d/m/Y · H:i" }}</span></div>
+    {% endif %}
+    {% if conversation.closed_at %}
+      <div class="info-row">{% icon 'circle-check' size=15 %}<span>Cerrado: {{ conversation.closed_by_name }} · {{ conversation.closed_at|date:"d/m/Y · H:i" }}</span></div>
+    {% endif %}
+  </div>
+  <div class="divider"></div>
+
+  <form class="info-col case-actions-form" method="post" action="{% url 'cases:detail' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}" id="case-actions-form">
+    {% csrf_token %}
+    <div class="section-title">GESTIÓN DEL CASO</div>
+
+    <div class="field-group">
+      <label class="field-label" for="assigned_to">Asesor asignado</label>
+      <select class="field-input" id="assigned_to" name="assigned_to" {% if case_is_closed %}disabled{% endif %}>
+        <option value="">Sin asignar</option>
+        {% for advisor in advisors %}
+          <option value="{{ advisor.id }}" {% if conversation.assigned_to_id == advisor.id %}selected{% endif %}>
+            {{ advisor.get_full_name|default:advisor.username }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="status">Estado del caso</label>
+      <select class="field-input" id="status" name="status" required {% if case_is_closed %}disabled{% endif %}>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if conversation.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-group" id="escalated-to-group" {% if conversation.status != "escalado" %}hidden{% endif %}>
+      <label class="field-label" for="escalated_to">Escalado a (dependencia)</label>
+      <select class="field-input" id="escalated_to" name="escalated_to" {% if case_is_closed %}disabled{% endif %}>
+        <option value="">Selecciona dependencia</option>
+        {% for dept in departments %}
+          <option value="{{ dept.id }}" {% if conversation.escalated_to_id == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="department">Dependencia (clasificación)</label>
+      <select class="field-input" id="department" name="department" {% if case_is_closed %}disabled{% endif %}>
+        <option value="">Sin dependencia</option>
+        {% for dept in departments %}
+          <option value="{{ dept.id }}" {% if conversation.department_id == dept.id %}selected{% endif %}>{{ dept.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="priority">Prioridad</label>
+      <select class="field-input" id="priority" name="priority" required {% if case_is_closed %}disabled{% endif %}>
+        {% for value, label in priority_choices %}
+          <option value="{{ value }}" {% if conversation.priority == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if not case_is_closed %}
+      <div class="case-actions-row">
+        <button class="btn btn-primary btn-block" type="submit" name="action" value="close_case">
+          Cerrar caso
+        </button>
+        <button class="btn btn-ghost btn-block" type="submit" name="action" value="update_case">
+          Guardar gestión
+        </button>
+      </div>
+      <p class="case-close-hint">Para cerrar el caso debe estar gestionado: asesor asignado y dependencia de clasificación.</p>
+    {% else %}
+      <p class="case-close-hint">Caso cerrado — gestión en solo lectura.</p>
+    {% endif %}
+  </form>
+  <div class="divider"></div>
+
+  <div class="notes-col">
+    <div class="section-title">COMENTARIOS DEL CASO</div>
+    {% for comment in comments %}
+      <div class="note-card">
+        <div class="note-top">
+          <span class="note-author">
+            {% if comment.author %}
+              {{ comment.author.get_full_name|default:comment.author.username }}
+            {% else %}
+              Sistema
+            {% endif %}
+          </span>
+          <time class="note-time" datetime="{{ comment.created_at|date:'c' }}">
+            {{ comment.created_at|date:"d/m/Y" }} · {{ comment.created_at|date:"H:i" }}
+          </time>
+        </div>
+        <div class="note-text">{{ comment.body }}</div>
+      </div>
+    {% empty %}
+      <div class="note-text" style="color: var(--text-muted);">Sin comentarios internos aún.</div>
+    {% endfor %}
+
+    {% if not case_is_closed %}
+    <form method="post" action="{% url 'cases:detail' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}" class="comment-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_comment">
+      <textarea class="field-textarea" name="comment_body" rows="3" placeholder="Agregar comentario interno (solo asesores)..." required></textarea>
+      <button class="add-note-btn" type="submit">
+        {% icon 'plus' size=14 %}
+        Agregar comentario
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</aside>

@@ -1,10 +1,97 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% load icons %}
 
-</body>
-</html>
+{% block title %}Base de conocimiento — Punto TdeA{% endblock %}
+{% block page_title %}Base de conocimiento{% endblock %}
+{% block page_subtitle %}Asistente institucional y FAQs vigentes{% endblock %}
+
+{% block content %}
+  <div class="knowledge-layout">
+    <section class="card knowledge-main">
+      <p class="knowledge-kicker">Módulo de conocimiento</p>
+      <h2 class="card-title" style="margin-bottom: 8px;">Asistente institucional</h2>
+      <p class="knowledge-lead">Pregunta por matrículas, trámites, programas y fechas oficiales.</p>
+
+      <div class="knowledge-chat" data-ask-url="{% url 'knowledge:ask' %}">
+        <div class="knowledge-chat__messages" data-chat-messages aria-live="polite">
+          <div class="chat-message chat-message--bot">
+            <strong>Asistente:</strong> Hola. ¿Qué información necesitas consultar?
+          </div>
+        </div>
+
+        <form class="knowledge-chat__form" data-chat-form>
+          <label class="sr-only" for="knowledge-question">Pregunta</label>
+          <div class="knowledge-ask-row">
+            <input id="knowledge-question" name="q" class="field-input" placeholder="Escribe tu pregunta..." autocomplete="off" required>
+            <button class="btn btn-primary" type="submit">Preguntar</button>
+          </div>
+          <p class="knowledge-hint">La respuesta se genera con información vigente de esta base.</p>
+        </form>
+      </div>
+
+      <div class="knowledge-articles">
+        <h3 class="card-title">Artículos recientes</h3>
+        <ul class="knowledge-list">
+          {% for article in articles %}
+            <li>
+              <div class="knowledge-list-title">{{ article.title }}</div>
+              <div class="knowledge-list-meta">{{ article.summary }}</div>
+            </li>
+          {% empty %}
+            <li class="knowledge-empty">Aún no hay artículos publicados.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+
+    <aside class="card knowledge-side">
+      <h3 class="card-title">Preguntas frecuentes</h3>
+      <div class="knowledge-faq-list">
+        {% for faq in faqs %}
+          <details class="knowledge-faq">
+            <summary>{{ faq.question }}</summary>
+            <p>{{ faq.answer }}</p>
+          </details>
+        {% empty %}
+          <p class="knowledge-empty">No hay FAQs activas.</p>
+        {% endfor %}
+      </div>
+    </aside>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    const root = document.querySelector(".knowledge-chat");
+    if (!root) return;
+    const form = root.querySelector("[data-chat-form]");
+    const messages = root.querySelector("[data-chat-messages]");
+    const input = root.querySelector("#knowledge-question");
+    const askUrl = root.dataset.askUrl;
+
+    function append(role, text) {
+      const el = document.createElement("div");
+      el.className = "chat-message chat-message--" + role;
+      el.innerHTML = "<strong>" + (role === "bot" ? "Asistente" : "Tú") + ":</strong> " + text;
+      messages.appendChild(el);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = (input.value || "").trim();
+      if (!q) return;
+      append("user", q);
+      input.value = "";
+      try {
+        const res = await fetch(askUrl + "?q=" + encodeURIComponent(q));
+        const data = await res.json();
+        append("bot", data.answer || data.response || "No encontré una respuesta.");
+      } catch (_) {
+        append("bot", "No pude consultar la base en este momento.");
+      }
+    });
+  })();
+</script>
+{% endblock %}

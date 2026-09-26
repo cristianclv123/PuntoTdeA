@@ -1,0 +1,115 @@
+{% extends "communications/base.html" %}
+{% load static %}
+
+{% block title %}Campañas — Punto TdeA{% endblock %}
+{% block page_heading %}Campañas{% endblock %}
+{% block page_lead %}Mensajería masiva y programación de envíos por canal institucional.{% endblock %}
+
+{% block hero_actions %}
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-success fw-semibold rounded-pill px-4">
+    <i class="bi bi-plus-lg me-1"></i> Nueva campaña asistida
+</a>
+{% endblock %}
+
+{% block outbound_content %}
+<div class="row g-4">
+    <!-- Columna del Formulario de Creación Rápida -->
+    <div class="col-lg-5">
+        <form class="card outbound-card shadow-sm h-100" method="post">
+            {% csrf_token %}
+            <div class="card-body p-4">
+                <h2 class="h5 fw-bold mb-3">Nueva campaña rápida</h2>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Segmento objetivo</label>
+                    <div class="btn-group w-100 mb-2" role="group">
+                        <input type="radio" class="btn-check" name="segment" id="segStudents" value="estudiantes" checked>
+                        <label class="btn btn-outline-success btn-sm" for="segStudents">Estudiantes</label>
+
+                        <input type="radio" class="btn-check" name="segment" id="segApplicants" value="aspirantes">
+                        <label class="btn btn-outline-success btn-sm" for="segApplicants">Aspirantes</label>
+
+                        <input type="radio" class="btn-check" name="segment" id="segAlumni" value="egresados">
+                        <label class="btn btn-outline-success btn-sm" for="segAlumni">Egresados</label>
+                    </div>
+                    <select class="form-select form-select-sm text-muted" name="program">
+                        <option value="">Programa específico (opcional)</option>
+                        <option value="ing_sistemas">Ingeniería de Software / Sistemas</option>
+                        <option value="derecho">Derecho</option>
+                        <option value="administracion">Administración de Empresas</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Canal de envío</label>
+                    <input type="hidden" name="channel" value="whatsapp">
+                    <div class="channel-row">
+                        <span class="channel-icon whatsapp"><i class="bi bi-whatsapp"></i></span>
+                        <div>
+                            <div class="fw-semibold">WhatsApp</div>
+                            <div class="small text-muted">Único canal disponible para campañas</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" for="campaignMessage">Mensaje</label>
+                    <textarea id="campaignMessage" name="message" class="form-control" rows="4" required>Recuerda que las inscripciones para el segundo semestre 2026 cierran el 5 de septiembre. ¡No te quedes por fuera!</textarea>
+                </div>
+
+                <div class="row g-2 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold" for="sendDate">Fecha de envío</label>
+                        <input type="date" id="sendDate" name="send_date" class="form-control form-control-sm" value="2026-08-28">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold" for="sendTime">Hora</label>
+                        <input type="time" id="sendTime" name="send_time" class="form-control form-control-sm" value="09:00">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success w-100 fw-bold">
+                    <i class="bi bi-send me-1"></i> Programar envío
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Columna del Listado de Campañas -->
+    <div class="col-lg-7">
+        <div class="card outbound-card shadow-sm h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                    <h2 class="h5 fw-bold mb-0">Campañas programadas y enviadas</h2>
+                    <span id="campaignsCount" class="badge rounded-pill px-3 py-1" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--border);">Cargando…</span>
+                </div>
+
+                <div id="campaignsList" class="d-flex flex-column gap-3" aria-live="polite">
+                    <div class="text-center py-4" style="color: var(--text-muted);">
+                        <div class="spinner-border spinner-border-sm text-success me-2" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        Cargando listado de campañas…
+                    </div>
+                </div>
+                <p id="campaignsEmpty" class="text-center py-4 mb-0 d-none" style="color: var(--text-muted);">
+                    No hay campañas registradas hasta el momento.
+                </p>
+                <div id="campaignsError" class="alert alert-danger d-none mb-0" role="alert"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.renderCampaignCards === 'function') {
+            OutboundUI.renderCampaignCards();
+        } else {
+            console.error('El módulo OutboundUI o la función renderCampaignCards no están disponibles.');
+        }
+    });
+</script>
+{% endblock %}

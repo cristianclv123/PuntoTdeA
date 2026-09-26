@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Bandeja — Punto TdeA{% endblock %}
+
+{% block topbar %}{% endblock %}
+
+{% block body %}
+  <div class="wa-layout" data-has-chat="0">
+    {% include "cases/partials/_list_pane.html" %}
+    <div class="wa-chat-pane">
+      {% include "cases/partials/_empty_chat.html" %}
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'cases/js/bandeja.js' %}"></script>
+{% endblock %}

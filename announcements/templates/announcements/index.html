@@ -1,12 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>anuncios</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% load icons %}
 
-<h1>bienvenido al modulo de anuncios</h1>
+{% block title %}Avisos — Punto TdeA{% endblock %}
+{% block page_title %}Avisos y novedades{% endblock %}
+{% block page_subtitle %}Publicaciones visibles para la comunidad{% endblock %}
 
-</body>
-</html>
+{% block content %}
+  <div class="profile-layout">
+    <section class="card">
+      <h2 class="card-title">Avisos urgentes</h2>
+      {% if urgent_announcements %}
+        <div class="knowledge-faq-list" style="margin-top: 14px;">
+          {% for announcement in urgent_announcements %}
+            <div class="knowledge-faq" style="border-color: rgba(252,165,165,0.35);">
+              <div class="knowledge-list-title" style="color: #fca5a5;">{{ announcement.title }}</div>
+              <p style="margin: 8px 0 0; color: var(--text-secondary);">{{ announcement.content }}</p>
+              <div class="knowledge-list-meta">Publicado el {{ announcement.created_at }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="knowledge-empty">No hay avisos urgentes en este momento.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Todos los anuncios</h2>
+      {% if announcements %}
+        <div class="knowledge-faq-list" style="margin-top: 14px;">
+          {% for announcement in announcements %}
+            <div class="knowledge-faq">
+              <div class="knowledge-list-title">{{ announcement.title }}</div>
+              <p style="margin: 8px 0 0; color: var(--text-secondary);">{{ announcement.content }}</p>
+              <div class="knowledge-list-meta">Publicado el {{ announcement.created_at }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="knowledge-empty">No hay anuncios registrados.</p>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

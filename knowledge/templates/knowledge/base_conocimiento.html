@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}Base de conocimiento — Punto TdeA{% endblock %}
+{% block page_title %}Base de conocimiento{% endblock %}
+{% block page_subtitle %}Preguntas frecuentes y respuestas automáticas{% endblock %}
+
+{% block content %}
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div class="search-box" style="width:360px; background: var(--white); outline: 1px solid var(--border); outline-offset: -1px;">
+      {% icon 'search' size=16 %}
+      <input type="text" placeholder="Buscar preguntas frecuentes...">
+    </div>
+    <button class="btn btn-primary" type="button">
+      {% icon 'plus' size=16 %}
+      Nueva respuesta
+    </button>
+  </div>
+
+  <div class="category-row">
+    <div class="category-tab active">Todas</div>
+    {% for category in categories %}
+      <div class="category-tab">{{ category }}</div>
+    {% endfor %}
+  </div>
+
+  <div class="data-table">
+    <div class="data-table-head">
+      <div class="col-flex">Pregunta</div>
+      <div class="col-fixed-160">Categoría</div>
+      <div class="col-fixed-110">Estado</div>
+      <div class="col-fixed-130">Actualizado</div>
+      <div style="width:70px; flex-shrink:0;"></div>
+    </div>
+    {% for faq in faqs %}
+      <div class="data-table-row">
+        <div class="col-flex" style="font-weight:500;">{{ faq.question }}</div>
+        <div class="col-fixed-160"><span class="tag">{{ faq.category }}</span></div>
+        <div class="col-fixed-110">
+          {% if faq.status == "publicado" %}
+            <span class="pill pill-success"><span class="status-dot dot-published" style="margin-right:5px;"></span>Publicado</span>
+          {% else %}
+            <span class="pill" style="background:var(--bg); color:var(--text-secondary);"><span class="status-dot dot-draft" style="margin-right:5px;"></span>Borrador</span>
+          {% endif %}
+        </div>
+        <div class="col-fixed-130" style="color:var(--text-muted); font-size:12px;">{{ faq.updated }}</div>
+        <div class="row-actions" style="width:70px; flex-shrink:0;">
+          {% icon 'pencil' size=15 %}
+          {% icon 'trash-2' size=15 %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

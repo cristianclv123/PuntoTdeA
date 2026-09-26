@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% load icons %}
+
+{% block title %}Dashboard — Punto TdeA{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Operación de atención por WhatsApp{% endblock %}
+
+{% block content %}
+  <div class="section-head">
+    <div>
+      <div class="card-title font-brand">Cola WhatsApp</div>
+      <div class="section-sub">Métricas reales de la bandeja de casos</div>
+    </div>
+    <a class="btn btn-outline" href="{% url 'cases:bandeja' %}">Ir a bandeja</a>
+  </div>
+
+  <div class="metrics-cards">
+    {% for card in metric_cards %}
+      <div class="metric-card">
+        <div class="metric-card-top">
+          <div class="metric-card-label">{{ card.label }}</div>
+          <div class="metric-icon-wrap" style="background: {{ card.bg }}; color: {{ card.fg }};">
+            {% icon card.icon size=16 %}
+          </div>
+        </div>
+        <div class="metric-card-value font-brand">{{ card.value }}</div>
+        <div class="metric-card-sub">{{ card.sub }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="workload-card" style="margin-top: 8px;">
+    <div class="workload-title-wrap">
+      <div class="card-title font-brand">Carga por asesor</div>
+      <div class="section-sub">Casos abiertos de WhatsApp asignados</div>
+    </div>
+    <div class="data-table-head">
+      <div class="col-flex">Asesor</div>
+      <div class="col-fixed-120">Abiertos</div>
+      <div class="col-fixed-120">Pendientes</div>
+      <div class="col-fixed-120">Escalados</div>
+      <div class="col-fixed-120">Cerrados hoy</div>
+    </div>
+    {% for row in workload_rows %}
+      <div class="data-table-row">
+        <div class="col-flex workload-row-name">
+          <div class="workload-avatar">{{ row.initials }}</div>
+          <div style="font-weight: 600;">{{ row.name }}</div>
+        </div>
+        <div class="col-fixed-120" style="color: var(--text-secondary);">{{ row.assigned }}</div>
+        <div class="col-fixed-120" style="color: var(--text-secondary);">{{ row.pending }}</div>
+        <div class="col-fixed-120" style="color: var(--text-secondary);">{{ row.escalated }}</div>
+        <div class="col-fixed-120" style="color: var(--text-secondary);">{{ row.closed_today }}</div>
+      </div>
+    {% empty %}
+      <div class="data-table-row" style="color: var(--text-muted);">
+        Aún no hay casos asignados en WhatsApp.
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="section-head" style="margin-top: 28px;">
+    <div>
+      <div class="card-title font-brand">Campañas WhatsApp</div>
+      <div class="section-sub">Envíos masivos e interacciones del canal</div>
+    </div>
+    <a class="btn btn-outline" href="{% url 'communications:campaigns' %}">Ver campañas</a>
+  </div>
+
+  <div class="metrics-cards">
+    {% for card in campaign_metrics %}
+      <div class="metric-card">
+        <div class="metric-card-top">
+          <div class="metric-card-label">{{ card.label }}</div>
+          <div class="metric-icon-wrap" style="background: var(--green-bg); color: var(--green);">
+            {% icon 'send' size=16 %}
+          </div>
+        </div>
+        <div class="metric-card-value font-brand">{{ card.value }}</div>
+        <div class="metric-card-sub">{{ card.sub }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="charts-row">
+    <div class="card" style="flex: 1.4;">
+      <div class="list-head" style="margin-bottom: 12px;">
+        <div class="card-title font-brand">Campañas recientes</div>
+        <a href="{% url 'communications:campaigns' %}" style="color: var(--accent); font-weight: 600; font-size: 13px;">Ver todas →</a>
+      </div>
+      <div class="dash-table">
+        <div class="dash-table-head">
+          <div class="col-flex">Campaña</div>
+          <div class="col-flex">Audiencia</div>
+          <div class="col-fixed-120">Estado</div>
+          <div class="col-fixed-110">Lectura</div>
+        </div>
+        {% for c in recent_campaigns %}
+          <div class="dash-table-row">
+            <div class="col-flex" style="font-weight: 600;">{{ c.name }}</div>
+            <div class="col-flex" style="color: var(--text-secondary);">{{ c.audience }}</div>
+            <div class="col-fixed-120">
+              {% if c.status == "enviada" %}
+                <span class="pill pill-success">enviada</span>
+              {% elif c.status == "programada" %}
+                <span class="pill pill-warning">programada</span>
+              {% else %}
+                <span class="pill pill-neutral">{{ c.status }}</span>
+              {% endif %}
+            </div>
+            <div class="col-fixed-110" style="font-weight: 700;">{{ c.read_pct }}</div>
+          </div>
+        {% empty %}
+          <div class="dash-table-row" style="color: var(--text-muted);">No hay campañas recientes.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card" style="flex: 1;">
+      <div class="card-title font-brand" style="margin-bottom: 14px;">Actividad reciente</div>
+      <div class="activity-list">
+        {% for log in campaign_activity %}
+          <div class="activity-row">
+            <div class="activity-main">
+              <strong>{{ log.person }}</strong>
+              <span>· {{ log.event }} en {{ log.campaign }}</span>
+            </div>
+            <div class="activity-meta">{{ log.at }} · {{ log.detail }}</div>
+          </div>
+        {% empty %}
+          <p style="color: var(--text-muted); margin: 0;">Sin actividad reciente.</p>
+        {% endfor %}
+      </div>
+      <a href="{% url 'communications:interactions' %}" class="btn btn-outline btn-block" style="margin-top: 16px;">Ver interacciones</a>
+    </div>
+  </div>
+{% endblock %}

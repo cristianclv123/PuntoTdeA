@@ -1,0 +1,462 @@
+.outbound-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    color: var(--text, #fafafa);
+}
+
+.outbound-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.outbound-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.outbound-tabs {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0 16px;
+    margin: 0;
+}
+
+.outbound-tabs a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: var(--surface, #141414) !important;
+    color: #fafafa !important;
+    text-decoration: none !important;
+    font-weight: 600;
+    font-size: 0.92rem;
+    border: 1px solid var(--border, #333);
+}
+
+.outbound-tabs a.is-active,
+.outbound-tabs a:hover {
+    background: var(--tdea-green, #00873e) !important;
+    color: #ffffff !important;
+    border-color: transparent;
+}
+
+.outbound-tabs a i {
+    color: inherit !important;
+}
+
+.outbound-card {
+    border: 1px solid var(--border, #333) !important;
+    border-radius: 16px;
+    background: var(--surface, #141414) !important;
+    color: var(--text, #fafafa);
+    box-shadow: none;
+}
+
+.outbound-table {
+    --bs-table-bg: #141414 !important;
+    --bs-table-color: #fafafa !important;
+    --bs-table-striped-bg: #1c1c1c !important;
+    --bs-table-striped-color: #fafafa !important;
+    --bs-table-hover-bg: #242424 !important;
+    --bs-table-hover-color: #fafafa !important;
+    --bs-table-border-color: #333333 !important;
+    background-color: #141414 !important;
+    color: #fafafa !important;
+}
+
+.outbound-table thead th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #a3a3a3 !important;
+    font-weight: 700;
+    background-color: #141414 !important;
+    border-bottom-color: #333333 !important;
+}
+
+.outbound-table tbody tr {
+    cursor: pointer;
+    border-color: #333333 !important;
+    background-color: #141414 !important;
+    color: #fafafa !important;
+}
+
+.outbound-table tbody tr:hover {
+    background-color: #1c1c1c !important;
+    color: #fafafa !important;
+}
+
+.outbound-table td,
+.outbound-table th {
+    color: #fafafa !important;
+    background-color: transparent !important;
+    border-color: #333333 !important;
+}
+
+.outbound-table .channel-chip {
+    color: #fafafa !important;
+}
+
+.outbound-card .card-body,
+.outbound-card .h5,
+.outbound-card .h6,
+.outbound-card strong {
+    color: #fafafa !important;
+}
+
+.kpi-card {
+    border: 1px solid var(--border, #333);
+    border-radius: 16px;
+    background: var(--surface, #141414);
+    padding: 18px 20px;
+    height: 100%;
+}
+
+.kpi-card .kpi-label {
+    font-size: 0.8rem;
+    color: var(--text-muted, #a3a3a3);
+    font-weight: 600;
+}
+
+.kpi-card .kpi-value {
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: var(--accent, #3dff8a);
+    line-height: 1.2;
+}
+
+.channel-chip,
+.channel-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.channel-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.channel-icon.whatsapp { background: #25d366; }
+.channel-icon.sms { background: #0d6efd; }
+.channel-icon.email { background: #6f42c1; }
+.channel-icon.facebook { background: #1877f2; }
+.channel-icon.instagram { background: linear-gradient(135deg, #f58529, #dd2a7b, #8134af); }
+
+.status-pill {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.status-enviada { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+.status-programada { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.status-borrador { background: #2a2a2a; color: #d4d4d4; }
+.status-cancelada { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+
+.outbound-checklist {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--text-secondary, #d4d4d4);
+}
+
+.outbound-checklist li { margin-bottom: 0.4rem; }
+
+.activity-feed { display: grid; gap: 12px; }
+
+.activity-item {
+    display: flex;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: var(--text, #fafafa);
+}
+
+.activity-item time {
+    color: var(--text-muted, #a3a3a3);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.channel-row {
+    background: var(--surface-2, #1c1c1c);
+    border-radius: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #333);
+}
+
+.wizard-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.wizard-step {
+    border: 1px solid var(--border, #333);
+    background: var(--surface-2, #1c1c1c);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-weight: 600;
+    color: var(--text-secondary, #d4d4d4);
+}
+
+.wizard-step.is-active {
+    background: var(--accent, #3dff8a);
+    color: var(--accent-on, #003d1f);
+    border-color: transparent;
+}
+
+.wizard-step.is-done {
+    background: rgba(0, 135, 62, 0.22);
+    color: #86efac;
+    border-color: transparent;
+}
+
+.channel-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+}
+
+.channel-option {
+    border: 2px solid var(--border, #333);
+    background: var(--surface-2, #1c1c1c);
+    border-radius: 14px;
+    padding: 14px 10px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text, #fafafa);
+}
+
+.channel-option.is-selected {
+    border-color: var(--accent, #3dff8a);
+    background: rgba(61, 255, 138, 0.1);
+}
+
+.segment-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.segment-chip {
+    border: 1px solid var(--border, #333);
+    background: var(--surface-2, #1c1c1c);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    color: var(--text, #fafafa);
+}
+
+.segment-chip.is-selected {
+    background: var(--tdea-green, #00873e);
+    color: #fff;
+    border-color: var(--tdea-green, #00873e);
+}
+
+.template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.template-card {
+    border: 2px solid var(--border, #333);
+    border-radius: 14px;
+    padding: 14px;
+    cursor: pointer;
+    background: var(--surface-2, #1c1c1c);
+    text-align: left;
+    color: var(--text, #fafafa);
+}
+
+.template-card.is-selected {
+    border-color: var(--accent, #3dff8a);
+    background: rgba(61, 255, 138, 0.1);
+}
+
+.phone-frame {
+    background: #111;
+    border-radius: 28px;
+    padding: 14px 12px 18px;
+    max-width: 280px;
+    margin: 0 auto;
+    border: 1px solid #333;
+}
+
+.phone-screen {
+    background: #1a2e1f;
+    border-radius: 18px;
+    min-height: 320px;
+    padding: 14px;
+}
+
+.wa-bubble {
+    background: #14532d;
+    color: #ecfdf5;
+    border-radius: 12px 12px 4px 12px;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+}
+
+.wa-bubble .wa-meta {
+    display: block;
+    text-align: right;
+    font-size: 0.68rem;
+    color: #86efac;
+    margin-top: 6px;
+}
+
+.wa-buttons {
+    margin-top: 8px;
+    display: grid;
+    gap: 6px;
+}
+
+.wa-buttons span {
+    display: block;
+    background: #0a0a0a;
+    color: #86efac;
+    border-radius: 8px;
+    padding: 6px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid #2a2a2a;
+}
+
+.review-list dt { font-weight: 600; color: var(--text-muted, #a3a3a3); }
+.review-list dd { color: var(--text, #fafafa); }
+
+.sticky-preview { position: sticky; top: 16px; }
+
+.campaign-item {
+    border: 1px solid var(--border, #333);
+    border-radius: 12px;
+    padding: 14px;
+    background: var(--surface-2, #1c1c1c);
+}
+
+.campaign-item-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: var(--surface, #141414);
+    border: 1px solid var(--border, #333);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 767.98px) {
+    .sticky-preview { position: static; }
+    .outbound-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* Protect app-shell sidebar from Bootstrap reboot (black links) */
+.sidebar,
+.sidebar a,
+.sidebar a:link,
+.sidebar a:visited,
+.sidebar a:hover,
+.sidebar a:active,
+.sidebar .sidebar-link,
+.sidebar .sidebar-brand,
+.sidebar .sidebar-user-link {
+  color: #d4d4d4 !important;
+  text-decoration: none !important;
+}
+
+.sidebar .sidebar-brand-title,
+.sidebar .sidebar-mark,
+.sidebar .sidebar-link:hover,
+.sidebar .sidebar-link:hover span,
+.sidebar .sidebar-collapse,
+.sidebar .sidebar-close {
+  color: #ffffff !important;
+}
+
+.sidebar .sidebar-brand-subtitle,
+.sidebar .sidebar-user-role,
+.sidebar .sidebar-link span {
+  color: #b0b0b0 !important;
+}
+
+.sidebar .sidebar-link.active,
+.sidebar .sidebar-link.active span,
+.sidebar .sidebar-user-link.active,
+.sidebar .sidebar-user-name {
+  color: #3dff8a !important;
+}
+
+.sidebar .sidebar-link.active {
+  background: rgba(61, 255, 138, 0.12) !important;
+}
+
+.sidebar .sidebar-link .icon,
+.sidebar .sidebar-collapse .icon,
+.sidebar .sidebar-close .icon {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
+/* Bootstrap form controls — dark panel */
+.outbound-panel .form-control,
+.outbound-panel .form-select,
+.outbound-panel .input-group-text {
+    background-color: #1c1c1c !important;
+    border-color: #333333 !important;
+    color: #fafafa !important;
+}
+
+.outbound-panel .form-control::placeholder {
+    color: #737373 !important;
+}
+
+.outbound-panel .form-control:focus,
+.outbound-panel .form-select:focus {
+    border-color: #3dff8a !important;
+    box-shadow: 0 0 0 0.2rem rgba(61, 255, 138, 0.15) !important;
+    background-color: #1c1c1c !important;
+    color: #fafafa !important;
+}
+
+.outbound-panel .form-label,
+.outbound-panel .text-muted,
+.outbound-panel .small.text-muted {
+    color: #a3a3a3 !important;
+}
+
+.outbound-panel .btn-outline-success {
+    color: #3dff8a !important;
+    border-color: #00873e !important;
+    background: transparent !important;
+}
+
+.outbound-panel .btn-check:checked + .btn-outline-success {
+    background: #00873e !important;
+    border-color: #00873e !important;
+    color: #fff !important;
+}
+
