@@ -1,3 +1,5 @@
+import uuid
+
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.text import slugify
@@ -124,3 +126,33 @@ class FAQ(BaseKnowledgeModel):
 
     def __str__(self) -> str:
         return str(self.question)
+
+
+class ChatConversation(BaseKnowledgeModel):
+    STATUS_ACTIVE = 'active'
+    STATUS_ENDED = 'ended'
+    STATUS_PENDING = 'pending'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Activa'),
+        (STATUS_ENDED, 'Finalizada'),
+        (STATUS_PENDING, 'Pendiente de asesor'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    channel = models.CharField(max_length=30, default='webchat', db_index=True)
+    external_user_id = models.CharField(max_length=120, blank=True, db_index=True)
+    flow_state = models.CharField(max_length=40, default='waiting_question')
+    last_question = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    messages = models.JSONField(default=list, blank=True)
+    escalation_reason = models.TextField(blank=True)
+    advisor_question = models.TextField(blank=True)
+    escalated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Conversación del chatbot'
+        verbose_name_plural = 'Conversaciones del chatbot'
+
+    def __str__(self) -> str:
+        return f'Conversación {self.pk}'

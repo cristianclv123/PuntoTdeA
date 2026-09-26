@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from cases.constants import channel_ui, status_tag_class
@@ -474,7 +475,11 @@ def caso_detail(request, case_id):
             "chat_messages": [
                 {
                     "text": m.body,
-                    "time": m.sent_at.strftime("%H:%M"),
+                    "time": (
+                        timezone.localtime(m.sent_at).strftime("%d/%m/%Y · %H:%M")
+                        if m.direction == Message.Direction.SYSTEM
+                        else m.sent_at.strftime("%H:%M")
+                    ),
                     "from_agent": m.direction == Message.Direction.OUTBOUND,
                     "is_system": m.direction == Message.Direction.SYSTEM,
                     "id": m.id,
