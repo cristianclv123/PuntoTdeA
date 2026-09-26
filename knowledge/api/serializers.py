@@ -37,6 +37,14 @@ class FAQSerializer(serializers.ModelSerializer):
         ]
 
 
+class FAQImportSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class ArticleImportSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
 class ChatConversationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatConversation

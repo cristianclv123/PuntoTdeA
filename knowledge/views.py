@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .chatbot import workflow as chatbot_workflow
 from .chatbot.whatsapp import parse_json, process_webhook, validate_signature, verify_webhook
-from .models import ChatConversation, FAQ, KnowledgeArticle
+from .models import Category, ChatConversation, FAQ, KnowledgeArticle
 
 
 def _manager(model):
@@ -29,6 +29,17 @@ def index(request):
 @login_required
 def faq_list(request):
     return index(request)
+
+
+@login_required
+def manage(request):
+    """Gestión de preguntas y artículos: la tabla se carga y muta por JS
+    contra /api/knowledge/ (ver knowledge/static/knowledge/js/manage.js)."""
+    return render(
+        request,
+        'knowledge/manage.html',
+        {'active_nav': 'knowledge-manage', 'categories': _manager(Category).filter(is_active=True).order_by('name')},
+    )
 
 
 @csrf_exempt

@@ -1,15 +1,45 @@
 """ViewSets CRUD para el contenido de la base de conocimiento."""
-from rest_framework import mixins, permissions, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import mixins, permissions, serializers, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.response import Response
 
 from knowledge.models import Category, ChatConversation, FAQ, Intent, KnowledgeArticle
+from knowledge.services.import_service import import_articles_from_excel, import_faqs_from_excel
 
 from .serializers import (
+    ArticleImportSerializer,
     CategorySerializer,
     ChatConversationSerializer,
+    FAQImportSerializer,
     FAQSerializer,
     IntentSerializer,
     KnowledgeArticleSerializer,
 )
+
+
+_import_result_serializer = inline_serializer(
+    name="KnowledgeImportResult",
+    fields={
+        "created": serializers.IntegerField(),
+        "updated": serializers.IntegerField(),
+        "skipped": serializers.IntegerField(),
+        "errors": serializers.ListField(child=serializers.CharField()),
+    },
+)
+
+
+def _import_result_response(result):
+    return Response(
+        {
+            "created": result.created,
+            "updated": result.updated,
+            "skipped": result.skipped,
+            "errors": result.errors,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -40,6 +70,19 @@ class KnowledgeArticleViewSet(viewsets.ModelViewSet):
             qs = qs.filter(published=published.lower() in {"1", "true"})
         return qs
 
+    @extend_schema(request=ArticleImportSerializer, responses=_import_result_serializer)
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def import_excel(self, request):
+        """POST /api/knowledge/articles/import_excel/ (multipart: file)
+
+        Columnas del Excel: titulo, contenido, categoria (obligatorias);
+        resumen, etiquetas, estado (opcionales).
+        """
+        payload = ArticleImportSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        result = import_articles_from_excel(payload.validated_data["file"])
+        return _import_result_response(result)
+
 
 class FAQViewSet(viewsets.ModelViewSet):
     queryset = FAQ.objects.select_related("category", "intent").all()
@@ -54,6 +97,19 @@ class FAQViewSet(viewsets.ModelViewSet):
         if (is_active := params.get("is_active")) is not None:
             qs = qs.filter(is_active=is_active.lower() in {"1", "true"})
         return qs
+
+    @extend_schema(request=FAQImportSerializer, responses=_import_result_serializer)
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
+    def import_excel(self, request):
+        """POST /api/knowledge/faqs/import_excel/ (multipart: file)
+
+        Columnas del Excel: pregunta, respuesta, categoria (obligatorias);
+        activo (opcional).
+        """
+        payload = FAQImportSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        result = import_faqs_from_excel(payload.validated_data["file"])
+        return _import_result_response(result)
 
 
 class ChatConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
