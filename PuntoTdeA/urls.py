@@ -26,6 +26,7 @@ urlpatterns = [
     path('perfil/', views.profile_view, name='profile'),
 
     path('api/cases/', include('cases.api.urls')),
+    path('api/knowledge/', include('knowledge.api.urls')),
 
     # Documentación de la API (Swagger / Redoc)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
