@@ -83,12 +83,77 @@ Los identificadores de los mensajes entrantes y de los cambios de estado se
 guardan en `WhatsAppWebhookEvent`. Esto evita responder dos veces cuando Meta
 reintenta un webhook.
 
+## Diagnóstico
+
+Hay dos herramientas para saber en qué punto falla la cadena, sin tener que
+inspeccionar logs a mano.
+
+### Comando de diagnóstico
+
+```powershell
+docker compose exec -T web python manage.py check_meta_whatsapp
+```
+
+Solo lee la configuración y **no hace peticiones de red**, así que es seguro
+ejecutarlo en cuanto se arranca el contenedor. Informa qué variables faltan y si
+el flujo de envío, el de recepción de webhooks y el de verificación de la
+suscripción están disponibles. Termina con código de salida `1` si algo falta,
+de modo que sirve como sonda en un monitor.
+
+Para confirmar contra Meta que el token sirve y que el número emisor existe:
+
+```powershell
+docker compose exec -T web python manage.py check_meta_whatsapp --validate
+```
+
+Esto consulta `debug_token` y `<PHONE_NUMBER_ID>` en Graph API y reporta los
+permisos (`scopes`) del token, el nombre verificado y la calificación de
+calidad del número.
+
+Si ya tienes el callback público expuesto por HTTPS, añade `--callback-url`:
+
+```powershell
+docker compose exec -T web python manage.py check_meta_whatsapp `
+  --callback-url https://TU-DOMINIO/api/whatsapp/webhook/
+```
+
+### Página de prueba
+
+En `http://localhost:8000/whatsapp-prueba/` hay una página de verificación con
+cuatro secciones: estado de la configuración, envío de un mensaje de prueba,
+simulador del webhook y últimos eventos recibidos. No aparece en la navegación
+del producto: se accede solo por URL y exige una sesión de personal `staff`.
+
+El simulador firma un payload con la misma forma que envía Meta y lo entrega al
+webhook real usando el cliente interno de Django, de modo que ejercita el
+routing, la validación de firma y el procesamiento sin salir del contenedor. Los
+escenarios son: mensaje entrante al chatbot, estado `delivered` y estado
+`failed` de campaña.
+
+> El simulador depende de `ALLOW_WEBHOOK_SIMULATOR`, que se apaga solo cuando
+> `DEBUG` es `false`. No debe habilitarse en producción: un payload firmado con el
+> App Secret es indistinguible de uno real de Meta.
+
+### Resumen en JSON
+
+`GET /api/whatsapp/health/` devuelve el mismo estado en JSON, sin exponer ningún
+secreto. **Exige la misma sesión `staff` que la página de prueba**, así que no
+sirve como sonda anónima: para automatizar el chequeo usa
+`python manage.py check_meta_whatsapp`, que sí es apto para un script de
+monitoring porque no necesita credenciales de la aplicación.
+
 ## Validación
 
 Ejecuta las pruebas de la integración dentro de Docker:
 
 ```powershell
 docker compose exec -T web python manage.py test communications.tests.test_meta_integration knowledge.chatbot.tests
+```
+
+La página de prueba tiene su propia suite:
+
+```powershell
+docker compose exec -T web python manage.py test communications.tests.test_meta_test_page
 ```
 
 Antes de producción, valida con un número de prueba de Meta este recorrido:

@@ -16,6 +16,11 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from communications.meta_test_views import health as meta_test_health
+from communications.meta_test_views import index as meta_test_index
+from communications.meta_test_views import send_test_message as meta_test_send
+from communications.meta_test_views import simulate_webhook as meta_test_simulate
+from communications.meta_test_views import validate_credentials as meta_test_validate
 from communications.webhooks.meta_webhook import whatsapp_webhook
 from . import views
 
@@ -27,6 +32,24 @@ urlpatterns = [
     path('perfil/', views.profile_view, name='profile'),
     # Callback único configurado en Meta Developers para campañas y chatbot.
     path('api/whatsapp/webhook/', whatsapp_webhook, name='meta-whatsapp-webhook'),
+    path(
+        'api/whatsapp/health/',
+        meta_test_health,
+        name='meta-whatsapp-health',
+    ),
+    # Página de verificación de la integración. Solo para personal staff.
+    path('whatsapp-prueba/', meta_test_index, name='meta-whatsapp-test'),
+    path('whatsapp-prueba/enviar/', meta_test_send, name='meta-whatsapp-test-send'),
+    path(
+        'whatsapp-prueba/simular/',
+        meta_test_simulate,
+        name='meta-whatsapp-test-simulate',
+    ),
+    path(
+        'whatsapp-prueba/validar/',
+        meta_test_validate,
+        name='meta-whatsapp-test-validate',
+    ),
 
     path('api/cases/', include('cases.api.urls')),
     path('api/knowledge/', include('knowledge.api.urls')),
