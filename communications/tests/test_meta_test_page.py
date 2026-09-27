@@ -22,6 +22,9 @@ class MetaConfigStatusTests(TestCase):
         self.assertFalse(config["can_verify"])
         self.assertIn("META_ACCESS_TOKEN", config["missing"])
         self.assertIn("META_APP_SECRET", config["missing"])
+        # Las opcionales van aparte: no bloquean la integración.
+        self.assertEqual(config["optional_missing"], ["META_APP_ID"])
+        self.assertNotIn("META_APP_ID", config["missing"])
 
     def test_secrets_are_never_exposed(self):
         with override_settings(
@@ -203,6 +206,70 @@ class MetaSimulatorTests(TestCase):
         self.assertEqual(event.status, "delivered")
         self.assertIsNotNone(event.processed_at)
 
+    @override_settings(
+        META_APP_SECRET="app-secret",
+        META_VERIFY_TOKEN="verify",
+        META_ACCESS_TOKEN="token",
+        WHATSAPP_PHONE_NUMBER_ID="123456789",
+        ALLOW_WEBHOOK_SIMULATOR=True,
+    )
+    def test_bot_script_advances_through_the_chatbot_states(self):
+        """El guion debe recorrer la conversación, no solo el primer saludo."""
+        from unittest.mock import patch
+
+        from knowledge.models import ChatConversation
+
+        with patch(
+            "communications.webhooks.meta_webhook.chatbot_whatsapp.send_text",
+            return_value=True,
+        ):
+            self.client.post(
+                reverse("meta-whatsapp-test-simulate"),
+                {"scenario": "script", "phone": "573009998877"},
+            )
+
+        conversation = ChatConversation.objects.get(external_user_id="573009998877")
+        bot_messages = [
+            entry["content"] for entry in conversation.messages if entry["author"] == "bot"
+        ]
+        self.assertEqual(len(bot_messages), 5, bot_messages)
+        # 1. saludo → 2. respuesta a la pregunta → 3. ofrece más ayuda
+        # 4. escala al asesor → 5. confirma que queda pendiente.
+        self.assertIn("Hola, soy el asistente de Punto TdeA", bot_messages[0])
+        self.assertIn("Claro. ¿Qué deseas hacer?", bot_messages[2])
+        self.assertIn("transferiremos esta conversación a un asesor", bot_messages[3])
+        self.assertIn("Hemos recibido tu solicitud", bot_messages[4])
+        self.assertEqual(conversation.status, ChatConversation.STATUS_PENDING)
+        self.assertEqual(conversation.flow_state, "pending")
+
+    @override_settings(
+        META_APP_SECRET="app-secret",
+        META_ACCESS_TOKEN="token",
+        WHATSAPP_PHONE_NUMBER_ID="123456789",
+        ALLOW_WEBHOOK_SIMULATOR=True,
+    )
+    def test_custom_text_reaches_the_bot(self):
+        from unittest.mock import patch
+
+        from knowledge.models import ChatConversation
+
+        with patch(
+            "communications.webhooks.meta_webhook.chatbot_whatsapp.send_text",
+            return_value=True,
+        ):
+            self.client.post(
+                reverse("meta-whatsapp-test-simulate"),
+                {
+                    "scenario": "inbound",
+                    "phone": "573005555444",
+                    "text": "prueba con texto propio",
+                },
+            )
+
+        conversation = ChatConversation.objects.get(external_user_id="573005555444")
+        self.assertEqual(len(conversation.messages), 1)
+        self.assertEqual(conversation.flow_state, "waiting_question")
+
     def test_health_endpoint_reports_missing_configuration(self):
         with override_settings(
             META_APP_SECRET="", META_ACCESS_TOKEN="", WHATSAPP_PHONE_NUMBER_ID=""
@@ -251,6 +318,25 @@ class CheckMetaCommandTests(TestCase):
                 "check_meta_whatsapp", stdout=StringIO(), stderr=StringIO()
             )
         self.assertEqual(ctx.exception.code, 1)
+
+    @override_settings(
+        META_VERIFY_TOKEN="verify",
+        META_APP_ID="",
+        META_APP_SECRET="secret",
+        META_ACCESS_TOKEN="token",
+        WHATSAPP_PHONE_NUMBER_ID="123456789",
+    )
+    def test_missing_app_id_does_not_block(self):
+        """META_APP_ID no lo usa la API: dejarlo vacío no debe marcar la integración como rota."""
+        from io import StringIO
+
+        out, err = StringIO(), StringIO()
+        call_command("check_meta_whatsapp", stdout=out, stderr=err)
+        output = out.getvalue()
+        self.assertIn("Configuración completa", output)
+        self.assertNotIn("Faltan valores", output)
+        self.assertIn("no bloquean la integración", output)
+        self.assertEqual(err.getvalue(), "")
 
     @override_settings(
         META_VERIFY_TOKEN="",

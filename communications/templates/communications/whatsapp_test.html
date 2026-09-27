@@ -86,7 +86,7 @@
             <code>{{ status.name }}</code>
             {% if status.value %}<span style="color:#9aa0a6"> · {{ status.value }}</span>{% endif %}
           </div>
-          <span class="wa-tag {% if status.is_set %}ok{% else %}bad{% endif %}">{{ status.state }}</span>
+          <span class="wa-tag {% if status.is_set %}ok{% elif status.required %}bad{% else %}warn{% endif %}">{{ status.state }}</span>
         </div>
       {% endfor %}
       <div class="wa-row" style="margin-top:.6rem;border-top:1px solid var(--border)">
@@ -129,10 +129,19 @@
           <div class="wa-field">
             <label class="wa-label" for="wa-scenario">Escenario</label>
             <select class="wa-select" id="wa-scenario" name="scenario">
-              <option value="inbound">Mensaje entrante → bot responde</option>
+              <option value="script">Guion completo del bot (recomendado)</option>
+              <option value="inbound">Un solo mensaje entrante</option>
               <option value="delivered">Estado «delivered» de campaña</option>
               <option value="failed">Estado «failed» de campaña</option>
             </select>
+          </div>
+          <div class="wa-field">
+            <label class="wa-label" for="wa-phone-sim">Teléfono que escribe</label>
+            <input class="wa-input" id="wa-phone-sim" name="phone" value="{{ default_simulated_phone }}" placeholder="573001112233">
+          </div>
+          <div class="wa-field">
+            <label class="wa-label" for="wa-text-sim">Mensaje (solo escenario «un mensaje entrante»)</label>
+            <input class="wa-input" id="wa-text-sim" name="text" placeholder="Vacío = mensaje de ejemplo">
           </div>
           <div class="wa-field">
             <label class="wa-label" for="wa-reference">wamid del destinatario (solo estados)</label>
@@ -141,9 +150,12 @@
           <button class="wa-btn" type="submit">Firmar y enviar al webhook</button>
         </form>
         <p class="wa-note">
-          El escenario <strong>inbound</strong> entrega el mensaje al flujo del chatbot. Si el envío de
-          la respuesta falla por falta de credenciales, el evento queda registrado igual.
-          Para los estados de campaña pega el <code>wamid</code> que Meta devolvió al enviar.
+          El <strong>guion completo</strong> reproduce los cinco turnos del chatbot
+          (saludo → pregunta → confirmación → asesor → cierre) como webhooks
+          independientes y firmados, para que la máquina de estados avance de verdad.
+          Cada respuesta se guarda en <code>/admin/knowledge/chatconversation/</code>.
+          Ten en cuenta que el bot intenta responder por WhatsApp al número que
+          escribes, así que con un número falso la respuesta no te llegará al celular.
         </p>
       {% else %}
         <span class="wa-tag warn">desactivado</span>

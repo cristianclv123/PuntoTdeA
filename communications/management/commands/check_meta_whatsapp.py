@@ -35,11 +35,9 @@ class Command(BaseCommand):
         self.stdout.write(f"  Simulador webhooks     {settings.ALLOW_WEBHOOK_SIMULATOR}")
 
         failures: list[str] = []
-        missing = [
-            status.name
-            for status in meta_config.setting_statuses()
-            if not status.is_set
-        ]
+        config = meta_config.capability_status()
+        missing = config["missing"]
+        optional_missing = config["optional_missing"]
         if missing:
             self.stdout.write("")
             self.stdout.write(
@@ -56,6 +54,11 @@ class Command(BaseCommand):
         else:
             self.stdout.write("")
             self.stdout.write(self.style.SUCCESS("Configuración completa."))
+        if optional_missing:
+            self.stdout.write(
+                "Opcionales sin definir (no bloquean la integración): "
+                + ", ".join(optional_missing)
+            )
 
         if options["validate"]:
             self.stdout.write("")

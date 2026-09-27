@@ -6,8 +6,28 @@ las campañas.
 
 ## Configuración local o de servidor
 
+Hay dos caminos. El script es una comodidad, no una dependencia: si prefieres
+editar el archivo a mano, el resultado es idéntico.
+
+### Con el asistente
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\configurar_meta.ps1
+```
+
+Pide el App secret, el Access token y el Phone Number ID con entrada oculta, y
+**genera el `META_VERIFY_TOKEN` por ti** porque ese valor no lo entrega Meta: lo
+eliges tú al registrar el callback. Después escribe el `.env`, recrea el
+servicio y ejecuta el diagnóstico. Usa `-SinRecrear` si solo quieres escribir el
+archivo.
+
+De nuevo: solo tres valores vienen de Meta. `META_APP_ID` es opcional y la API
+no lo necesita.
+
+### A mano
+
 1. Copia `.env.example` como `.env` en la raíz del proyecto.
-2. Completa los valores entregados en Meta Developers:
+2. Completa los valores:
 
    ```dotenv
    META_VERIFY_TOKEN=un-secreto-largo-para-la-verificacion
@@ -28,6 +48,10 @@ las campañas.
    docker compose up -d --build --force-recreate web
    docker compose exec -T web python manage.py migrate
    ```
+
+> Las credenciales llegan al contenedor como variables de entorno, así que
+> hace falta **recrear** (`up -d --force-recreate`), no reiniciar
+> (`restart`). Un `restart` deja las variables viejas.
 
 ## Configuración en Meta Developers
 
@@ -127,8 +151,33 @@ del producto: se accede solo por URL y exige una sesión de personal `staff`.
 El simulador firma un payload con la misma forma que envía Meta y lo entrega al
 webhook real usando el cliente interno de Django, de modo que ejercita el
 routing, la validación de firma y el procesamiento sin salir del contenedor. Los
-escenarios son: mensaje entrante al chatbot, estado `delivered` y estado
-`failed` de campaña.
+escenarios son:
+
+- **Guion completo del bot:** reproduce los cinco turnos de la conversación
+  (saludo → pregunta → confirmación → escalado al asesor → cierre) como cinco
+  webhooks independientes y firmados, para que la máquina de estados avance de
+  verdad y no se salte pasos.
+- **Un solo mensaje entrante**, con el texto que quieras o el de ejemplo.
+- **Estado `delivered`** y **estado `failed`** de campaña, indicando el `wamid`
+  que devolvió Meta al enviar.
+
+> El bot ignora el texto del primer mensaje y solo devuelve el saludo, así que
+> al probar a mano por WhatsApp el primer mensaje debe ser un saludo: la
+> pregunta solo se procesa a partir del segundo.
+
+Las respuestas del bot quedan en `/admin/knowledge/chatconversation/`, donde se
+ven el `flow_state` y el `status` de cada conversación. Ten en cuenta que el bot
+intenta responder por WhatsApp al número que escribes: con un número falso la
+lógica se ejecuta y se guarda, pero la respuesta no te llega al celular.
+
+Dos detalles del entorno que confunden al probar:
+
+- La respuesta a la pregunta sale de la base de conocimiento. Si está vacía el
+  bot contesta «No encontré información suficiente…» y eso **es el
+  comportamiento correcto**. Carga contenido con
+  `docker compose exec -T web python manage.py seed_knowledge`.
+- El cierre por escalado cambia según el horario de atención configurado: fuera
+  de horario el bot dice que la solicitud queda pendiente.
 
 > El simulador depende de `ALLOW_WEBHOOK_SIMULATOR`, que se apaga solo cuando
 > `DEBUG` es `false`. No debe habilitarse en producción: un payload firmado con el

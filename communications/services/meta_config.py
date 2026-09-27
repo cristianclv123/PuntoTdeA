@@ -22,13 +22,14 @@ class SettingStatus:
     is_set: bool
     is_secret: bool
     detail: str = ""
+    required: bool = True
 
     @property
     def state(self) -> str:
         if self.is_secret:
-            return "configurado" if self.is_set else "FALTA"
+            return "configurado" if self.is_set else ("FALTA" if self.required else "opcional")
         if not self.is_set:
-            return "vacío"
+            return "vacío" if self.required else "opcional"
         return self.value
 
 
@@ -96,6 +97,8 @@ def setting_statuses() -> list[SettingStatus]:
             _masked(_setting("META_APP_ID"), 6),
             bool(_setting("META_APP_ID")),
             False,
+            "Solo informativo: la API no lo necesita para enviar ni para recibir.",
+            required=False,
         ),
         SettingStatus(
             "WHATSAPP_PHONE_NUMBER_ID",
@@ -133,15 +136,25 @@ def capability_status() -> dict[str, Any]:
     """Resumen de lo que la integración puede y no puede hacer ahora mismo."""
     can_send = is_fully_configured()
     can_receive = can_receive_webhooks()
+    statuses = setting_statuses()
     return {
         "can_send": can_send,
         "can_receive": can_receive,
         "can_verify": can_verify_subscription(),
         "webhook_path": WEBHOOK_PATH,
+        # Solo las obligatorias: las opcionales se listan aparte para no
+        # hacer creer que la integración está incompleta sin ellas.
         "missing": [
-            status.name for status in setting_statuses() if not status.is_set
+            status.name
+            for status in statuses
+            if not status.is_set and status.required
         ],
-        "statuses": setting_statuses(),
+        "optional_missing": [
+            status.name
+            for status in statuses
+            if not status.is_set and not status.required
+        ],
+        "statuses": statuses,
     }
 
 

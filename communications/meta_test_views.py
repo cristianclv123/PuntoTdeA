@@ -14,7 +14,7 @@ import json
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -46,6 +46,7 @@ def index(request: HttpRequest):
             .order_by("-id")[:10]
         ),
         "simulator_enabled": settings.ALLOW_WEBHOOK_SIMULATOR,
+        "default_simulated_phone": DEFAULT_SIMULATED_PHONE,
     }
     return render(request, "communications/whatsapp_test.html", context)
 
@@ -72,55 +73,83 @@ def send_test_message(request: HttpRequest):
     return redirect("meta-whatsapp-test")
 
 
-def _simulated_payload(scenario: str, reference: str) -> dict:
-    """Payload con la misma forma que envía Meta."""
+DEFAULT_SIMULATED_PHONE = "573001112233"
+
+# Guion que recorre todos los estados del chatbot. El primer mensaje siempre
+# devuelve el saludo y descarta lo que el usuario escribió, así que el guion
+# tiene que empezar por un saludo real.
+BOT_SCRIPT = (
+    "Hola",
+    "¿Cuáles son los requisitos para matricularme?",
+    "sí",
+    "quiero hablar con un asesor",
+    "Necesito información sobre la Modalidad a Distancia",
+)
+
+
+def _inbound_payload(text: str, phone: str, sequence: int) -> dict:
+    """Un mensaje entrante con la misma forma que envía Meta."""
     now = int(timezone.now().timestamp())
     # Usa el Phone Number ID real: si no coincide, el webhook descarta el evento
-    # por Proveniente de un número no configurado.
-    metadata: dict[str, str] = {"display_phone_number": "15550000000"}
+    # como proveniente de un número no configurado.
+    metadata: dict[str, str] = {"display_phone_number": phone}
     phone_number_id = str(settings.WHATSAPP_PHONE_NUMBER_ID or "").strip()
     if phone_number_id:
         metadata["phone_number_id"] = phone_number_id
-    if scenario == "inbound":
-        return {
-            "object": "whatsapp_business_account",
-            "entry": [
-                {
-                    "id": "SIMULATED_WABA_ID",
-                    "changes": [
-                        {
-                            "field": "messages",
-                            "value": {
-                                "messaging_product": "whatsapp",
-                                "metadata": metadata,
-                                "messages": [
-                                    {
-                                        "id": f"wamid.simulated.inbound.{now}",
-                                        "from": "573001112233",
-                                        "timestamp": str(now),
-                                        "type": "text",
-                                        "text": {"body": "Hola, necesito información de matrículas"},
-                                    }
-                                ],
-                            },
-                        }
-                    ],
-                }
-            ],
-        }
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "SIMULATED_WABA_ID",
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": metadata,
+                            "messages": [
+                                {
+                                    "id": f"wamid.simulated.inbound.{sequence}.{phone}",
+                                    "from": phone,
+                                    "timestamp": str(now + sequence),
+                                    "type": "text",
+                                    "text": {"body": text},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
 
-    status = "failed" if scenario == "failed" else "delivered"
+
+def _status_payload(status: str, reference: str, phone: str) -> dict:
+    """Un estado de entrega con la misma forma que envía Meta."""
+    now = int(timezone.now().timestamp())
+    metadata: dict[str, str] = {"display_phone_number": phone}
+    phone_number_id = str(settings.WHATSAPP_PHONE_NUMBER_ID or "").strip()
+    if phone_number_id:
+        metadata["phone_number_id"] = phone_number_id
+
     value = {
         "id": reference or "wamid.NO_ENCONTRADO",
         "status": status,
         "timestamp": str(now),
-        "recipient_id": "573001112233",
-        "conversation": {"id": f"conversation.simulated.{now}", "origin": {"type": "marketing"}},
+        "recipient_id": phone,
+        "conversation": {
+            "id": f"conversation.simulated.{now}",
+            "origin": {"type": "marketing"},
+        },
         "pricing": {"billable": True, "pricing_model": "CBP"},
     }
     if status == "failed":
         value["errors"] = [
-            {"code": 131026, "title": "Message undeliverable", "message": "Número no entregado"}
+            {
+                "code": 131026,
+                "title": "Message undeliverable",
+                "message": "Número no entregado",
+            }
         ]
     return {
         "object": "whatsapp_business_account",
@@ -128,19 +157,65 @@ def _simulated_payload(scenario: str, reference: str) -> dict:
             {
                 "id": "SIMULATED_WABA_ID",
                 "changes": [
-                    {"field": "messages", "value": {"messaging_product": "whatsapp", "metadata": metadata, "statuses": [value]}}
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": metadata,
+                            "statuses": [value],
+                        },
+                    }
                 ],
             }
         ],
     }
 
 
+def _deliver(payload: dict) -> dict:
+    """Firma un payload y lo entrega al webhook real."""
+    body = json.dumps(payload).encode()
+    return _post_to_webhook(body, _sign(body))
+
+
+def _run_bot_script(request: HttpRequest, phone: str) -> HttpResponse:
+    """Recorre la conversación completa del chatbot, turno por turno.
+
+    Cada turno se envía como un webhook independiente y firmado, igual que
+    haría Meta, para que la máquina de estados avance de verdad en lugar de
+    saltarse pasos.
+    """
+    processed = 0
+    failures: list[str] = []
+    for index, line in enumerate(BOT_SCRIPT, start=1):
+        response_data = _deliver(_inbound_payload(line, phone, index))
+        result = response_data.get("result")
+        if response_data.get("status_code") == 200 and isinstance(result, dict):
+            processed += result.get("processed", 0)
+        else:
+            failures.append(f"turno {index}: HTTP {response_data.get('status_code')}")
+
+    if failures:
+        messages.error(
+            request,
+            "El guion se detuvo en: " + "; ".join(failures),
+        )
+    else:
+        messages.success(
+            request,
+            f"Guion del bot completo: {processed} turno(s) procesado(s) desde {phone}. "
+            "Revisa la conversación en /admin/knowledge/chatconversation/.",
+        )
+    return redirect("meta-whatsapp-test")
+
+
 @_staff_required
 @require_POST
 def simulate_webhook(request: HttpRequest):
-    """Firma un payload con el App Secret y lo envía al webhook real."""
+    """Firma payloads con el App Secret y los entrega al webhook real."""
     scenario = (request.POST.get("scenario") or "inbound").strip()
     reference = (request.POST.get("reference") or "").strip()
+    phone = (request.POST.get("phone") or DEFAULT_SIMULATED_PHONE).strip()
+    text = (request.POST.get("text") or "").strip()
 
     if not settings.ALLOW_WEBHOOK_SIMULATOR:
         messages.error(
@@ -159,14 +234,20 @@ def simulate_webhook(request: HttpRequest):
         )
         return redirect("meta-whatsapp-test")
 
-    payload = _simulated_payload(scenario, reference)
-    body = json.dumps(payload).encode()
-    signature = _sign(body)
-    response_data = _post_to_webhook(body, signature)
+    if scenario == "script":
+        return _run_bot_script(request, phone)
+
+    if scenario in {"delivered", "failed"}:
+        payloads = [_status_payload(scenario, reference, phone)]
+    else:
+        body_text = text or "Hola, necesito información de matrículas"
+        payloads = [_inbound_payload(body_text, phone, 1)]
+
+    response_data = _deliver(payloads[0])
     result = response_data.get("result")
     status_code = response_data.get("status_code")
 
-    if result is not None and status_code == 200:
+    if isinstance(result, dict) and status_code == 200:
         processed = result.get("processed", 0)
         duplicates = result.get("duplicates", 0)
         unmatched = result.get("unmatched", 0)
