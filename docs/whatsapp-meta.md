@@ -191,6 +191,45 @@ sirve como sonda anónima: para automatizar el chequeo usa
 `python manage.py check_meta_whatsapp`, que sí es apto para un script de
 monitoring porque no necesita credenciales de la aplicación.
 
+## Datos de demostración
+
+Para probar sin esperar a tener contactos reales:
+
+```powershell
+docker compose exec -T web python manage.py seed_demo_whatsapp
+```
+
+Crea 8 contactos, 2 segmentos, 2 plantillas y 2 campañas:
+
+- **«Demo: recordatorio de matrícula (enviada)»** tiene un destinatario en cada
+  estado posible (`pending`, `queued`, `sent`, `delivered`, `read`, `failed`,
+  `opted_out`) con su `wamid`. Es lo que permite probar el webhook de estados:
+  pega un `wamid` de la lista en el simulador y observa cómo avanza el
+  destinatario y cómo se respeta la no regresión de `read`.
+- **«Demo: bienvenida a admitidos (borrador)»** queda con todos sus
+  destinatarios en `pending`, que es lo que el envío real procesa. Úsala cuando
+  tengas credenciales para probar un envío de verdad.
+
+Notas:
+
+- Los `wamid` son **sintéticos** (`wamid.SEED0001`…), no provienen de Meta. El
+  prefijo existe para que no se confundan con los reales.
+- La plantilla aprobada se llama `recordatorio_matricula_2026`. Para que un
+  envío real funcione, ese nombre debe coincidir con una plantilla aprobada en
+  tu cuenta de Meta; si no, Meta la rechaza.
+- No se envía nada a Meta al ejecutar el comando.
+- Es idempotente: repetirlo no duplica nada.
+- Se niega a correr si `DEBUG` está apagado, salvo que le pases `--force`: una
+  semilla de contactos y campañas ficticias en producción crearía campañas con
+  aspecto real. Para borrar lo sembrado:
+
+  ```powershell
+  docker compose exec -T web python manage.py seed_demo_whatsapp --limpiar
+  ```
+
+  Solo borra lo marcado como demostración; los contactos que ya tuvieras se
+  conservan.
+
 ## Validación
 
 Ejecuta las pruebas de la integración dentro de Docker:
