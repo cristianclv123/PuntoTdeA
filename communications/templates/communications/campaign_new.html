@@ -1,40 +1,55 @@
-{% extends "communications/base.html" %}
+{% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Nueva Campaña{% endblock %}
-{% block page_heading %}Nueva Campaña{% endblock %}
-{% block page_lead %}Configura el nombre, canal, plantilla y audiencia para tu nueva campaña.{% endblock %}
-
-{% block outbound_content %}
-<div class="row g-4">
-    <!-- COLUMNA PRINCIPAL / FORMULARIO -->
-    <div class="col-lg-8">
-        <!-- BLOQUE PARA CARGAR SEGMENTO DE DESTINATARIOS (EXCEL) -->
-        <div class="card p-4 shadow-sm mb-4 border-0 bg-light">
-            <h5 class="fw-bold text-success mb-2">
-                <i class="bi bi-file-earmark-spreadsheet me-2"></i> Cargar Segmento de Destinatarios (.xls / .xlsx)
-            </h5>
-            <p class="text-muted small mb-3">Adjunta un archivo de Excel para definir la lista de contactos de esta campaña.</p>
-
-            <form action="{% url 'communications:upload_segment_excel' %}" method="POST" enctype="multipart/form-data" class="row g-2 align-items-center">
-                {% csrf_token %}
-                <div class="col-md-8">
-                    <input 
-                        type="file" 
-                        class="form-control" 
-                        id="excel_file" 
-                        name="excel_file" 
-                        accept=".xls, .xlsx, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
-                        required
-                    >
-                </div>
-                <div class="col-md-4">
-                    <button type="submit" class="btn btn-success w-100 fw-semibold rounded-pill">
-                        <i class="bi bi-upload me-1"></i> Cargar Excel
-                    </button>
-                </div>
-            </form>
-        </div>
+{% block content %}
+<div class="p-6 text-white bg-black min-h-screen">
+  <div class="max-w-4xl mx-auto">
+    
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold">Nueva campaña</h1>
+      <p class="text-gray-400 text-sm">Canal WhatsApp. Define los detalles, selecciona una plantilla y el momento de envío.</p>
     </div>
+
+    <form method="POST" enctype="multipart/form-data" class="space-y-6">
+      {% csrf_token %}
+
+      <div class="bg-zinc-900 p-6 rounded-xl border border-zinc-800 space-y-4">
+        <h2 class="text-lg font-semibold">Detalles de la campaña</h2>
+        
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Nombre de la campaña</label>
+          <input type="text" name="name" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Tipo</label>
+            <select name="type" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white">
+              <option value="UTILIDAD">Utilidad</option>
+              <option value="MARKETING">Marketing</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Cuenta de envío</label>
+            <select name="account" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2.5 text-white">
+              <option value="tdea_wa">TdeA WhatsApp +57 604 444 00 00</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-zinc-900 p-6 rounded-xl border border-zinc-800 space-y-4">
+        <h2 class="text-lg font-semibold">Base de datos (Excel)</h2>
+        <input type="file" name="excel_file" accept=".xlsx, .xls" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-500">
+      </div>
+
+      <div class="flex justify-end space-x-3">
+        <button type="submit" class="bg-emerald-600 text-white px-5 py-2.5 rounded-lg font-medium">
+          Guardar y continuar
+        </button>
+      </div>
+    </form>
+
+  </div>
 </div>
 {% endblock %}
