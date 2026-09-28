@@ -8,3 +8,4 @@ django-cors-headers==4.6.0
 requests==2.32.3
 Pillow==11.3.0
 openpyxl==3.1.2
+xlrd==2.0.1

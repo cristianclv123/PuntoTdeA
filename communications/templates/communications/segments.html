@@ -12,6 +12,36 @@
 {% endblock %}
 
 {% block outbound_content %}
+<!-- SECCIÓN PARA SUBIR ARCHIVO EXCEL DE SEGMENTO -->
+<div class="card p-4 shadow-sm mb-4 border-0">
+    <h5 class="mb-3 fw-bold text-success">
+        <i class="bi bi-file-earmark-spreadsheet me-2"></i>Cargar Segmento desde Excel
+    </h5>
+    
+    <form action="{% url 'communications:upload_segment_excel' %}" method="POST" enctype="multipart/form-data" class="row g-3 align-items-end">
+        {% csrf_token %}
+        
+        <div class="col-md-8">
+            <label for="excel_file" class="form-label text-muted small">Selecciona tu archivo (.xls o .xlsx):</label>
+            <input 
+                type="file" 
+                class="form-control" 
+                id="excel_file" 
+                name="excel_file" 
+                accept=".xls, .xlsx, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
+                required
+            >
+        </div>
+
+        <div class="col-md-4">
+            <button type="submit" class="btn btn-success w-100 fw-semibold rounded-pill">
+                <i class="bi bi-upload me-1"></i> Subir Archivo
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- GRILLA DE SEGMENTOS Y AUDIENCIAS -->
 <div class="row g-3" id="segmentsGrid">
     <div class="col-12 text-center text-muted py-5">
         <div class="spinner-border text-success mb-2" role="status">
