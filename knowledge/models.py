@@ -148,6 +148,7 @@ class ChatConversation(BaseKnowledgeModel):
     escalation_reason = models.TextField(blank=True)
     advisor_question = models.TextField(blank=True)
     escalated_at = models.DateTimeField(null=True, blank=True)
+    linked_ticket_number = models.CharField(max_length=32, blank=True)
 
     class Meta:
         ordering = ['-created_at']

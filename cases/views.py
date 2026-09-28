@@ -19,17 +19,19 @@ from cases.services.realtime import broadcast_conversation_update
 User = get_user_model()
 
 
-def _whatsapp_channel_qs():
-    return Conversation.objects.filter(channel__code="whatsapp")
+def _bandeja_channel_qs():
+    """Todos los canales (whatsapp, web, ...): la bandeja no es exclusiva
+    de WhatsApp, también recibe casos escalados por el bot desde la web."""
+    return Conversation.objects.all()
 
 
-def _whatsapp_base_qs():
-    """Cola activa de WhatsApp: excluye casos cerrados."""
-    return _whatsapp_channel_qs().exclude(status=Conversation.Status.CERRADO)
+def _bandeja_base_qs():
+    """Cola activa: excluye casos cerrados."""
+    return _bandeja_channel_qs().exclude(status=Conversation.Status.CERRADO)
 
 
-def _whatsapp_closed_qs():
-    return _whatsapp_channel_qs().filter(status=Conversation.Status.CERRADO)
+def _bandeja_closed_qs():
+    return _bandeja_channel_qs().filter(status=Conversation.Status.CERRADO)
 
 
 def _unanswered_q():
@@ -142,21 +144,21 @@ def _bandeja_list_context(request, selected_id=None):
 
     active_tab = "all"
     if closed == "1" or status_filter == Conversation.Status.CERRADO:
-        qs = _whatsapp_closed_qs()
+        qs = _bandeja_closed_qs()
         active_tab = "closed"
     elif assigned == "me":
-        qs = _whatsapp_base_qs().filter(assigned_to=request.user)
+        qs = _bandeja_base_qs().filter(assigned_to=request.user)
         active_tab = "mine"
     elif unanswered == "1":
-        qs = _whatsapp_base_qs().annotate(**_unanswered_q()).filter(
+        qs = _bandeja_base_qs().annotate(**_unanswered_q()).filter(
             _last_direction=Message.Direction.INBOUND
         )
         active_tab = "unanswered"
     elif unassigned == "1" or assigned == "none":
-        qs = _whatsapp_base_qs().filter(assigned_to__isnull=True)
+        qs = _bandeja_base_qs().filter(assigned_to__isnull=True)
         active_tab = "unassigned"
     else:
-        qs = _whatsapp_base_qs()
+        qs = _bandeja_base_qs()
 
     qs = (
         qs.select_related(
@@ -193,7 +195,7 @@ def _bandeja_list_context(request, selected_id=None):
         and not any(c["id"] == selected_id for c in conversations)
     ):
         selected = (
-            _whatsapp_closed_qs()
+            _bandeja_closed_qs()
             .filter(pk=selected_id)
             .select_related(
                 "channel",
@@ -209,7 +211,7 @@ def _bandeja_list_context(request, selected_id=None):
         if selected:
             conversations.insert(0, _serialize_conversation(selected))
 
-    base = _whatsapp_base_qs()
+    base = _bandeja_base_qs()
     mine_count = base.filter(assigned_to=request.user).count()
     unassigned_count = base.filter(assigned_to__isnull=True).count()
     unanswered_count = (
@@ -217,7 +219,7 @@ def _bandeja_list_context(request, selected_id=None):
         .filter(_last_direction=Message.Direction.INBOUND)
         .count()
     )
-    closed_count = _whatsapp_closed_qs().count()
+    closed_count = _bandeja_closed_qs().count()
     filter_query = _filter_query_for_tab(active_tab)
 
     return {
