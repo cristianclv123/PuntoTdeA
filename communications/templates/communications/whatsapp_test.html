@@ -147,9 +147,7 @@
       </div>
       {% if config.missing %}
         <p class="wa-strip-warn">
-          Faltan <strong>{{ config.missing|join:", " }}</strong>. Se definen en
-          <code>.env</code> y se aplican con
-          <code>docker compose up -d --force-recreate web</code>.
+          Faltan <strong>{{ config.missing|join:" - " }}</strong>.
         </p>
       {% endif %}
       <form method="post" action="{% url 'meta-whatsapp-test-validate' %}" style="margin-top:.9rem">

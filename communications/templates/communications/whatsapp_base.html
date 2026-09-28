@@ -87,19 +87,12 @@
       margin: .7rem 0 0; padding-top: .6rem; border-top: 1px dashed var(--border);
       font-size: .78rem; color: var(--warning-text); line-height: 1.5;
     }
-    /* En estas páginas el grupo «WhatsApp (Meta)» llega abierto y el menú puede
-       superar la altura de la ventana; el sidebar es sticky con overflow oculto,
-       así que sin esto la parte de abajo quedaría cortada sin forma de alcanzarla. */
     .sidebar {
       overflow-y: auto; overflow-x: hidden;
       scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
     }
     .sidebar::-webkit-scrollbar { width: 6px; }
     .sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 3px; }
-    /* Dos columnas: pruebas a la izquierda, config compacta a la derecha.
-       El nombre es exclusivo del modulo de integracion: en styles.css ya existe
-       .wa-layout (bandeja de chat) con height:100vh y overflow:hidden, y usar
-       el mismo nombre dejaria la pagina bloqueada sin scroll. */
     .wa-console-layout {
       display: grid; gap: 1rem; align-items: start;
       grid-template-columns: minmax(0, 1fr) 340px;
