@@ -6,7 +6,9 @@ las campañas.
 
 > Este documento es la referencia de la integración. Los equipos de campañas y
 > del bot tienen un documento propio para su parte:
-> [`guia-consumo-webhook.md`](guia-consumo-webhook.md).
+> [`guia-consumo-webhook.md`](guia-consumo-webhook.md). Para saber **cómo usar
+> la integración desde cada módulo** (qué llamar, cómo probar, qué no tocar):
+> [`guia-uso-para-otros-modulos.md`](guia-uso-para-otros-modulos.md).
 
 ## Configuración local o de servidor
 
