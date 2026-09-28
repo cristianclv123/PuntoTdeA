@@ -1,5 +1,6 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.utils import timezone
 
 from cases.constants import channel_ui, status_tag_class
 
@@ -77,7 +78,11 @@ def _message_payload(message) -> dict:
         "from_agent": message.direction == "outbound",
         "is_system": message.direction == "system",
         "text": message.body,
-        "time": message.sent_at.strftime("%H:%M"),
+        "time": (
+            timezone.localtime(message.sent_at).strftime("%d/%m/%Y · %H:%M")
+            if message.direction == "system"
+            else message.sent_at.strftime("%H:%M")
+        ),
         "sent_at": message.sent_at.isoformat(),
         "attachments": attachments,
     }

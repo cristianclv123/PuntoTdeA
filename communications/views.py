@@ -8,7 +8,11 @@ from .models import AudienceSegment, Contact, SegmentMembership
 
 
 def campaigns(request):
-    return render(request, "communications/campaigns.html")
+    context = {
+        "active_nav": "campaigns",
+        "nav_section": "campaigns",
+    }
+    return render(request, "communications/campanas.html", context)
 
 
 def campaign_new(request):

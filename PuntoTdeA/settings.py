@@ -37,9 +37,11 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "corsheaders",
     "channels",
     # Aplicaciones del proyecto PuntoTdeA
+    "dashboard",
     "cases",
     "knowledge",
     "communications",
@@ -125,6 +127,23 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Punto TdeA API",
+    "DESCRIPTION": "Documentación de las APIs del sistema Punto TdeA (casos, comunicaciones, base de conocimiento y avisos).",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": "/api/",
+    "ENUM_NAME_OVERRIDES": {
+        "ConversationStatusEnum": "cases.models.Conversation.Status",
+        "MessageTemplateStatusEnum": "communications.models.MessageTemplate.Status",
+        "CampaignStatusEnum": "communications.models.Campaign.Status",
+        "BroadcastRecipientStatusEnum": "communications.models.BroadcastRecipient.Status",
+        "KnowledgeArticleStatusEnum": "knowledge.models.KnowledgeArticle.STATUS_CHOICES",
+        "ChatConversationStatusEnum": "knowledge.models.ChatConversation.STATUS_CHOICES",
+    },
 }
 
 
@@ -132,6 +151,13 @@ _cors_origins = os.environ.get("WIDGET_ALLOWED_ORIGINS", "http://localhost:8000,
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
+
+META_VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "puntotdea-dev-verify")
+META_APP_ID = os.environ.get("META_APP_ID", "1090920187024593")
+META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
+META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "1371800496011297")
+WHATSAPP_API_VERSION = os.environ.get("WHATSAPP_API_VERSION", "v21.0")
 
 ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "ALLOW_WEBHOOK_SIMULATOR",

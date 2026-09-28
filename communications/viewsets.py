@@ -1,6 +1,7 @@
 # API interna (consumida solo por el BFF)
 from django.db.models import Q
-from rest_framework import status, viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
@@ -50,6 +51,19 @@ class AudienceSegmentViewSet(viewsets.ModelViewSet):
     serializer_class = AudienceSegmentSerializer
     permission_classes = [IsInternalService]
 
+    @extend_schema(
+        request=SegmentImportSerializer,
+        responses=inline_serializer(
+            name="SegmentImportResponse",
+            fields={
+                "segment": AudienceSegmentSerializer(),
+                "created": serializers.IntegerField(),
+                "updated": serializers.IntegerField(),
+                "skipped": serializers.IntegerField(),
+                "errors": serializers.ListField(child=serializers.CharField()),
+            },
+        ),
+    )
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def import_excel(self, request):
         """POST /api/segments/import_excel/  (multipart: name, description?, file)
@@ -75,6 +89,7 @@ class AudienceSegmentViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @extend_schema(responses=ContactSerializer(many=True))
     @action(detail=True, methods=["get"])
     def contacts(self, request, pk=None):
         segment = self.get_object()
@@ -121,6 +136,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
         campaign = campaign_service.cancel_campaign(self.get_object())
         return Response(self.get_serializer(campaign).data)
 
+    @extend_schema(responses=BroadcastRecipientSerializer(many=True))
     @action(detail=True, methods=["get"])
     def recipients(self, request, pk=None):
         campaign = self.get_object()

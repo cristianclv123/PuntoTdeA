@@ -22,7 +22,7 @@
     </button>
   </div>
   <nav class="sidebar-nav">
-    <a href="{% url 'dashboard' %}" class="sidebar-link {% if active_nav == 'dashboard' %}active{% endif %}" title="Dashboard" aria-label="Dashboard">
+    <a href="{% url 'dashboard:index' %}" class="sidebar-link {% if active_nav == 'dashboard' %}active{% endif %}" title="Dashboard" aria-label="Dashboard">
       {% icon 'layout-dashboard' %}
       <span>Dashboard</span>
     </a>
@@ -30,10 +30,21 @@
       {% icon 'inbox' %}
       <span>Bandeja</span>
     </a>
-    <a href="{% url 'knowledge:list' %}" class="sidebar-link {% if active_nav == 'knowledge' %}active{% endif %}" title="Base de conocimiento" aria-label="Base de conocimiento">
-      {% icon 'book-open' %}
-      <span>Base de conocimiento</span>
-    </a>
+    <details class="sidebar-group" {% if active_nav == 'knowledge' or active_nav == 'knowledge-manage' %}open{% endif %}>
+      <summary class="sidebar-link {% if active_nav == 'knowledge' or active_nav == 'knowledge-manage' %}active{% endif %}" title="Base de conocimiento" aria-label="Base de conocimiento">
+        {% icon 'book-open' %}
+        <span>Base de conocimiento</span>
+        {% icon 'chevron-down' size=14 %}
+      </summary>
+      <div class="sidebar-submenu">
+        <a href="{% url 'knowledge:list' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'knowledge' %}active{% endif %}">
+          <span>Asistente</span>
+        </a>
+        <a href="{% url 'knowledge:manage' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'knowledge-manage' %}active{% endif %}">
+          <span>Gestionar contenido</span>
+        </a>
+      </div>
+    </details>
     <a href="{% url 'communications:campaigns' %}" class="sidebar-link {% if active_nav == 'campaigns' %}active{% endif %}" title="Campañas" aria-label="Campañas">
       {% icon 'send' %}
       <span>Campañas</span>
