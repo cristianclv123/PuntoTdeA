@@ -323,3 +323,29 @@ class BroadcastRecipient(models.Model):
 
     def __str__(self):
         return f"{self.campaign_id} → {self.phone_snapshot} ({self.status})"
+
+
+class WhatsAppWebhookEvent(models.Model):
+    """Evento técnico de Meta usado para trazabilidad e idempotencia.
+
+    Meta puede reenviar los mismos webhooks. La llave única permite que un
+    mensaje entrante o un estado de entrega se procese una sola vez.
+    """
+
+    class Type(models.TextChoices):
+        INBOUND = "inbound", "Mensaje entrante"
+        STATUS = "status", "Estado de mensaje"
+
+    id = models.BigAutoField(primary_key=True)
+    event_key = models.CharField(max_length=300, unique=True)
+    provider_message_id = models.CharField(max_length=150, db_index=True)
+    event_type = models.CharField(max_length=20, choices=Type.choices)
+    status = models.CharField(max_length=30, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.event_type}: {self.provider_message_id}"

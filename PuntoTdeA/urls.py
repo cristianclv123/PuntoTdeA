@@ -16,6 +16,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from communications.webhooks.meta_webhook import whatsapp_webhook
 from . import views
 
 urlpatterns = [
@@ -24,6 +25,8 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('perfil/', views.profile_view, name='profile'),
+    # Callback único configurado en Meta Developers para campañas y chatbot.
+    path('api/whatsapp/webhook/', whatsapp_webhook, name='meta-whatsapp-webhook'),
 
     path('api/cases/', include('cases.api.urls')),
     path('api/knowledge/', include('knowledge.api.urls')),
