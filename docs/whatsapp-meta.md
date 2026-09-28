@@ -4,6 +4,10 @@ PuntoTdeA usa exclusivamente **Meta WhatsApp Cloud API**. Un solo webhook
 recibe tanto los mensajes dirigidos al chatbot como los estados de entrega de
 las campañas.
 
+> Este documento es la referencia de la integración. Los equipos de campañas y
+> del bot tienen un documento propio para su parte:
+> [`guia-consumo-webhook.md`](guia-consumo-webhook.md).
+
 ## Configuración local o de servidor
 
 Hay dos caminos. El script es una comodidad, no una dependencia: si prefieres
