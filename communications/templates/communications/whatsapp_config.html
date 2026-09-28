@@ -66,7 +66,7 @@
   <section class="wa-card">
     <h2>{% icon 'globe' size=18 %} Callback de Meta</h2>
     <p class="hint">Es la única URL que debes registrar en Meta Developers.</p>
-    <div class="wa-endpoint">https://TU-DOMINIO{{ callback_path }}</div>
+    <div class="wa-endpoint">https://{DOMINIO-PUNTO-TdeA}{{ callback_path }}</div>
     <p class="wa-note">
       Meta no alcanza <code>localhost</code>. Para pruebas necesitas un túnel HTTPS
       (Cloudflare Tunnel o ngrok) y para producción un dominio con proxy inverso y TLS.

@@ -75,7 +75,8 @@ class MetaTestPageAccessTests(TestCase):
         self.client.force_login(self.staff)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Estado de configuración")
+        self.assertContains(response, "Integración WhatsApp")
+        self.assertContains(response, "Validar credenciales con Graph API")
 
     @override_settings(
         META_VERIFY_TOKEN="",

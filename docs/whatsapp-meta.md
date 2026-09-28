@@ -61,7 +61,7 @@ no lo necesita.
 
 En **WhatsApp > Configuration** de la aplicación de Meta, registra:
 
-- **Callback URL:** `https://TU-DOMINIO/api/whatsapp/webhook/`
+- **Callback URL:** `https://{DOMINIO-PUNTO-TdeA}/api/whatsapp/webhook/`
 - **Verify token:** el mismo valor de `META_VERIFY_TOKEN`.
 - Suscripción del objeto WhatsApp al campo **`messages`**.
 
@@ -142,7 +142,7 @@ Si ya tienes el callback público expuesto por HTTPS, añade `--callback-url`:
 
 ```powershell
 docker compose exec -T web python manage.py check_meta_whatsapp `
-  --callback-url https://TU-DOMINIO/api/whatsapp/webhook/
+  --callback-url https://{DOMINIO-PUNTO-TdeA}/api/whatsapp/webhook/
 ```
 
 ### Páginas de la consola

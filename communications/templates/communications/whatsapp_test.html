@@ -6,39 +6,36 @@
 
 {% block wa_content %}
 
-  {% if config.missing %}
-    <div class="wa-card full">
-      <div class="wa-alert warn" style="margin:0">
-        Variables pendientes: <strong>{{ config.missing|join:", " }}</strong>.
-        Edítalas en <code>.env</code> y recrea el servicio con
-        <code>docker compose up -d --force-recreate web</code>.
-        Mientras falten, el webhook rechaza peticiones porque no puede validar la firma.
-        <a href="{% url 'meta-whatsapp-config' %}" style="color:inherit;text-decoration:underline">Ver configuración</a>
+  <section class="wa-card full wa-strip">
+    <div class="wa-strip-main">
+      <div class="wa-lights">
+        {% for status in config.statuses %}
+          <span class="wa-light" title="{{ status.name }}: {{ status.state }}{% if status.detail %} — {{ status.detail }}{% endif %}">
+            <span class="wa-dot {% if status.is_set %}ok{% elif status.required %}bad{% else %}warn{% endif %}"></span>
+            <code>{{ status.name }}</code>
+          </span>
+        {% endfor %}
+      </div>
+      <div class="wa-strip-actions">
+        <form method="post" action="{% url 'meta-whatsapp-test-validate' %}">
+          {% csrf_token %}
+          <button class="wa-btn" type="submit">Validar credenciales con Graph API</button>
+        </form>
+        <a class="wa-btn link" href="{% url 'meta-whatsapp-config' %}">Configuración completa</a>
       </div>
     </div>
-  {% endif %}
-
-  <section class="wa-card full">
-    <h2>Estado de configuración</h2>
-    <p class="hint">Los secretos nunca se muestran: solo se confirma si están presentes.</p>
-    {% for status in config.statuses %}
-      <div class="wa-row">
-        <div>
-          <code>{{ status.name }}</code>
-          {% if status.value %}<span style="color:#9aa0a6"> · {{ status.value }}</span>{% endif %}
-        </div>
-        <span class="wa-tag {% if status.is_set %}ok{% elif status.required %}bad{% else %}warn{% endif %}">{{ status.state }}</span>
-      </div>
-    {% endfor %}
-    <div class="wa-row" style="margin-top:.6rem;border-top:1px solid var(--border)">
-      <div style="color:#9aa0a6">Callback que debes registrar en Meta Developers</div>
-      <span class="wa-tag ok">obligatorio</span>
+    <div class="wa-strip-cb" style="margin-top:.6rem">
+      Callback para registrar en Meta:
+      <code>https://{DOMINIO-PUNTO-TdeA}{{ callback_path }}</code>
     </div>
-    <div class="wa-endpoint" style="margin-top:.4rem">https://TU-DOMINIO{{ callback_path }}</div>
-    <form method="post" action="{% url 'meta-whatsapp-test-validate' %}" style="margin-top:.9rem">
-      {% csrf_token %}
-      <button class="wa-btn alt" type="submit">Validar credenciales contra Graph API</button>
-    </form>
+    {% if config.missing %}
+      <p class="wa-strip-warn">
+        Faltan <strong>{{ config.missing|join:", " }}</strong>. Se definen en
+        <code>.env</code> y se aplican con
+        <code>docker compose up -d --force-recreate web</code>. El detalle está en
+        <a href="{% url 'meta-whatsapp-config' %}" style="color:inherit">la página de configuración</a>.
+      </p>
+    {% endif %}
   </section>
 
   <section class="wa-card">

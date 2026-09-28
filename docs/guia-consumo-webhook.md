@@ -33,7 +33,7 @@ second webhook, re-validate the signature, or call Graph API directly.**
 Canonical URL, the only one to register in Meta Developers:
 
 ```
-POST https://TU-DOMINIO/api/whatsapp/webhook/
+POST https://{DOMINIO-PUNTO-TdeA}/api/whatsapp/webhook/
 ```
 
 `/base-de-conocimiento/chatbot/whatsapp/` is an alias that calls the same function.

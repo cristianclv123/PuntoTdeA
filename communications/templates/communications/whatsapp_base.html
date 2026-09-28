@@ -62,6 +62,31 @@
       padding: .6rem .7rem; font-size: .78rem; overflow-x: auto; white-space: pre;
       margin: .3rem 0 .8rem;
     }
+    /* Franja compacta de estado (semáforo) en la página de prueba */
+    .wa-strip { padding: .9rem 1.1rem; }
+    .wa-strip-main {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: .75rem 1rem;
+    }
+    .wa-lights { display: flex; flex-wrap: wrap; gap: .4rem; flex: 1 1 auto; min-width: 0; }
+    .wa-light {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #1c1c1c; border: 1px solid var(--border); border-radius: 999px;
+      padding: .22rem .55rem; font-size: .74rem; white-space: nowrap;
+      cursor: default;
+    }
+    .wa-light code { font-size: .72rem; color: #cfd3d6; }
+    .wa-dot { width: .55rem; height: .55rem; border-radius: 50%; flex: 0 0 auto; }
+    .wa-dot.ok { background: var(--success-text); box-shadow: 0 0 6px var(--success-text); }
+    .wa-dot.bad { background: var(--danger-text); box-shadow: 0 0 6px var(--danger-text); }
+    .wa-dot.warn { background: var(--warning-text); box-shadow: 0 0 6px var(--warning-text); }
+    .wa-strip-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .wa-strip-cb { font-size: .76rem; color: #9aa0a6; }
+    .wa-strip-cb code { font-size: .74rem; color: #cfd3d6; }
+    .wa-strip-warn {
+      margin: .7rem 0 0; padding-top: .6rem; border-top: 1px dashed var(--border);
+      font-size: .78rem; color: var(--warning-text); line-height: 1.5;
+    }
   </style>
 {% endblock %}
 

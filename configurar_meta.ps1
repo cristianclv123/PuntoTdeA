@@ -129,5 +129,5 @@ Write-Host ''
 Write-Host '  Listo. Abre http://localhost:8000/whatsapp-prueba/ para verificar' -ForegroundColor Green
 Write-Host '  y pulsa «Validar credenciales contra Graph API».' -ForegroundColor Green
 Write-Host '  Recuerda registrar en Meta Developers el callback:' -ForegroundColor Cyan
-Write-Host '    https://TU-DOMINIO/api/whatsapp/webhook/' -ForegroundColor White
+Write-Host '    https://{DOMINIO-PUNTO-TdeA}/api/whatsapp/webhook/' -ForegroundColor White
 Write-Host '  Meta no alcanza localhost: necesitas un tunel HTTPS o un dominio.' -ForegroundColor Yellow
