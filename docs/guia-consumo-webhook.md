@@ -340,7 +340,19 @@ events (the bot's conversations). Deleting an event never undoes a delivery
 state already applied to `BroadcastRecipient`: the `WhatsAppWebhookEvent` row is
 just the audit/idempotency trail.
 
-For very active accounts, schedule it nightly (e.g. cron). Triggering it after
-each campaign send is also a valid option — the campaigns team decides.
+A PowerShell helper wraps the same command and appends a timestamped log to
+`logs/`:
+
+```powershell
+# Dry-run first, then confirm before deleting
+.\limpiar_retencion.ps1
+
+# Non-interactive, for Task Scheduler / cron
+.\limpiar_retencion.ps1 -Days 7 -Si
+```
+
+For very active accounts, schedule it nightly (e.g. cron or Windows Task
+Scheduler). Triggering it after each campaign send is also a valid option — the
+campaigns team decides; a worker (Celery Beat) can reuse the same command later.
 
 Full reference: [`whatsapp-meta.md`](whatsapp-meta.md).

@@ -46,6 +46,28 @@ def config(request: HttpRequest):
     )
 
 
+def suggested_wamid() -> str:
+    """Último wamid que todavía puede avanzar para el simulador de estados.
+
+    Se prefiere un destinatario en estado `sent`: simular `delivered` o `failed`
+    sobre él produce un cambio visible. Si no lo hay, se sugiere el último wamid
+    disponible.
+    """
+    recipient = (
+        BroadcastRecipient.objects.exclude(provider_message_id="")
+        .filter(status=BroadcastRecipient.Status.SENT)
+        .order_by("-id")
+        .first()
+    )
+    if recipient is None:
+        recipient = (
+            BroadcastRecipient.objects.exclude(provider_message_id="")
+            .order_by("-id")
+            .first()
+        )
+    return recipient.provider_message_id if recipient else ""
+
+
 @_staff_required
 def index(request: HttpRequest):
     """Estado de configuración, envío de prueba y simulador de webhook."""
@@ -61,6 +83,7 @@ def index(request: HttpRequest):
         ),
         "simulator_enabled": settings.ALLOW_WEBHOOK_SIMULATOR,
         "default_simulated_phone": DEFAULT_SIMULATED_PHONE,
+        "suggested_wamid": suggested_wamid(),
         "active_nav": "whatsapp-test",
     }
     return render(request, "communications/whatsapp_test.html", context)

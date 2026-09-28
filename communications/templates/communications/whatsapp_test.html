@@ -48,13 +48,13 @@
           <label class="wa-label" for="wa-phone-sim">Teléfono que escribe</label>
           <input class="wa-input" id="wa-phone-sim" name="phone" value="{{ default_simulated_phone }}" placeholder="573001112233">
         </div>
-        <div class="wa-field">
-          <label class="wa-label" for="wa-text-sim">Mensaje (solo escenario «un mensaje entrante»)</label>
+        <div class="wa-field" id="wa-field-text">
+          <label class="wa-label" for="wa-text-sim">Mensaje</label>
           <input class="wa-input" id="wa-text-sim" name="text" placeholder="Vacío = mensaje de ejemplo">
         </div>
-        <div class="wa-field">
+        <div class="wa-field" id="wa-field-reference">
           <label class="wa-label" for="wa-reference">wamid del destinatario (solo estados)</label>
-          <input class="wa-input" id="wa-reference" name="reference" placeholder="wamid.HBg...">
+          <input class="wa-input" id="wa-reference" name="reference" value="{{ suggested_wamid }}" placeholder="wamid.HBg...">
         </div>
         <button class="wa-btn" type="submit">Firmar y enviar al webhook</button>
       </form>
@@ -163,4 +163,25 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Muestra solo los campos que aplican al escenario elegido en el simulador.
+  (function () {
+    const select = document.getElementById('wa-scenario');
+    if (!select) return;
+    const textField = document.getElementById('wa-field-text');
+    const refField = document.getElementById('wa-field-reference');
+    function sync() {
+      const value = select.value;
+      if (textField) textField.style.display = value === 'inbound' ? '' : 'none';
+      if (refField) {
+        refField.style.display = (value === 'delivered' || value === 'failed') ? '' : 'none';
+      }
+    }
+    select.addEventListener('change', sync);
+    sync();
+  })();
+</script>
 {% endblock %}

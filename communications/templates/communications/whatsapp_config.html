@@ -116,11 +116,14 @@ docker compose exec -T web python manage.py check_meta_whatsapp --validate</div>
       la tabla de eventos crece rápido. El comando es un ensayo por defecto.
     </p>
     <div class="wa-code">docker compose exec -T web python manage.py cleanup_whatsapp_events
-docker compose exec -T web python manage.py cleanup_whatsapp_events --days 7 --ejecutar</div>
+docker compose exec -T web python manage.py cleanup_whatsapp_events --days 7 --ejecutar
+.\limpiar_retencion.ps1 -Days 7 -Si</div>
     <p class="wa-note">
       Borra estados de envío antiguos (<code>sent</code>/<code>delivered</code>/<code>read</code>)
       y conserva los <code>failed</code> (motivo del error) y los mensajes
       entrantes del bot. No afecta los estados ya aplicados a los destinatarios.
+      El script deja un log en <code>logs/</code> y es apto para el Programador
+      de tareas de Windows.
     </p>
   </section>
 </div>

@@ -3,6 +3,8 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from io import StringIO
+
 from communications.services import meta_config
 
 
@@ -478,3 +480,59 @@ class CheckMetaCommandTests(TestCase):
                 stderr=StringIO(),
             )
         self.assertIn("META_ACCESS_TOKEN no está configurado", out.getvalue())
+
+
+class MetaSimulatorSuggestionTests(TestCase):
+    """La página de prueba sugiere un wamid listo para ejercitar los estados.
+
+    El runner de tests pone DEBUG=False; el entorno de desarrollo se declara
+    explícito para poder usar el seed (que se niega a correr sin DEBUG salvo
+    --force) y habilitar el simulador.
+    """
+
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username="staff-sug", password="x", is_staff=True
+        )
+
+    @override_settings(
+        DEBUG=True,
+        META_APP_SECRET="app-secret",
+        META_VERIFY_TOKEN="verify",
+        META_ACCESS_TOKEN="token",
+        WHATSAPP_PHONE_NUMBER_ID="123456789",
+        ALLOW_WEBHOOK_SIMULATOR=True,
+    )
+    def test_suggests_a_wamid_that_can_still_advance(self):
+        from communications.models import BroadcastRecipient
+
+        call_command("seed_demo_whatsapp", stdout=StringIO(), stderr=StringIO())
+        suggested = (
+            BroadcastRecipient.objects.exclude(provider_message_id="")
+            .filter(status=BroadcastRecipient.Status.SENT)
+            .order_by("-id")
+            .first()
+        )
+        self.assertIsNotNone(suggested)
+
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("meta-whatsapp-test"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, 'name="reference" value="%s"' % suggested.provider_message_id
+        )
+
+    @override_settings(
+        DEBUG=True,
+        META_APP_SECRET="app-secret",
+        META_VERIFY_TOKEN="verify",
+        META_ACCESS_TOKEN="token",
+        WHATSAPP_PHONE_NUMBER_ID="123456789",
+        ALLOW_WEBHOOK_SIMULATOR=True,
+    )
+    def test_no_suggestion_when_there_are_no_recipients(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("meta-whatsapp-test"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="reference"')
+        self.assertNotContains(response, 'value="wamid')
