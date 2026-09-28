@@ -280,6 +280,126 @@ class MetaSimulatorTests(TestCase):
         self.assertIn("META_ACCESS_TOKEN", response.json()["missing"])
 
 
+class MetaConfigPageTests(TestCase):
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-config")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+        self.regular = get_user_model().objects.create_user(
+            username="asesor", password="x"
+        )
+
+    def test_anonymous_is_redirected_to_login(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+    def test_non_staff_is_redirected_away(self):
+        self.client.force_login(self.regular)
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+
+    @override_settings(
+        META_VERIFY_TOKEN="",
+        META_APP_SECRET="",
+        META_ACCESS_TOKEN="",
+        META_APP_ID="",
+        WHATSAPP_PHONE_NUMBER_ID="",
+    )
+    def test_lists_the_missing_variables(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "META_ACCESS_TOKEN")
+        self.assertContains(response, "META_APP_SECRET")
+        self.assertContains(response, "Faltan")
+
+    @override_settings(
+        META_VERIFY_TOKEN="verify",
+        META_APP_SECRET="secret",
+        META_ACCESS_TOKEN="token",
+        META_APP_ID="",
+        WHATSAPP_PHONE_NUMBER_ID="123456789",
+    )
+    def test_complete_configuration_is_reported_as_ready(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "Configuración completa")
+
+    @override_settings(
+        META_VERIFY_TOKEN="super-secreto-de-prueba",
+        META_APP_SECRET="otro-secreto",
+        META_ACCESS_TOKEN="tercer-secreto",
+        META_APP_ID="123456",
+        WHATSAPP_PHONE_NUMBER_ID="987654321",
+    )
+    def test_never_renders_a_secret(self):
+        self.client.force_login(self.staff)
+        body = self.client.get(self.url).content.decode()
+        for secret in ("super-secreto-de-prueba", "otro-secreto", "tercer-secreto"):
+            self.assertNotIn(secret, body)
+
+    def test_page_is_read_only(self):
+        """No debe haber ningún campo que permita escribir credenciales."""
+        self.client.force_login(self.staff)
+        body = self.client.get(self.url).content.decode()
+        for field in ('name="META_APP_SECRET"', 'name="META_ACCESS_TOKEN"', 'type="password"'):
+            self.assertNotIn(field, body)
+
+    def test_shows_the_callback_path_to_register_in_meta(self):
+        self.client.force_login(self.staff)
+        self.assertContains(self.client.get(self.url), "/api/whatsapp/webhook/")
+
+
+class SidebarMenuTests(TestCase):
+    """El grupo del menú solo puede existir para personal staff."""
+
+    def setUp(self):
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+        self.regular = get_user_model().objects.create_user(
+            username="asesor", password="x"
+        )
+
+    def _sidebar(self):
+        return self.client.get(reverse("dashboard:index")).content.decode()
+
+    def test_staff_sees_the_whatsapp_group(self):
+        self.client.force_login(self.staff)
+        body = self._sidebar()
+        self.assertIn(reverse("meta-whatsapp-config"), body)
+        self.assertIn(reverse("meta-whatsapp-test"), body)
+
+    def test_regular_user_does_not_see_it(self):
+        self.client.force_login(self.regular)
+        body = self._sidebar()
+        self.assertNotIn(reverse("meta-whatsapp-config"), body)
+
+    def test_the_group_follows_the_same_markup_as_knowledge(self):
+        self.client.force_login(self.staff)
+        body = self._sidebar()
+        self.assertIn("WhatsApp (Meta)", body)
+        # Mismo patrón de grupo plegable y submenú que usa Base de conocimiento.
+        self.assertEqual(body.count('class="sidebar-group"'), body.count("<details"))
+        self.assertIn("sidebar-link--sub", body)
+
+
+class MetaConfigPageActiveNavTests(TestCase):
+    def test_pages_mark_themselves_as_active(self):
+        staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+        self.client.force_login(staff)
+        self.assertEqual(
+            self.client.get(reverse("meta-whatsapp-config")).context["active_nav"],
+            "whatsapp-config",
+        )
+        self.assertEqual(
+            self.client.get(reverse("meta-whatsapp-test")).context["active_nav"],
+            "whatsapp-test",
+        )
+
+
 class CheckMetaCommandTests(TestCase):
     """El comando se encadena en un monitor, así que su código de salida importa."""
 

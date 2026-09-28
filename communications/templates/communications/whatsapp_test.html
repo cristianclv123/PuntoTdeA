@@ -1,227 +1,167 @@
-{% extends "base.html" %}
-{% load static %}
+﻿{% extends "communications/whatsapp_base.html" %}
 
 {% block title %}Prueba WhatsApp (Meta) — Punto TdeA{% endblock %}
 {% block page_title %}Integración WhatsApp{% endblock %}
 {% block page_subtitle %}Verificación técnica de Meta Cloud API{% endblock %}
 
-{% block extra_head %}
-  <style>
-    .wa-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-    .wa-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; padding: 1.1rem 1.2rem;
-    }
-    .wa-card h2 { font-size: 1rem; margin: 0 0 .2rem; display: flex; align-items: center; gap: .5rem; }
-    .wa-card p.hint { color: #9aa0a6; font-size: .8rem; margin: 0 0 .9rem; line-height: 1.45; }
-    .wa-card.full { grid-column: 1 / -1; }
-    .wa-row {
-      display: flex; align-items: center; justify-content: space-between; gap: .75rem;
-      padding: .45rem 0; border-bottom: 1px dashed var(--border); font-size: .85rem;
-    }
-    .wa-row:last-child { border-bottom: 0; }
-    .wa-row code { font-size: .8rem; color: #cfd3d6; }
-    .wa-tag {
-      font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-      padding: .2rem .5rem; border-radius: 999px; white-space: nowrap;
-    }
-    .wa-tag.ok { background: var(--success-bg); color: var(--success-text); }
-    .wa-tag.bad { background: var(--danger-bg); color: var(--danger-text); }
-    .wa-tag.warn { background: var(--warning-bg); color: var(--warning-text); }
-    .wa-input, .wa-select, .wa-textarea {
-      width: 100%; background: #1c1c1c; border: 1px solid var(--border);
-      border-radius: 9px; color: #f1f3f4; padding: .55rem .7rem; font-size: .87rem;
-      font-family: inherit;
-    }
-    .wa-textarea { resize: vertical; min-height: 72px; }
-    .wa-label { display: block; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: #9aa0a6; margin: 0 0 .3rem; }
-    .wa-field { margin-bottom: .7rem; }
-    .wa-btn {
-      background: var(--blue); color: #fff; border: 0; border-radius: 9px;
-      padding: .55rem 1.1rem; font-size: .85rem; font-weight: 600; cursor: pointer;
-    }
-    .wa-btn:hover { filter: brightness(1.1); }
-    .wa-btn.alt { background: #333; }
-    .wa-alert { border-radius: 10px; padding: .7rem .9rem; font-size: .84rem; margin-bottom: .5rem; }
-    .wa-alert.ok { background: var(--success-bg); color: var(--success-text); }
-    .wa-alert.bad { background: var(--danger-bg); color: var(--danger-text); }
-    .wa-alert.warn { background: var(--warning-bg); color: var(--warning-text); }
-    .wa-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-    .wa-table th, .wa-table td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--border); }
-    .wa-table th { color: #9aa0a6; font-weight: 600; text-transform: uppercase; font-size: .68rem; letter-spacing: .05em; }
-    .wa-endpoint { background: #1c1c1c; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .6rem; font-size: .8rem; overflow-x: auto; }
-    .wa-radio { display: flex; gap: .4rem; align-items: center; font-size: .84rem; margin-bottom: .4rem; }
-    .wa-note { font-size: .76rem; color: #9aa0a6; line-height: 1.5; margin-top: .7rem; }
-  </style>
-{% endblock %}
-
-{% block content %}
-  {% if messages %}
-    <div style="margin-bottom:1rem">
-      {% for message in messages %}
-        <div class="wa-alert {% if message.tags == 'success' %}ok{% elif message.tags == 'warning' %}warn{% else %}bad{% endif %}">
-          {{ message }}
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
+{% block wa_content %}
 
   {% if config.missing %}
-    <div class="wa-alert warn" style="margin-bottom:1rem">
-      Variables pendientes: <strong>{{ config.missing|join:", " }}</strong>.
-      Edítalas en <code>.env</code> y recrea el servicio con
-      <code>docker compose up -d --force-recreate web</code>.
-      Mientras falten, el webhook rechaza peticiones porque no puede validar la firma.
+    <div class="wa-card full">
+      <div class="wa-alert warn" style="margin:0">
+        Variables pendientes: <strong>{{ config.missing|join:", " }}</strong>.
+        Edítalas en <code>.env</code> y recrea el servicio con
+        <code>docker compose up -d --force-recreate web</code>.
+        Mientras falten, el webhook rechaza peticiones porque no puede validar la firma.
+        <a href="{% url 'meta-whatsapp-config' %}" style="color:inherit;text-decoration:underline">Ver configuración</a>
+      </div>
     </div>
   {% endif %}
 
-  <div class="wa-grid">
-
-    <section class="wa-card full">
-      <h2>Estado de configuración</h2>
-      <p class="hint">Los secretos nunca se muestran: solo se confirma si están presentes.</p>
-      {% for status in config.statuses %}
-        <div class="wa-row">
-          <div>
-            <code>{{ status.name }}</code>
-            {% if status.value %}<span style="color:#9aa0a6"> · {{ status.value }}</span>{% endif %}
-          </div>
-          <span class="wa-tag {% if status.is_set %}ok{% elif status.required %}bad{% else %}warn{% endif %}">{{ status.state }}</span>
+  <section class="wa-card full">
+    <h2>Estado de configuración</h2>
+    <p class="hint">Los secretos nunca se muestran: solo se confirma si están presentes.</p>
+    {% for status in config.statuses %}
+      <div class="wa-row">
+        <div>
+          <code>{{ status.name }}</code>
+          {% if status.value %}<span style="color:#9aa0a6"> · {{ status.value }}</span>{% endif %}
         </div>
-      {% endfor %}
-      <div class="wa-row" style="margin-top:.6rem;border-top:1px solid var(--border)">
-        <div style="color:#9aa0a6">Callback que debes registrar en Meta Developers</div>
-        <span class="wa-tag ok">obligatorio</span>
+        <span class="wa-tag {% if status.is_set %}ok{% elif status.required %}bad{% else %}warn{% endif %}">{{ status.state }}</span>
       </div>
-      <div class="wa-endpoint" style="margin-top:.4rem">https://TU-DOMINIO{{ callback_path }}</div>
-      <form method="post" action="{% url 'meta-whatsapp-test-validate' %}" style="margin-top:.9rem">
-        {% csrf_token %}
-        <button class="wa-btn alt" type="submit">Validar credenciales contra Graph API</button>
-      </form>
-    </section>
+    {% endfor %}
+    <div class="wa-row" style="margin-top:.6rem;border-top:1px solid var(--border)">
+      <div style="color:#9aa0a6">Callback que debes registrar en Meta Developers</div>
+      <span class="wa-tag ok">obligatorio</span>
+    </div>
+    <div class="wa-endpoint" style="margin-top:.4rem">https://TU-DOMINIO{{ callback_path }}</div>
+    <form method="post" action="{% url 'meta-whatsapp-test-validate' %}" style="margin-top:.9rem">
+      {% csrf_token %}
+      <button class="wa-btn alt" type="submit">Validar credenciales contra Graph API</button>
+    </form>
+  </section>
 
-    <section class="wa-card">
-      <h2>Enviar mensaje de prueba</h2>
-      <p class="hint">Envía un texto real al número indicado mediante Meta. Requiere token y Phone Number ID.</p>
-      <form method="post" action="{% url 'meta-whatsapp-test-send' %}">
-        {% csrf_token %}
-        <div class="wa-field">
-          <label class="wa-label" for="wa-phone">Teléfono</label>
-          <input class="wa-input" id="wa-phone" name="phone" placeholder="+573001234567" required>
-        </div>
-        <div class="wa-field">
-          <label class="wa-label" for="wa-text">Mensaje</label>
-          <textarea class="wa-textarea" id="wa-text" name="text" placeholder="Mensaje de verificación" required></textarea>
-        </div>
-        <button class="wa-btn" type="submit">Enviar a Meta</button>
-      </form>
-    </section>
+  <section class="wa-card">
+    <h2>Enviar mensaje de prueba</h2>
+    <p class="hint">Envía un texto real al número indicado mediante Meta. Requiere token y Phone Number ID.</p>
+    <form method="post" action="{% url 'meta-whatsapp-test-send' %}">
+      {% csrf_token %}
+      <div class="wa-field">
+        <label class="wa-label" for="wa-phone">Teléfono</label>
+        <input class="wa-input" id="wa-phone" name="phone" placeholder="+573001234567" required>
+      </div>
+      <div class="wa-field">
+        <label class="wa-label" for="wa-text">Mensaje</label>
+        <textarea class="wa-textarea" id="wa-text" name="text" placeholder="Mensaje de verificación" required></textarea>
+      </div>
+      <button class="wa-btn" type="submit">Enviar a Meta</button>
+    </form>
+  </section>
 
-    <section class="wa-card">
-      <h2>Simular webhook</h2>
-      {% if simulator_enabled %}
-        <p class="hint">
-          Genera un payload con la misma forma que envía Meta, lo firma con tu App Secret
-          y lo entrega al webhook real por la misma ruta.
-        </p>
-        <form method="post" action="{% url 'meta-whatsapp-test-simulate' %}">
-          {% csrf_token %}
-          <div class="wa-field">
-            <label class="wa-label" for="wa-scenario">Escenario</label>
-            <select class="wa-select" id="wa-scenario" name="scenario">
-              <option value="script">Guion completo del bot (recomendado)</option>
-              <option value="inbound">Un solo mensaje entrante</option>
-              <option value="delivered">Estado «delivered» de campaña</option>
-              <option value="failed">Estado «failed» de campaña</option>
-            </select>
-          </div>
-          <div class="wa-field">
-            <label class="wa-label" for="wa-phone-sim">Teléfono que escribe</label>
-            <input class="wa-input" id="wa-phone-sim" name="phone" value="{{ default_simulated_phone }}" placeholder="573001112233">
-          </div>
-          <div class="wa-field">
-            <label class="wa-label" for="wa-text-sim">Mensaje (solo escenario «un mensaje entrante»)</label>
-            <input class="wa-input" id="wa-text-sim" name="text" placeholder="Vacío = mensaje de ejemplo">
-          </div>
-          <div class="wa-field">
-            <label class="wa-label" for="wa-reference">wamid del destinatario (solo estados)</label>
-            <input class="wa-input" id="wa-reference" name="reference" placeholder="wamid.HBg...">
-          </div>
-          <button class="wa-btn" type="submit">Firmar y enviar al webhook</button>
-        </form>
-        <p class="wa-note">
-          El <strong>guion completo</strong> reproduce los cinco turnos del chatbot
-          (saludo → pregunta → confirmación → asesor → cierre) como webhooks
-          independientes y firmados, para que la máquina de estados avance de verdad.
-          Cada respuesta se guarda en <code>/admin/knowledge/chatconversation/</code>.
-          Ten en cuenta que el bot intenta responder por WhatsApp al número que
-          escribes, así que con un número falso la respuesta no te llegará al celular.
-        </p>
-      {% else %}
-        <span class="wa-tag warn">desactivado</span>
-        <p class="hint" style="margin-top:.6rem">
-          <code>ALLOW_WEBHOOK_SIMULATOR</code> está apagado, señal de que <code>DEBUG</code>
-          es <code>false</code>. El simulador queda oculto a propósito: un payload firmado con
-          el App Secret es indistinguible de uno real de Meta, así que solo debe existir en
-          entornos de prueba. En producción usa el webhook leyendo la tabla de eventos de abajo.
-        </p>
-      {% endif %}
-    </section>
-
-    <section class="wa-card full">
-      <h2>Eventos del webhook</h2>
+  <section class="wa-card">
+    <h2>Simular webhook</h2>
+    {% if simulator_enabled %}
       <p class="hint">
-        {{ event_count }} evento(s) registrado(s). Sirven para confirmar que Meta sí está llegando
-        y para verificar que los reintentos no se procesen dos veces.
+        Genera un payload con la misma forma que envía Meta, lo firma con tu App Secret
+        y lo entrega al webhook real por la misma ruta.
       </p>
-      {% if recent_events %}
-        <table class="wa-table">
-          <thead>
-            <tr><th>Tipo</th><th>Estado</th><th>provider_message_id</th><th>Procesado</th><th>Recibido</th></tr>
-          </thead>
-          <tbody>
-            {% for event in recent_events %}
-              <tr>
-                <td>{{ event.get_event_type_display }}</td>
-                <td>{{ event.status|default:"—" }}</td>
-                <td><code style="font-size:.75rem">{{ event.provider_message_id }}</code></td>
-                <td>{{ event.processed_at|default:"pendiente"|date:"d/m/Y H:i" }}</td>
-                <td>{{ event.created_at|date:"d/m/Y H:i" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p class="hint" style="margin:0">
-          Aún no hay eventos. Configura el callback en Meta y envía un WhatsApp al número,
-          o usa el simulador de arriba.
-        </p>
-      {% endif %}
-    </section>
-
-    {% if recent_recipients %}
-      <section class="wa-card full">
-        <h2>Destinatarios con wamid</h2>
-        <p class="hint">Los estados de Meta se aplican a estos destinatarios de campaña por su <code>provider_message_id</code>.</p>
-        <table class="wa-table">
-          <thead>
-            <tr><th>Campaña</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th>wamid</th><th>Leído</th></tr>
-          </thead>
-          <tbody>
-            {% for recipient in recent_recipients %}
-              <tr>
-                <td>{{ recipient.campaign.name }}</td>
-                <td>{{ recipient.contact.full_name }}</td>
-                <td>{{ recipient.phone_snapshot }}</td>
-                <td>{{ recipient.get_status_display }}</td>
-                <td><code style="font-size:.72rem">{{ recipient.provider_message_id }}</code></td>
-                <td>{{ recipient.read_at|date:"d/m H:i"|default:"—" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </section>
+      <form method="post" action="{% url 'meta-whatsapp-test-simulate' %}">
+        {% csrf_token %}
+        <div class="wa-field">
+          <label class="wa-label" for="wa-scenario">Escenario</label>
+          <select class="wa-select" id="wa-scenario" name="scenario">
+            <option value="script">Guion completo del bot (recomendado)</option>
+            <option value="inbound">Un solo mensaje entrante</option>
+            <option value="delivered">Estado «delivered» de campaña</option>
+            <option value="failed">Estado «failed» de campaña</option>
+          </select>
+        </div>
+        <div class="wa-field">
+          <label class="wa-label" for="wa-phone-sim">Teléfono que escribe</label>
+          <input class="wa-input" id="wa-phone-sim" name="phone" value="{{ default_simulated_phone }}" placeholder="573001112233">
+        </div>
+        <div class="wa-field">
+          <label class="wa-label" for="wa-text-sim">Mensaje (solo escenario «un mensaje entrante»)</label>
+          <input class="wa-input" id="wa-text-sim" name="text" placeholder="Vacío = mensaje de ejemplo">
+        </div>
+        <div class="wa-field">
+          <label class="wa-label" for="wa-reference">wamid del destinatario (solo estados)</label>
+          <input class="wa-input" id="wa-reference" name="reference" placeholder="wamid.HBg...">
+        </div>
+        <button class="wa-btn" type="submit">Firmar y enviar al webhook</button>
+      </form>
+      <p class="wa-note">
+        El <strong>guion completo</strong> reproduce los cinco turnos del chatbot
+        (saludo → pregunta → confirmación → asesor → cierre) como webhooks
+        independientes y firmados, para que la máquina de estados avance de verdad.
+        Cada respuesta se guarda en <code>/admin/knowledge/chatconversation/</code>.
+        Ten en cuenta que el bot intenta responder por WhatsApp al número que
+        escribes, así que con un número falso la respuesta no te llegará al celular.
+      </p>
+    {% else %}
+      <span class="wa-tag warn">desactivado</span>
+      <p class="hint" style="margin-top:.6rem">
+        <code>ALLOW_WEBHOOK_SIMULATOR</code> está apagado, señal de que <code>DEBUG</code>
+        es <code>false</code>. El simulador queda oculto a propósito: un payload firmado con el
+        App Secret es indistinguible de uno real de Meta, así que solo debe existir en
+        entornos de prueba. En producción usa el webhook leyendo la tabla de eventos de abajo.
+      </p>
     {% endif %}
+  </section>
 
-  </div>
+  <section class="wa-card full">
+    <h2>Eventos del webhook</h2>
+    <p class="hint">
+      {{ event_count }} evento(s) registrado(s). Sirven para confirmar que Meta sí está llegando
+      y para verificar que los reintentos no se procesen dos veces.
+    </p>
+    {% if recent_events %}
+      <table class="wa-table">
+        <thead>
+          <tr><th>Tipo</th><th>Estado</th><th>provider_message_id</th><th>Procesado</th><th>Recibido</th></tr>
+        </thead>
+        <tbody>
+          {% for event in recent_events %}
+            <tr>
+              <td>{{ event.get_event_type_display }}</td>
+              <td>{{ event.status|default:"—" }}</td>
+              <td><code style="font-size:.75rem">{{ event.provider_message_id }}</code></td>
+              <td>{% if event.processed_at %}{{ event.processed_at|date:"d/m/Y H:i" }}{% else %}pendiente{% endif %}</td>
+              <td>{{ event.created_at|date:"d/m/Y H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="hint" style="margin:0">
+        Aún no hay eventos. Configura el callback en Meta y envía un WhatsApp al número,
+        o usa el simulador de arriba.
+      </p>
+    {% endif %}
+  </section>
+
+  {% if recent_recipients %}
+    <section class="wa-card full">
+      <h2>Destinatarios con wamid</h2>
+      <p class="hint">Los estados de Meta se aplican a estos destinatarios de campaña por su <code>provider_message_id</code>.</p>
+      <table class="wa-table">
+        <thead>
+          <tr><th>Campaña</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th>wamid</th><th>Leído</th></tr>
+        </thead>
+        <tbody>
+          {% for recipient in recent_recipients %}
+            <tr>
+              <td>{{ recipient.campaign.name }}</td>
+              <td>{{ recipient.contact.full_name }}</td>
+              <td>{{ recipient.phone_snapshot }}</td>
+              <td>{{ recipient.get_status_display }}</td>
+              <td><code style="font-size:.72rem">{{ recipient.provider_message_id }}</code></td>
+              <td>{% if recipient.read_at %}{{ recipient.read_at|date:"d/m H:i" }}{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
 {% endblock %}

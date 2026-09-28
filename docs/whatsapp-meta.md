@@ -141,12 +141,24 @@ docker compose exec -T web python manage.py check_meta_whatsapp `
   --callback-url https://TU-DOMINIO/api/whatsapp/webhook/
 ```
 
-### Página de prueba
+### Páginas de la consola
 
-En `http://localhost:8000/whatsapp-prueba/` hay una página de verificación con
-cuatro secciones: estado de la configuración, envío de un mensaje de prueba,
-simulador del webhook y últimos eventos recibidos. No aparece en la navegación
-del producto: se accede solo por URL y exige una sesión de personal `staff`.
+Ambas están en el menú lateral, dentro del grupo **WhatsApp (Meta)**, y exigen
+sesión de personal `staff`. El grupo no se renderiza para usuarios sin `is_staff`.
+
+| Página | URL | Para qué |
+| --- | --- | --- |
+| Configuración | `/whatsapp-configuracion/` | Estado de las variables, capacidades, callback a registrar en Meta y los comandos para aplicar los cambios. **Solo lectura.** |
+| Prueba de integración | `/whatsapp-prueba/` | Envío de un mensaje real, simulador del webhook y últimos eventos recibidos. |
+
+La página de configuración es deliberadamente de solo lectura: no hay ningún
+campo que escriba credenciales. Los secretos no travels por el navegador ni por
+una sesión web, y siguen la vía que sí funciona: editar `.env` y recrear el
+servicio. Un formulario que guardara el `.env` además surtiría efecto pendiente
+de un `docker compose up --force-recreate` que el navegador no puede lanzar.
+
+Ambas páginas comparten `communications/templates/communications/whatsapp_base.html`,
+que concentra los estilos, para que las dos se vean igual.
 
 El simulador firma un payload con la misma forma que envía Meta y lo entrega al
 webhook real usando el cliente interno de Django, de modo que ejercita el
@@ -186,7 +198,7 @@ Dos detalles del entorno que confunden al probar:
 ### Resumen en JSON
 
 `GET /api/whatsapp/health/` devuelve el mismo estado en JSON, sin exponer ningún
-secreto. **Exige la misma sesión `staff` que la página de prueba**, así que no
+secreto. **Exige la misma sesión `staff` que la consola**, así que no
 sirve como sonda anónima: para automatizar el chequeo usa
 `python manage.py check_meta_whatsapp`, que sí es apto para un script de
 monitoring porque no necesita credenciales de la aplicación.
@@ -238,10 +250,11 @@ Ejecuta las pruebas de la integración dentro de Docker:
 docker compose exec -T web python manage.py test communications.tests.test_meta_integration knowledge.chatbot.tests
 ```
 
-La página de prueba tiene su propia suite:
+La consola tiene su propia suite, que incluye las guardas de las dos páginas y
+del menú lateral:
 
 ```powershell
-docker compose exec -T web python manage.py test communications.tests.test_meta_test_page
+docker compose exec -T web python manage.py test communications.tests.test_meta_console
 ```
 
 Antes de producción, valida con un número de prueba de Meta este recorrido:

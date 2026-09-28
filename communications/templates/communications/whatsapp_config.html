@@ -1,0 +1,111 @@
+{% extends "communications/whatsapp_base.html" %}
+{% load icons %}
+
+{% block title %}Configuración de WhatsApp (Meta) — Punto TdeA{% endblock %}
+{% block page_title %}Configuración de WhatsApp{% endblock %}
+{% block page_subtitle %}Estado de la conexión con Meta Cloud API{% endblock %}
+
+{% block wa_content %}
+
+  {% if config.missing %}
+    <div class="wa-card full">
+      <div class="wa-alert warn" style="margin:0">
+        Faltan {{ config.missing|length }} variable(s) obligatorias: <strong>{{ config.missing|join:", " }}</strong>.
+        Mientras falten, el webhook rechaza las peticiones porque no puede validar la firma
+        y ningún envío llega a Meta.
+      </div>
+    </div>
+  {% else %}
+    <div class="wa-card full">
+      <div class="wa-alert ok" style="margin:0">
+        Configuración completa. {% if config.can_send and config.can_receive %}
+          La integración puede enviar mensajes y recibir webhooks.
+        {% else %}
+          Revisa las capacidades marcadas abajo.
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <section class="wa-card full">
+    <h2>{% icon 'settings' size=18 %} Variables de entorno</h2>
+    <p class="hint">Los secretos no se muestran: solo se confirma si están presentes. Esta página es de solo lectura.</p>
+    {% for status in config.statuses %}
+      <div class="wa-row">
+        <div>
+          <code>{{ status.name }}</code>
+          {% if status.detail %}<div style="color:#9aa0a6;font-size:.76rem;margin-top:.15rem">{{ status.detail }}</div>{% endif %}
+        </div>
+        <span class="wa-tag {% if status.is_set %}ok{% elif status.required %}bad{% else %}warn{% endif %}">{{ status.state }}</span>
+      </div>
+    {% endfor %}
+  </section>
+
+  <section class="wa-card">
+    <h2>{% icon 'zap' size=18 %} Capacidades</h2>
+    <p class="hint">Qué puede hacer la integración en este momento.</p>
+    <div class="wa-row">
+      <div>Recibir webhooks de Meta</div>
+      <span class="wa-tag {% if config.can_receive %}ok{% else %}bad{% endif %}">{% if config.can_receive %}disponible{% else %}no disponible{% endif %}</span>
+    </div>
+    <div class="wa-row">
+      <div>Validar la suscripción (GET de Meta)</div>
+      <span class="wa-tag {% if config.can_verify %}ok{% else %}bad{% endif %}">{% if config.can_verify %}disponible{% else %}no disponible{% endif %}</span>
+    </div>
+    <div class="wa-row">
+      <div>Enviar mensajes a Meta</div>
+      <span class="wa-tag {% if config.can_send %}ok{% else %}bad{% endif %}">{% if config.can_send %}disponible{% else %}no disponible{% endif %}</span>
+    </div>
+    <p class="wa-note">
+      Cada capacidad depende de una variable concreta: la firma del webhook del
+      <strong>App secret</strong>, el desafío inicial del <strong>verify token</strong>
+      y el envío del <strong>access token</strong> junto al <strong>Phone Number ID</strong>.
+    </p>
+  </section>
+
+  <section class="wa-card">
+    <h2>{% icon 'globe' size=18 %} Callback de Meta</h2>
+    <p class="hint">Es la única URL que debes registrar en Meta Developers.</p>
+    <div class="wa-endpoint">https://TU-DOMINIO{{ callback_path }}</div>
+    <p class="wa-note">
+      Meta no alcanza <code>localhost</code>. Para pruebas necesitas un túnel HTTPS
+      (Cloudflare Tunnel o ngrok) y para producción un dominio con proxy inverso y TLS.
+      El verify token que registres debe coincidir con <code>META_VERIFY_TOKEN</code>.
+    </p>
+  </section>
+
+  <section class="wa-card">
+    <h2>{% icon 'file-text' size=18 %} Cómo configurar</h2>
+    <p class="hint">Las credenciales se escriben en el archivo <code>.env</code> de la máquina, nunca desde el navegador.</p>
+    <div class="wa-step"><b>1</b><div>Ejecuta el asistente, que pide los tres valores de Meta con entrada oculta y genera el verify token:</div></div>
+    <div class="wa-code">powershell -ExecutionPolicy Bypass -File .\configurar_meta.ps1</div>
+    <div class="wa-step"><b>2</b><div>Si prefieres editarlo a mano, completa <code>.env</code> a partir de <code>.env.example</code>.</div></div>
+    <div class="wa-code">META_VERIFY_TOKEN=...
+META_APP_SECRET=...
+META_ACCESS_TOKEN=...
+WHATSAPP_PHONE_NUMBER_ID=...</div>
+    <div class="wa-step"><b>3</b><div>
+      Aplica los cambios. Las credenciales llegan como variables de entorno, así que
+      hay que <strong>recrear</strong> el servicio; un reinicio deja las anteriores:
+    </div></div>
+    <div class="wa-code">docker compose up -d --force-recreate web</div>
+    <div class="wa-step"><b>4</b><div>Comprueba el estado y valida contra Graph API:</div></div>
+    <div class="wa-code">docker compose exec -T web python manage.py check_meta_whatsapp
+docker compose exec -T web python manage.py check_meta_whatsapp --validate</div>
+    <a class="wa-btn link" href="{% url 'meta-whatsapp-test' %}">
+      {% icon 'zap' size=15 %} Ir a la página de prueba
+    </a>
+  </section>
+
+  <section class="wa-card full">
+    <h2>{% icon 'layout-template' size=18 %} Datos de demostración</h2>
+    <p class="hint">Para probar el flujo de estados sin esperar a tener contactos reales.</p>
+    <div class="wa-code">docker compose exec -T web python manage.py seed_demo_whatsapp</div>
+    <p class="wa-note">
+      Crea 8 contactos, 2 segmentos y 2 campañas: una con un destinatario en cada
+      estado de entrega y otra en borrador para probar el envío real. Los
+      <code>wamid</code> son sintéticos. Para borrar lo sembrado, añade <code>--limpiar</code>.
+    </p>
+  </section>
+
+{% endblock %}

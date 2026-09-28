@@ -1,8 +1,8 @@
-"""Página de prueba de la integración con Meta WhatsApp Cloud API.
+"""Consola de verificación de la integración con Meta WhatsApp Cloud API.
 
-Es una herramienta de verificación interna: no forma parte de la experiencia de
-los equipos de campañas ni de conocimiento y se accede únicamente por URL,
-sin enlace en la navegación principal.
+Reúne el estado de la configuración, el envío de mensajes de prueba y el
+simulador del webhook. Es una herramienta interna: no forma parte de la
+experiencia de los equipos de campañas ni de conocimiento.
 """
 
 from __future__ import annotations
@@ -33,6 +33,20 @@ def _staff_required(view):
 
 
 @_staff_required
+def config(request: HttpRequest):
+    """Estado de la configuración y los pasos para aplicarla. Solo lectura."""
+    return render(
+        request,
+        "communications/whatsapp_config.html",
+        {
+            "config": meta_config.capability_status(),
+            "callback_path": meta_config.WEBHOOK_PATH,
+            "active_nav": "whatsapp-config",
+        },
+    )
+
+
+@_staff_required
 def index(request: HttpRequest):
     """Estado de configuración, envío de prueba y simulador de webhook."""
     context = {
@@ -47,6 +61,7 @@ def index(request: HttpRequest):
         ),
         "simulator_enabled": settings.ALLOW_WEBHOOK_SIMULATOR,
         "default_simulated_phone": DEFAULT_SIMULATED_PHONE,
+        "active_nav": "whatsapp-test",
     }
     return render(request, "communications/whatsapp_test.html", context)
 
