@@ -2,12 +2,12 @@ import json
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
+from communications.webhooks.meta_webhook import whatsapp_webhook as meta_whatsapp_webhook
 from .chatbot import workflow as chatbot_workflow
-from .chatbot.whatsapp import parse_json, process_webhook, validate_signature, verify_webhook
 from .models import Category, ChatConversation, FAQ, KnowledgeArticle
 
 
@@ -83,23 +83,6 @@ def chatbot(request):
     return JsonResponse(result)
 
 
-@csrf_exempt
 def whatsapp_webhook(request):
-    if request.method == 'GET':
-        challenge = verify_webhook(
-            request.GET.get('hub.mode', ''),
-            request.GET.get('hub.verify_token', ''),
-            request.GET.get('hub.challenge', ''),
-        )
-        if challenge is None:
-            return HttpResponseForbidden('Verification failed')
-        return HttpResponse(challenge, content_type='text/plain')
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido.'}, status=405)
-    if not validate_signature(request.body, request.META.get('HTTP_X_HUB_SIGNATURE_256')):
-        return HttpResponseForbidden('Invalid signature')
-    try:
-        payload = parse_json(request.body)
-    except (UnicodeDecodeError, ValueError):
-        return JsonResponse({'error': 'El cuerpo debe ser JSON válido.'}, status=400)
-    return JsonResponse({'ok': True, 'processed': process_webhook(payload)})
+    """Alias temporal del webhook central para no romper URLs ya publicadas."""
+    return meta_whatsapp_webhook(request)
