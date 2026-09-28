@@ -150,14 +150,6 @@
           Faltan <strong>{{ config.missing|join:" - " }}</strong>.
         </p>
       {% endif %}
-      <form method="post" action="{% url 'meta-whatsapp-test-validate' %}" style="margin-top:.9rem">
-        {% csrf_token %}
-        <button class="wa-btn" type="submit" style="width:100%">Validar credenciales con Graph API</button>
-      </form>
-      <p class="wa-strip-cb" style="margin-top:.8rem">
-        Callback para registrar en Meta:<br>
-        <code>https://{DOMINIO-PUNTO-TdeA}{{ callback_path }}</code>
-      </p>
     </section>
   </aside>
 

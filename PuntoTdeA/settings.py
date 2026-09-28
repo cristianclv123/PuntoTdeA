@@ -27,6 +27,9 @@ ALLOWED_HOSTS = [
 if DEBUG and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("*")
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://lodge-field-gloves-hosted.trycloudflare.com",
+]
 
 INSTALLED_APPS = [
     "daphne",
