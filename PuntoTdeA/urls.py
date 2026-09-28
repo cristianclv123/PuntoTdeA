@@ -16,6 +16,13 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from communications.meta_console_views import config as meta_console_config
+from communications.meta_console_views import health as meta_console_health
+from communications.meta_console_views import index as meta_console_index
+from communications.meta_console_views import send_test_message as meta_console_send
+from communications.meta_console_views import simulate_webhook as meta_console_simulate
+from communications.meta_console_views import validate_credentials as meta_console_validate
+from communications.webhooks.meta_webhook import whatsapp_webhook
 from . import views
 
 urlpatterns = [
@@ -24,6 +31,31 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('perfil/', views.profile_view, name='profile'),
+    # Callback único configurado en Meta Developers para campañas y chatbot.
+    path('api/whatsapp/webhook/', whatsapp_webhook, name='meta-whatsapp-webhook'),
+    path(
+        'api/whatsapp/health/',
+        meta_console_health,
+        name='meta-whatsapp-health',
+    ),
+    # Consola de verificación de la integración. Solo para personal staff.
+    path('whatsapp-prueba/', meta_console_index, name='meta-whatsapp-test'),
+    path('whatsapp-prueba/enviar/', meta_console_send, name='meta-whatsapp-test-send'),
+    path(
+        'whatsapp-prueba/simular/',
+        meta_console_simulate,
+        name='meta-whatsapp-test-simulate',
+    ),
+    path(
+        'whatsapp-prueba/validar/',
+        meta_console_validate,
+        name='meta-whatsapp-test-validate',
+    ),
+    path(
+        'whatsapp-configuracion/',
+        meta_console_config,
+        name='meta-whatsapp-config',
+    ),
 
     path('api/cases/', include('cases.api.urls')),
     path('api/knowledge/', include('knowledge.api.urls')),
