@@ -318,4 +318,29 @@ Remember `docker compose up -d --force-recreate web` after changing `.env`: a
 `restart` keeps the old environment variables and will look like the config never
 took effect.
 
+## 7. Maintenance: event retention
+
+Meta reports one delivery state per message, so a campaign with thousands of
+recipients grows the events table fast (≈3–4 events per message:
+sent → delivered → read). Keep it small with the retention command, which is a
+**dry-run by default**:
+
+```powershell
+# Preview what would be deleted (events older than 30 days)
+docker compose exec -T web python manage.py cleanup_whatsapp_events
+
+# Actually delete delivery-state events older than 7 days
+docker compose exec -T web python manage.py cleanup_whatsapp_events --days 7 --ejecutar
+```
+
+The command only removes processed **delivery-state** events
+(`sent`/`delivered`/`read` and other non-`failed` statuses) past the cutoff. It
+always keeps `failed` events (they carry the delivery error) and `inbound`
+events (the bot's conversations). Deleting an event never undoes a delivery
+state already applied to `BroadcastRecipient`: the `WhatsAppWebhookEvent` row is
+just the audit/idempotency trail.
+
+For very active accounts, schedule it nightly (e.g. cron). Triggering it after
+each campaign send is also a valid option — the campaigns team decides.
+
 Full reference: [`whatsapp-meta.md`](whatsapp-meta.md).

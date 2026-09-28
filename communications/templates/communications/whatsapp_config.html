@@ -108,6 +108,21 @@ docker compose exec -T web python manage.py check_meta_whatsapp --validate</div>
       <code>wamid</code> son sintéticos. Para borrar lo sembrado, añade <code>--limpiar</code>.
     </p>
   </section>
+
+  <section class="wa-card full">
+    <h2>{% icon 'trash-2' size=18 %} Mantenimiento de eventos</h2>
+    <p class="hint">
+      Meta reporta cada estado de entrega por mensaje: con miles de destinatarios
+      la tabla de eventos crece rápido. El comando es un ensayo por defecto.
+    </p>
+    <div class="wa-code">docker compose exec -T web python manage.py cleanup_whatsapp_events
+docker compose exec -T web python manage.py cleanup_whatsapp_events --days 7 --ejecutar</div>
+    <p class="wa-note">
+      Borra estados de envío antiguos (<code>sent</code>/<code>delivered</code>/<code>read</code>)
+      y conserva los <code>failed</code> (motivo del error) y los mensajes
+      entrantes del bot. No afecta los estados ya aplicados a los destinatarios.
+    </p>
+  </section>
 </div>
 
 {% endblock %}

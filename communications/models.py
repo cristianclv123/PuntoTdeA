@@ -304,7 +304,9 @@ class BroadcastRecipient(models.Model):
 
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
     provider = models.CharField(max_length=20, blank=True, help_text="twilio | meta | mock")
-    provider_message_id = models.CharField(max_length=100, blank=True)
+    # Indizado: el webhook busca el destinatario por este wamid en cada notificación
+    # de estado; con miles de destinatarios por campaña, sin índice sería un barrido.
+    provider_message_id = models.CharField(max_length=100, blank=True, db_index=True)
     error_message = models.TextField(blank=True)
 
     queued_at = models.DateTimeField(null=True, blank=True)
@@ -342,7 +344,9 @@ class WhatsAppWebhookEvent(models.Model):
     event_type = models.CharField(max_length=20, choices=Type.choices)
     status = models.CharField(max_length=30, blank=True)
     processed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    # Indizado: la limpieza por retención borra por antigüedad y la consola lista
+    # los más recientes (ordering = -created_at).
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
