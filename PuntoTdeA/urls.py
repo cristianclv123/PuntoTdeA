@@ -16,6 +16,8 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from knowledge import views as knowledge_views
+
 from . import views
 
 urlpatterns = [
@@ -24,6 +26,10 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('perfil/', views.profile_view, name='profile'),
+
+    # Asistente público (sin login): misma vista que knowledge:chatbot,
+    # expuesta con una URL de cara al visitante.
+    path('asistente/', knowledge_views.chatbot, name='asistente'),
 
     path('api/cases/', include('cases.api.urls')),
     path('api/knowledge/', include('knowledge.api.urls')),
