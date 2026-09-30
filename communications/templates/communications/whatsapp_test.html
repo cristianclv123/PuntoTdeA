@@ -290,13 +290,6 @@
         </p>
       {% endif %}
       <div class="wa-row">
-        <div>
-          <strong>Validación real</strong>
-          <div class="wa-note" style="margin-top:.15rem">
-            Los puntitos de arriba solo miran el <code>.env</code>: dicen que la
-            variable existe, no que el token siga vivo.
-          </div>
-        </div>
         <form method="post" action="{% url 'meta-whatsapp-test-validate' %}">
           {% csrf_token %}
           <button class="wa-btn alt" type="submit">Validar credenciales con Graph API</button>
