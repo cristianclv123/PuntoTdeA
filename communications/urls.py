@@ -15,6 +15,7 @@ urlpatterns = [
     path("", views.campaigns, name="campaigns"),
     path("", views.campaigns, name="index"),
     path("nueva/", views.campaign_new, name="campaign_new"),
+    path("plantillas/", views.templates, name="templates"),
     path("detalle/", views.campaign_detail, name="campaign_detail"),
     path("audiencias/", views.segments, name="segments"),
     path("interacciones/", views.interactions, name="interactions"),

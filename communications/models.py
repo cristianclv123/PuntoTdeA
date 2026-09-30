@@ -132,6 +132,13 @@ class MessageTemplate(models.Model):
     body_text = models.TextField(
         help_text="Usa {{1}}, {{2}}, etc. para parámetros dinámicos."
     )
+
+    variable_types = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Tipos de variables, ej. {"1": "text", "2": "date"}',
+    )
+
     header_type = models.CharField(max_length=10, choices=HeaderType.choices, default=HeaderType.NONE)
     header_media_url = models.URLField(blank=True)
     buttons = models.JSONField(

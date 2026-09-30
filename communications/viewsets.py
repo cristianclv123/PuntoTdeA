@@ -1,5 +1,6 @@
 # API interna (consumida solo por el BFF)
 from django.db.models import Q
+from django.db.models.deletion import ProtectedError
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
@@ -44,6 +45,19 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
     queryset = MessageTemplate.objects.all()
     serializer_class = MessageTemplateSerializer
     permission_classes = [IsInternalService]
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        try:
+            instance.delete()
+        except ProtectedError:
+            return Response(
+                {
+                    "detail": "No se puede eliminar esta plantilla porque está siendo utilizada por una campaña."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AudienceSegmentViewSet(viewsets.ModelViewSet):

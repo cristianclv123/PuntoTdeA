@@ -1,3 +1,4 @@
+from channels.auth import login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
@@ -27,6 +28,10 @@ def campaign_detail(request):
         "communications/campaign_detail.html",
         {"nav_section": "campaigns", "active_nav": "campaigns"},
     )
+
+@login_required
+def templates(request):
+    return render(request, "communications/templates.html")
 
 
 @login_required

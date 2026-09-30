@@ -1,0 +1,49 @@
+{% extends "communications/base.html" %}
+{% load static %}
+
+{% block title %}Plantillas — Punto TdeA{% endblock %}
+{% block page_heading %}Plantillas{% endblock %}
+{% block page_lead %}Administra las plantillas de mensajes para tus campañas.{% endblock %}
+
+{% block hero_actions %}
+<a href="{% url 'communications:campaign_new' %}" class="btn btn-outline-success rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i> Nueva campaña
+</a>
+{% endblock %}
+
+{% block outbound_content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="h5 mb-1 fw-bold">Plantillas de mensajes</h2>
+        <p class="text-muted mb-0">
+            Crea y administra las plantillas disponibles para tus campañas.
+        </p>
+    </div>
+
+    <button type="button" class="btn btn-success rounded-pill" id="newTemplateBtn">
+        <i class="bi bi-plus-lg me-1"></i>
+        Nueva plantilla
+    </button>
+</div>
+
+<div id="templateList" class="row g-3">
+    <div class="col-12 text-center py-5">
+        <div class="spinner-border text-success" role="status"></div>
+        <p class="text-muted mt-2 mb-0">Cargando plantillas...</p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initTemplatesPage === 'function') {
+            OutboundUI.initTemplatesPage();
+        } else {
+            console.error('El módulo OutboundUI o la función initTemplatesPage no están disponibles.');
+        }
+    });
+</script>
+{% endblock %}
