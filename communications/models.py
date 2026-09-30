@@ -311,7 +311,11 @@ class BroadcastRecipient(models.Model):
 
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
     provider = models.CharField(max_length=20, blank=True, help_text="twilio | meta | mock")
-    provider_message_id = models.CharField(max_length=100, blank=True)
+    provider_message_id = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+    )
     error_message = models.TextField(blank=True)
 
     queued_at = models.DateTimeField(null=True, blank=True)
@@ -330,3 +334,30 @@ class BroadcastRecipient(models.Model):
 
     def __str__(self):
         return f"{self.campaign_id} → {self.phone_snapshot} ({self.status})"
+
+
+class WhatsAppWebhookEvent(models.Model):
+    """Evento técnico de Meta usado para trazabilidad e idempotencia."""
+
+    class Type(models.TextChoices):
+        INBOUND = "inbound", "Mensaje entrante"
+        STATUS = "status", "Estado de mensaje"
+
+    id = models.BigAutoField(primary_key=True)
+    event_key = models.CharField(max_length=300, unique=True)
+    provider_message_id = models.CharField(max_length=150, db_index=True)
+    event_type = models.CharField(max_length=20, choices=Type.choices)
+    status = models.CharField(max_length=30, blank=True)
+    payload = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Fragmento crudo del evento de Meta, para conservar el motivo de un failed.",
+    )
+    processed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.event_type}: {self.provider_message_id}"
