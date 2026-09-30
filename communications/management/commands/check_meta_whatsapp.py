@@ -32,7 +32,7 @@ class Command(BaseCommand):
         self.stdout.write("")
         self.stdout.write(f"  Callback configurado  {meta_config.WEBHOOK_PATH}")
         self.stdout.write(f"  DEBUG                  {settings.DEBUG}")
-        self.stdout.write(f"  Simulador webhooks     {settings.ALLOW_WEBHOOK_SIMULATOR}")
+        self.stdout.write(f"  Simulador de casos     {settings.ALLOW_WEBHOOK_SIMULATOR}")
 
         failures: list[str] = []
         config = meta_config.capability_status()

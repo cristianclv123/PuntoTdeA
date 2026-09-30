@@ -47,16 +47,25 @@ def _signature_is_valid(raw_body: bytes, signature_header: str | None) -> bool:
     return hmac.compare_digest(expected, signature_header.split("=", 1)[1])
 
 
-def _event(event_key: str, message_id: str, event_type: str, status: str = ""):
+def _event(
+    event_key: str,
+    message_id: str,
+    event_type: str,
+    status: str = "",
+    payload: dict[str, Any] | None = None,
+):
     """Obtiene o registra el evento. ``False`` indica que ya fue procesado."""
+    defaults = {
+        "provider_message_id": message_id,
+        "event_type": event_type,
+        "status": status,
+    }
+    if payload:
+        defaults["payload"] = payload
     try:
         event, created = WhatsAppWebhookEvent.objects.get_or_create(
             event_key=event_key,
-            defaults={
-                "provider_message_id": message_id,
-                "event_type": event_type,
-                "status": status,
-            },
+            defaults=defaults,
         )
     except IntegrityError:
         event = WhatsAppWebhookEvent.objects.get(event_key=event_key)
@@ -66,7 +75,49 @@ def _event(event_key: str, message_id: str, event_type: str, status: str = ""):
 
 def _finish_event(event: WhatsAppWebhookEvent) -> None:
     event.processed_at = timezone.now()
-    event.save(update_fields=["processed_at"])
+    # `payload` se actualiza junto: en varios caminos de ignorados se anota el
+    # motivo y no hay otra llamada a save() que lo persista.
+    event.save(update_fields=["processed_at", "payload"])
+
+
+def _compact_status(payload: dict[str, Any]) -> dict[str, Any]:
+    """Guarda el `statuses[]` de Meta sin arrastrar campos que no usamos.
+
+    Lo que importa es `errors[]`: sin él, un `failed` que no corresponde a
+    ningún destinatario de campaña queda registrado como fallido, pero sin
+    explicación de por qué.
+    """
+    compact: dict[str, Any] = {
+        "timestamp": payload.get("timestamp"),
+        "recipient_id": payload.get("recipient_id"),
+    }
+    pricing = payload.get("pricing") or {}
+    if pricing:
+        compact["pricing"] = {
+            key: pricing[key]
+            for key in ("billable", "pricing_model", "type", "category")
+            if key in pricing
+        }
+    errors = [error for error in (payload.get("errors") or []) if isinstance(error, dict)]
+    if errors:
+        compact["errors"] = [
+            {key: error[key] for key in ("code", "title", "message") if key in error}
+            for error in errors
+        ]
+    conversation = payload.get("conversation") or {}
+    if conversation.get("id"):
+        compact["conversation_id"] = conversation["id"]
+    return compact
+
+
+def _compact_inbound(message: dict[str, Any]) -> dict[str, Any]:
+    """Guarda lo esencial del mensaje entrante para poder mostrarlo después."""
+    return {
+        "from": message.get("from"),
+        "type": message.get("type"),
+        "text": ((message.get("text") or {}).get("body") or "")[:500],
+        "timestamp": message.get("timestamp"),
+    }
 
 
 def _timestamp(value: Any):
@@ -97,6 +148,7 @@ def _process_status(status_payload: dict[str, Any]) -> str:
         message_id,
         WhatsAppWebhookEvent.Type.STATUS,
         status,
+        _compact_status(status_payload),
     )
     if not should_process:
         return "duplicate"
@@ -107,7 +159,13 @@ def _process_status(status_payload: dict[str, Any]) -> str:
         .first()
     )
     if recipient is None:
-        logger.info("Estado de Meta sin destinatario de campaña: %s", message_id)
+        # Sin destinatario el estado no se puede aplicar, pero se conserva el
+        # motivo: es la única forma de saber por qué falló un envío suelto
+        # hecho desde la página de prueba.
+        event.payload = {**event.payload, "unmatched": True}
+        logger.info(
+            "Estado de Meta sin destinatario de campaña: %s (%s)", message_id, status
+        )
         _finish_event(event)
         return "unmatched"
 
@@ -180,6 +238,7 @@ def _process_inbound(message: dict[str, Any], phone_number_id: str) -> str:
         f"inbound:{message_id}",
         message_id,
         WhatsAppWebhookEvent.Type.INBOUND,
+        payload=_compact_inbound(message),
     )
     if not should_process:
         return "duplicate"

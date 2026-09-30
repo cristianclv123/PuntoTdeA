@@ -155,7 +155,7 @@ sesión de personal `staff`. El grupo no se renderiza para usuarios sin `is_staf
 | Página | URL | Para qué |
 | --- | --- | --- |
 | Configuración | `/whatsapp-configuracion/` | Estado de las variables, capacidades, callback a registrar en Meta y los comandos para aplicar los cambios. **Solo lectura.** |
-| Prueba de integración | `/whatsapp-prueba/` | Envío de un mensaje real, simulador del webhook y últimos eventos recibidos. |
+| Prueba de integración | `/whatsapp-prueba/` | Envío de mensajes y plantillas reales, y todo lo que Meta reporta de vuelta. Ver [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md). |
 
 La página de configuración es deliberadamente de solo lectura: no hay ningún
 campo que escriba credenciales. Los secretos no travels por el navegador ni por
@@ -166,18 +166,17 @@ de un `docker compose up --force-recreate` que el navegador no puede lanzar.
 Ambas páginas comparten `communications/templates/communications/whatsapp_base.html`,
 que concentra los estilos, para que las dos se vean igual.
 
-El simulador firma un payload con la misma forma que envía Meta y lo entrega al
-webhook real usando el cliente interno de Django, de modo que ejercita el
-routing, la validación de firma y el procesamiento sin salir del contenedor. Los
-escenarios son:
+La página de prueba **no simula nada**: todo lo que aparece en sus tablas viene de
+Meta de verdad, para que un problema real no se confunda con uno de demostración.
+La referencia completa de esa página está en
+[`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md).
 
-- **Guion completo del bot:** reproduce los cinco turnos de la conversación
-  (saludo → pregunta → confirmación → escalado al asesor → cierre) como cinco
-  webhooks independientes y firmados, para que la máquina de estados avance de
-  verdad y no se salte pasos.
-- **Un solo mensaje entrante**, con el texto que quieras o el de ejemplo.
-- **Estado `delivered`** y **estado `failed`** de campaña, indicando el `wamid`
-  que devolvió Meta al enviar.
+Para probarla a mano, el recorrido es:
+
+1. Escribile **un saludo** al número de negocio desde un WhatsApp.
+2. Esperá unos segundos y recargá: tiene que aparecer un evento `inbound` y una
+   conversación del bot.
+3. Dentro de las 24 horas siguientes, mandá un texto libre desde la página.
 
 > El bot ignora el texto del primer mensaje y solo devuelve el saludo, así que
 > al probar a mano por WhatsApp el primer mensaje debe ser un saludo: la
@@ -196,10 +195,6 @@ Dos detalles del entorno que confunden al probar:
   `docker compose exec -T web python manage.py seed_knowledge`.
 - El cierre por escalado cambia según el horario de atención configurado: fuera
   de horario el bot dice que la solicitud queda pendiente.
-
-> El simulador depende de `ALLOW_WEBHOOK_SIMULATOR`, que se apaga solo cuando
-> `DEBUG` es `false`. No debe habilitarse en producción: un payload firmado con el
-> App Secret es indistinguible de uno real de Meta.
 
 ### Resumen en JSON
 
@@ -221,9 +216,9 @@ Crea 8 contactos, 2 segmentos, 2 plantillas y 2 campañas:
 
 - **«Demo: recordatorio de matrícula (enviada)»** tiene un destinatario en cada
   estado posible (`pending`, `queued`, `sent`, `delivered`, `read`, `failed`,
-  `opted_out`) con su `wamid`. Es lo que permite probar el webhook de estados:
-  pega un `wamid` de la lista en el simulador y observa cómo avanza el
-  destinatario y cómo se respeta la no regresión de `read`.
+  `opted_out`) con su `wamid`. Sirve para ver cómo se aplica un estado y cómo se
+  respeta la no regresión de `read` en el admin, no para probar el webhook: sus
+  `wamid` son sintéticos y Meta nunca mandará un estado con ese identificador.
 - **«Demo: bienvenida a admitidos (borrador)»** queda con todos sus
   destinatarios en `pending`, que es lo que el envío real procesa. Úsala cuando
   tengas credenciales para probar un envío de verdad.
@@ -250,10 +245,54 @@ Notas:
 
 ## Validación
 
-Ejecuta las pruebas de la integración dentro de Docker:
+La página de prueba (`/whatsapp-prueba/`) es el lugar donde se comprueba la
+cadena completa. Antes de nada, revisá los dos puntos que más veces hacen creer
+que todo está bien cuando no llega nada, porque **no se pueden comprobar por
+API** y hay que mirarlos en el App Dashboard:
+
+- **que la app esté en modo Live.** En modo Development Meta no manda webhooks
+  reales. No es que fallen: es que no llegan. La verificación del `GET` sí
+  funciona en Development, que es justo lo que hace pasar la casilla de
+  "callback verificado" sin que después ocurra nada.
+- **que estés suscrito al campo `messages`** del callback. Sin esa casilla el
+  GET de verificación pasa, pero nunca llega un POST.
+
+El resto de la configuración sí la comprueba la propia página; la referencia
+completa está en [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md).
+
+El recorrido que reproduce un envío de verdad:
+
+1. Pedile a alguien que escriba **un saludo** al número de negocio. El primer
+   mensaje siempre se descarta y solo devuelve el saludo del bot, así que una
+   conversación completa arranca con un saludo.
+2. Recargá la página: el evento `inbound` aparece en *Eventos del webhook* y el
+   hilo del bot en *Conversaciones del bot*.
+3. Mandá un texto libre desde el primer formulario. Dentro de las 24 horas
+   debería llegar al celular. El indicador de ventana te dice si esas 24 horas
+   siguen abiertas antes de mandarlo.
+4. Pasadas 24 horas, el texto libre se rechaza con el error `131047`. Usá el
+   segundo formulario, que envía una plantilla aprobada.
+5. Cada envío queda registrado con su `wamid` real en *Envíos de prueba*. Los
+   estados que Meta reporte después aparecen agrupados por `wamid` en *Estados
+   por mensaje*, como `sent` → `delivered` → `read`.
+
+Un `POST /messages` puede devolver HTTP 200 con `wamid` y aun así no entregar:
+el fallo llega después como un estado `failed` con su `errors[]`. Por eso la
+página guarda el `wamid` de cada envío y muestra el motivo del fallo, en lugar
+de informar solo que Meta aceptó el envío.
+
+Los `wamid` de la semilla `seed_demo_whatsapp` son sintéticos y la página de
+prueba no los usa: para ver estados reales hay que mandar algo y usar el
+`wamid` que devuelve Meta. Para dejar la consola en cero:
 
 ```powershell
-docker compose exec -T web python manage.py test communications.tests.test_meta_integration knowledge.chatbot.tests
+docker compose exec -T web python manage.py reset_whatsapp_test_data --ejecutar
+```
+
+Para correr la integración dentro de Docker:
+
+```powershell
+docker compose exec -T web python manage.py test communications knowledge
 ```
 
 La consola tiene su propia suite, que incluye las guardas de las dos páginas y
@@ -262,11 +301,3 @@ del menú lateral:
 ```powershell
 docker compose exec -T web python manage.py test communications.tests.test_meta_console
 ```
-
-Antes de producción, valida con un número de prueba de Meta este recorrido:
-
-1. Enviar una campaña con una plantilla aprobada.
-2. Confirmar que se almacena el `wamid`.
-3. Confirmar los eventos de entrega y lectura en el destinatario.
-4. Enviar un texto desde WhatsApp al número configurado y recibir la respuesta
-   del chatbot.
