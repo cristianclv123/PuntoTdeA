@@ -28,7 +28,7 @@ if DEBUG and "*" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("*")
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://com-disc-pushing-flex.trycloudflare.com",
+    "https://indicator-rise-tables-insertion.trycloudflare.com",
 ]
 
 INSTALLED_APPS = [
