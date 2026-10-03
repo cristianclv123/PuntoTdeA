@@ -3,14 +3,15 @@ name: CI
 # Corre en cada push y PR. El job `tests` es el check que vigila Render:
 # con autoDeployTrigger=checksPass, un deploy solo arranca si esto pasa.
 #
-# IMPORTANTE: `feature/JCFS/IntegracionAPIWA` debe seguir listada aqui. Render
-# despliega esa rama y solo arranca si ve un check en verde; si el CI no corre
-# en ella, el servicio simplemente nunca despliega.
+# IMPORTANTE: la rama que Render despliegue debe seguir listada aqui. Render
+# usa `autoDeployTrigger: checksPass`, asi que si el CI no corre en esa rama no
+# hay check verde y el servicio simplemente nunca despliega, sin avisar.
+# Hoy es `dev`. Cuando cambies `branch:` en render.yaml, cambiala aqui tambien.
 on:
   push:
-    branches: [main, dev, feature/JCFS/IntegracionAPIWA]
+    branches: [main, dev]
   pull_request:
-    branches: [main, dev, feature/JCFS/IntegracionAPIWA]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}

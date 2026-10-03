@@ -18,10 +18,16 @@ services:
     dockerContext: .
     region: oregon
     plan: free
-    # Render despliega esta rama. Ahora mismo es la feature de la integracion
-    # de WhatsApp (entorno de pruebas). Cuando se fusione a main, vuelve aqui
-    # a `main` y Render cambia de rama en el siguiente sync.
-    branch: feature/JCFS/IntegracionAPIWA
+    # Render despliega esta rama: `dev`, que es la rama de integracion. Este
+    # cambio entra por PR, nunca push directo a dev.
+    #
+    # OJO: hay DOS ramas distintas en juego y cambiar solo una no hace nada.
+    #   1. Esta linea (`branch:`) -> de que rama despliega el SERVICIO.
+    #   2. Blueprints -> Settings -> Branch (en el panel) -> de que rama LEE
+    #      Render este render.yaml.
+    # Para pasar a produccion hay que tocar las dos: esta linea a `main` y la
+    # del panel a `main`.
+    branch: dev
     # El deploy solo arranca si los checks de GitHub Actions estan en verde.
     autoDeployTrigger: checksPass
     # SIN `dockerCommand` a proposito. Render ejecuta ese valor como una sola

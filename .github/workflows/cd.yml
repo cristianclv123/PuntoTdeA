@@ -8,8 +8,8 @@ name: CD
 # Este workflow existe para dejar traza explicita del deploy y para poder
 # reintentar a mano.
 #
-# `feature/JCFS/IntegracionAPIWA` es la rama que Render despliega ahora mismo;
-# cuando la integracion se fusione a main, deja de hacer falta aqui.
+# `dev` es la rama que Render despliega ahora mismo. Cuando la integracion
+# llegue a produccion, dejala de hacer falta aqui y pon `main`.
 #
 # Si prefieres que Render lo haga solo (recomendado), puedes borrar este
 # archivo: la configuracion de `checksPass` en render.yaml ya es suficiente.
@@ -17,7 +17,7 @@ name: CD
 on:
   workflow_run:
     workflows: ["CI"]
-    branches: [main, feature/JCFS/IntegracionAPIWA]
+    branches: [main, dev]
     types: [completed]
   workflow_dispatch:
 
