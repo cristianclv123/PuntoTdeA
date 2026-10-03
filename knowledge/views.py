@@ -2,15 +2,13 @@ import json
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
+from communications.webhooks.meta_webhook import whatsapp_webhook as meta_whatsapp_webhook
 from .chatbot import workflow as chatbot_workflow
-from .chatbot.whatsapp import parse_json, process_webhook, validate_signature, verify_webhook
-from .models import ChatConversation, FAQ, KnowledgeArticle
-from .services.indexing_service import index_academic_calendar
-from .services.rag_service import answer_query, search_knowledge
+from .models import Category, ChatConversation, FAQ, KnowledgeArticle
 
 
 def _manager(model):
@@ -34,17 +32,14 @@ def faq_list(request):
 
 
 @login_required
-def search(request):
-    query = request.GET.get('q', '').strip()
-    results = search_knowledge(query) if query else []
-    return JsonResponse({'results': results, 'query': query})
-
-
-@login_required
-def ask(request):
-    query = request.GET.get('q', '').strip()
-    response = answer_query(query)
-    return JsonResponse(response)
+def manage(request):
+    """Gestión de preguntas y artículos: la tabla se carga y muta por JS
+    contra /api/knowledge/ (ver knowledge/static/knowledge/js/manage.js)."""
+    return render(
+        request,
+        'knowledge/manage.html',
+        {'active_nav': 'knowledge-manage', 'categories': _manager(Category).filter(is_active=True).order_by('name')},
+    )
 
 
 @csrf_exempt
@@ -88,29 +83,6 @@ def chatbot(request):
     return JsonResponse(result)
 
 
-@csrf_exempt
 def whatsapp_webhook(request):
-    if request.method == 'GET':
-        challenge = verify_webhook(
-            request.GET.get('hub.mode', ''),
-            request.GET.get('hub.verify_token', ''),
-            request.GET.get('hub.challenge', ''),
-        )
-        if challenge is None:
-            return HttpResponseForbidden('Verification failed')
-        return HttpResponse(challenge, content_type='text/plain')
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido.'}, status=405)
-    if not validate_signature(request.body, request.META.get('HTTP_X_HUB_SIGNATURE_256')):
-        return HttpResponseForbidden('Invalid signature')
-    try:
-        payload = parse_json(request.body)
-    except (UnicodeDecodeError, ValueError):
-        return JsonResponse({'error': 'El cuerpo debe ser JSON válido.'}, status=400)
-    return JsonResponse({'ok': True, 'processed': process_webhook(payload)})
-
-
-@login_required
-def reindex_academic_calendar(_request):
-    payload = index_academic_calendar()
-    return JsonResponse({'status': 'ok', 'payload': payload})
+    """Alias temporal del webhook central para no romper URLs ya publicadas."""
+    return meta_whatsapp_webhook(request)

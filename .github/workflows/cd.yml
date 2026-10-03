@@ -1,0 +1,50 @@
+name: CD
+
+# Despliegue a Render despues de que CI pase.
+#
+# Render NO tiene deploy automatico por API key en este proyecto: el propio
+# servicio usa `autoDeployTrigger: checksPass`, asi que cuando CI termina en
+# verde Render detecta el check del commit y arranca el build por su cuenta.
+# Este workflow existe para dejar traza explicita del deploy y para poder
+# reintentar a mano.
+#
+# `dev` es la rama que Render despliega ahora mismo. Cuando la integracion
+# llegue a produccion, dejala de hacer falta aqui y pon `main`.
+#
+# Si prefieres que Render lo haga solo (recomendado), puedes borrar este
+# archivo: la configuracion de `checksPass` en render.yaml ya es suficiente.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main, dev]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Desplegar en Render
+    # Solo si CI paso. `workflow_run` se dispara tambien cuando CI falla.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Disparar deploy hook de Render
+        # El deploy hook vive en el panel: Service -> Settings -> Deploy Hook.
+        # Guardalo como secreto en Settings -> Secrets -> Actions:
+        #   RENDER_DEPLOY_HOOK_URL = https://api.render.com/deploy/srv-XXX?key=YYY
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RENDER_DEPLOY_HOOK_URL}" ]; then
+            echo "::notice::RENDER_DEPLOY_HOOK_URL no configurado. Render desplegara solo al detectar el check verde de CI (autoDeployTrigger=checksPass)."
+            exit 0
+          fi
+          curl --fail --silent --show-error \
+               -X POST "${RENDER_DEPLOY_HOOK_URL}" \
+               -o /dev/null -w "Deploy disparado, HTTP %{http_code}\n"

@@ -80,7 +80,7 @@ class AuthTests(TestCase):
             {"username": "asesor1@tdea.edu.co", "password": "secret123"},
         )
         self.assertEqual(res.status_code, 302)
-        self.assertEqual(res.url, reverse("dashboard"))
+        self.assertEqual(res.url, reverse("dashboard:index"))
 
     def test_profile_requires_login(self):
         res = self.client.get(reverse("profile"))

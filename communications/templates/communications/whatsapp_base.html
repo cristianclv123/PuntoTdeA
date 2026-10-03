@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}
+  <style>
+    .wa-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .wa-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.1rem 1.2rem;
+    }
+    .wa-card h2 { font-size: 1rem; margin: 0 0 .2rem; display: flex; align-items: center; gap: .5rem; }
+    .wa-card p.hint { color: #9aa0a6; font-size: .8rem; margin: 0 0 .9rem; line-height: 1.45; }
+    .wa-card.full { grid-column: 1 / -1; }
+    .wa-row {
+      display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+      padding: .45rem 0; border-bottom: 1px dashed var(--border); font-size: .85rem;
+    }
+    .wa-row:last-child { border-bottom: 0; }
+    .wa-row code { font-size: .8rem; color: #cfd3d6; }
+    .wa-tag {
+      font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      padding: .2rem .5rem; border-radius: 999px; white-space: nowrap;
+    }
+    .wa-tag.ok { background: var(--success-bg); color: var(--success-text); }
+    .wa-tag.bad { background: var(--danger-bg); color: var(--danger-text); }
+    .wa-tag.warn { background: var(--warning-bg); color: var(--warning-text); }
+    .wa-input, .wa-select, .wa-textarea {
+      width: 100%; background: #1c1c1c; border: 1px solid var(--border);
+      border-radius: 9px; color: #f1f3f4; padding: .55rem .7rem; font-size: .87rem;
+      font-family: inherit;
+    }
+    .wa-textarea { resize: vertical; min-height: 72px; }
+    .wa-label { display: block; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: #9aa0a6; margin: 0 0 .3rem; }
+    .wa-field { margin-bottom: .7rem; }
+    .wa-btn {
+      background: var(--blue); color: #fff; border: 0; border-radius: 9px;
+      padding: .55rem 1.1rem; font-size: .85rem; font-weight: 600; cursor: pointer;
+    }
+    .wa-btn:hover { filter: brightness(1.1); }
+    .wa-btn.alt { background: #333; }
+    .wa-btn.link {
+      background: none; border: 1px solid var(--border); color: #cfd3d6;
+      text-decoration: none; display: inline-flex; align-items: center; gap: .4rem;
+    }
+    .wa-alert { border-radius: 10px; padding: .7rem .9rem; font-size: .84rem; margin-bottom: .5rem; }
+    .wa-alert.ok { background: var(--success-bg); color: var(--success-text); }
+    .wa-alert.bad { background: var(--danger-bg); color: var(--danger-text); }
+    .wa-alert.warn { background: var(--warning-bg); color: var(--warning-text); }
+    .wa-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    .wa-table th, .wa-table td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--border); }
+    .wa-table th { color: #9aa0a6; font-weight: 600; text-transform: uppercase; font-size: .68rem; letter-spacing: .05em; }
+    .wa-endpoint { background: #1c1c1c; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .6rem; font-size: .8rem; overflow-x: auto; }
+    .wa-note { font-size: .76rem; color: #9aa0a6; line-height: 1.5; margin-top: .7rem; }
+    .wa-note.ok { color: var(--success-text); }
+    .wa-note.warn { color: var(--warning-text); }
+    .wa-note.bad { color: var(--danger-text); }
+    /* Chips de estado de entrega. El color dice en qué punto va el mensaje:
+       enviado, entregado, leído o fallido. */
+    .wa-chip {
+      display: inline-block; font-size: .68rem; font-weight: 600;
+      padding: .15rem .45rem; border-radius: 6px; white-space: nowrap;
+      background: #2a2a2a; color: #cfd3d6;
+    }
+    .wa-chip.sent { background: #2f3640; color: #b0bec5; }
+    .wa-chip.delivered { background: var(--blue-soft); color: var(--blue); }
+    .wa-chip.read { background: var(--success-bg); color: var(--success-text); }
+    .wa-chip.failed { background: var(--danger-bg); color: var(--danger-text); }
+    .wa-chip.test_text, .wa-chip.test_template { background: var(--warning-bg); color: var(--warning-text); }
+    .wa-timeline { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+    .wa-err {
+      font-size: .72rem; color: var(--danger-text);
+      margin-top: .25rem; line-height: 1.4;
+    }
+    .wa-thread-meta { color: #9aa0a6; font-size: .72rem; white-space: nowrap; }
+    /* Burbujas del bot, para leer la conversación sin abrir el admin. */
+    .wa-bubble {
+      border-radius: 10px; padding: .45rem .6rem; font-size: .82rem;
+      line-height: 1.45; margin-top: .35rem;
+    }
+    .wa-bubble.bot { background: #1c1c1c; border: 1px solid var(--border); }
+    .wa-bubble.user { background: var(--blue-soft); color: var(--blue); }
+    .wa-who { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: #9aa0a6; }
+    .wa-copy {
+      background: none; border: 0; color: #9aa0a6; cursor: pointer;
+      font-size: .7rem; padding: 0 .25rem;
+    }
+    .wa-copy:hover { color: var(--blue); }
+    .wa-step { display: flex; gap: .7rem; font-size: .85rem; margin-bottom: .55rem; line-height: 1.5; }
+    .wa-step b {
+      flex: 0 0 1.4rem; height: 1.4rem; border-radius: 50%;
+      background: var(--blue-soft); color: var(--blue); display: grid; place-items: center;
+      font-size: .75rem;
+    }
+    .wa-code {
+      background: #1c1c1c; border: 1px solid var(--border); border-radius: 8px;
+      padding: .6rem .7rem; font-size: .78rem; overflow-x: auto; white-space: pre;
+      margin: .3rem 0 .8rem;
+    }
+    /* Franja compacta de estado (semáforo) en la página de prueba */
+    .wa-strip { padding: .9rem 1.1rem; }
+    .wa-strip-main {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: .75rem 1rem;
+    }
+    .wa-lights { display: flex; flex-wrap: wrap; gap: .4rem; flex: 1 1 auto; min-width: 0; }
+    .wa-light {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #1c1c1c; border: 1px solid var(--border); border-radius: 999px;
+      padding: .22rem .55rem; font-size: .74rem; white-space: nowrap;
+      cursor: default;
+    }
+    .wa-light code { font-size: .72rem; color: #cfd3d6; }
+    .wa-dot { width: .55rem; height: .55rem; border-radius: 50%; flex: 0 0 auto; }
+    .wa-dot.ok { background: var(--success-text); box-shadow: 0 0 6px var(--success-text); }
+    .wa-dot.bad { background: var(--danger-text); box-shadow: 0 0 6px var(--danger-text); }
+    .wa-dot.warn { background: var(--warning-text); box-shadow: 0 0 6px var(--warning-text); }
+    .wa-strip-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .wa-strip-cb { font-size: .76rem; color: #9aa0a6; }
+    .wa-strip-cb code { font-size: .74rem; color: #cfd3d6; }
+    .wa-strip-warn {
+      margin: .7rem 0 0; padding-top: .6rem; border-top: 1px dashed var(--border);
+      font-size: .78rem; color: var(--warning-text); line-height: 1.5;
+    }
+    .sidebar {
+      overflow-y: auto; overflow-x: hidden;
+      scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 6px; }
+    .sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.25); border-radius: 3px; }
+    .wa-console-layout {
+      display: grid; gap: 1rem; align-items: start;
+      grid-template-columns: minmax(0, 1fr) 340px;
+    }
+    .wa-console-layout .wa-grid { min-width: 0; }
+    .wa-aside .wa-card { border-radius: 12px; }
+    .wa-aside-title {
+      font-size: .78rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: #9aa0a6; margin: 0 0 .6rem;
+    }
+    @media (max-width: 1100px) {
+      .wa-console-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  {% if messages %}
+    <div style="margin-bottom:1rem">
+      {% for message in messages %}
+        <div class="wa-alert {% if message.tags == 'success' %}ok{% elif message.tags == 'warning' %}warn{% else %}bad{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div>
+    {% block wa_content %}{% endblock %}
+  </div>
+{% endblock %}

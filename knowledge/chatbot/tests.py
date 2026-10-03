@@ -1,4 +1,6 @@
 import json
+import hashlib
+import hmac
 from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
@@ -100,20 +102,29 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content.decode(), 'abc123')
 
-    @override_settings(META_ACCESS_TOKEN='token', WHATSAPP_PHONE_NUMBER_ID='phone-id')
+    @override_settings(
+        META_ACCESS_TOKEN='token',
+        WHATSAPP_PHONE_NUMBER_ID='phone-id',
+        META_APP_SECRET='app-secret',
+    )
     def test_webhook_processes_and_sends_message(self):
         payload = {
             'entry': [{'changes': [{'value': {'messages': [{
+                'id': 'wamid.inbound.knowledge-test',
                 'from': '573001112233', 'type': 'text', 'text': {'body': 'Hola'},
             }]}}]}],
         }
         response_mock = Mock(status_code=200)
         response_mock.raise_for_status.return_value = None
-        with patch('knowledge.chatbot.whatsapp.requests.post', return_value=response_mock) as send:
+        response_mock.json.return_value = {'messages': [{'id': 'wamid.outbound.knowledge-test'}]}
+        body = json.dumps(payload).encode()
+        signature = hmac.new(b'app-secret', body, hashlib.sha256).hexdigest()
+        with patch('communications.adapters.meta_adapter.requests.post', return_value=response_mock) as send:
             response = self.client.post(
                 reverse('knowledge:whatsapp-webhook'),
-                data=json.dumps(payload),
+                data=body,
                 content_type='application/json',
+                HTTP_X_HUB_SIGNATURE_256=f'sha256={signature}',
             )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['processed'], 1)

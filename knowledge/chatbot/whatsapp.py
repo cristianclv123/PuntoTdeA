@@ -7,10 +7,10 @@ import logging
 import re
 from typing import Any
 
-import requests
 from django.conf import settings
 from django.utils import timezone
 
+from communications.adapters.meta_adapter import send_text_message
 from communications.models import Contact
 from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
@@ -34,7 +34,7 @@ def verify_webhook(mode: str, token: str, challenge: str) -> str | None:
 def validate_signature(raw_body: bytes, signature_header: str | None) -> bool:
     secret = getattr(settings, 'META_APP_SECRET', '')
     if not secret:
-        return True
+        return False
     if not signature_header or not signature_header.startswith('sha256='):
         return False
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
@@ -194,29 +194,14 @@ def handle_message(sender: str, text: str) -> list[str]:
 
 
 def send_text(recipient: str, text: str) -> bool:
-    token = getattr(settings, 'META_ACCESS_TOKEN', '')
-    phone_number_id = getattr(settings, 'WHATSAPP_PHONE_NUMBER_ID', '')
-    api_version = getattr(settings, 'WHATSAPP_API_VERSION', 'v21.0')
-    if not token or not phone_number_id:
-        logger.warning('WhatsApp no está configurado; se omite el envío a %s.', recipient)
-        return False
-    try:
-        response = requests.post(
-            f'https://graph.facebook.com/{api_version}/{phone_number_id}/messages',
-            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
-            json={
-                'messaging_product': 'whatsapp',
-                'to': recipient,
-                'type': 'text',
-                'text': {'body': text},
-            },
-            timeout=10,
+    result = send_text_message(recipient, text)
+    if not result.success:
+        logger.warning(
+            'No fue posible enviar la respuesta de WhatsApp a %s: %s',
+            recipient,
+            result.error,
         )
-        response.raise_for_status()
-    except requests.RequestException:
-        logger.exception('No fue posible enviar la respuesta de WhatsApp a %s.', recipient)
-        return False
-    return True
+    return result.success
 
 
 def process_webhook(payload: dict[str, Any]) -> int:
