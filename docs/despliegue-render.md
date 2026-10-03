@@ -15,22 +15,32 @@ configurar nada a mano** salvo los valores marcados `sync: false`.
 
 ## Primer despliegue
 
-1. **Sube el código a la rama que Render despliega.** Ahora mismo
-   `render.yaml` apunta a `feature/JCFS/IntegracionAPIWA` (entorno de pruebas
-   con la integración de WhatsApp):
+1. **Sube el código por PR.** `dev` no recibe push directo: todo entra por Pull
+   Request desde la rama de integración. Y `render.yaml` apunta a `dev`, así que
+   cada PR mergeado a `dev` dispara un deploy.
 
    ```bash
+   git switch feature/JCFS/IntegracionAPIWA
    git add -A
-   git commit -m "Despliegue en Render + anuncios de WhatsApp Status"
+   git commit -m "Despliegue en Render"
    git push origin feature/JCFS/IntegracionAPIWA
    ```
 
-   Cuando la feature se fusione a `main`, vuelve a poner `branch: main` en
-   `render.yaml` y Render cambia de rama en el siguiente sync.
+   Luego abre el PR hacia `dev`. El merge genera un push a `dev`, el CI corre
+   sobre ese commit y Render despliega cuando queda verde.
 
 2. **Crea el Blueprint** en <https://dashboard.render.com> → *New* → *Blueprint* →
-   apunta a `cristianclv123/PuntoTdeA` y elige la rama
-   `feature/JCFS/IntegracionAPIWA`.
+   apunta a `cristianclv123/PuntoTdeA` y elige la rama `dev`.
+
+   Ojo: hay **dos ramas distintas** en juego, y cambiar solo una no hace nada:
+
+   | Dónde | Qué decide |
+   |---|---|
+   | *Blueprints → Settings → Branch* (panel) | De dónde **lee** Render el `render.yaml` |
+   | `branch:` dentro del `render.yaml` | Desde dónde **despliega** el servicio |
+
+   Para pasar a producción hay que tocar las dos: la del panel a `main` y la
+   línea `branch:` a `main`.
 
 3. **Completa las variables que Render te pida** (`sync: false`). Son las de
    credenciales de Meta y `WIDGET_ALLOWED_ORIGINS`. Copia los valores de tu `.env`
