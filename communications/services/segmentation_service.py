@@ -1,10 +1,5 @@
 # Resolución de audiencias contra Backend CRUD
-"""Resolución de audiencias a partir de archivos Excel exportados de Campus.
-
-T-06.3: la carga extrae obligatoriamente Celular, Correo, Nombre y Documento.
-Cualquier otra columna del Excel (programa, semestre, rol...) se toma si
-está presente, pero no es obligatoria.
-"""
+"""Resolución de audiencias a partir de archivos .xlsx exportados de Campus."""
 
 import re
 from dataclasses import dataclass, field
@@ -14,18 +9,14 @@ import openpyxl
 from ..models import AudienceSegment, Contact, ContactEvent, SegmentMembership
 from .logging_service import log_event
 
-# Nombres de columna aceptados por cada campo (insensible a mayúsculas/acentos).
-# Si el Excel de Campus usa otro encabezado, agrégalo a la lista correspondiente.
-COLUMN_ALIASES = {
-    "phone": ["celular", "telefono", "teléfono", "whatsapp", "numero", "número"],
-    "email": ["correo", "email", "correo electronico", "correo electrónico"],
-    "full_name": ["nombre", "nombre completo", "nombres"],
-    "document_number": ["documento", "cedula", "cédula", "numero documento", "número documento"],
-    "academic_program": ["programa", "programa academico", "programa académico"],
-    "semester": ["semestre"],
+EXCEL_COLUMNS = {
+    "document_number": "documento identidad",
+    "full_name": "nombre",
+    "phone": "celular",
+    "email": "email",
 }
 
-REQUIRED_FIELDS = ["phone", "full_name", "document_number"]
+REQUIRED_FIELDS = ["document_number", "full_name", "phone"]
 
 
 @dataclass
@@ -37,16 +28,16 @@ class ImportResult:
 
 
 def _normalize_header(header: str) -> str:
-    return (header or "").strip().lower()
+    return " ".join(str(header or "").split()).casefold()
 
 
 def _map_columns(header_row) -> dict[str, int]:
     """Devuelve {campo_interno: índice_columna} según los encabezados del Excel."""
     normalized = [_normalize_header(h) for h in header_row]
     mapping = {}
-    for field_name, aliases in COLUMN_ALIASES.items():
+    for field_name, official_header in EXCEL_COLUMNS.items():
         for idx, header in enumerate(normalized):
-            if header in aliases:
+            if header == official_header:
                 mapping[field_name] = idx
                 break
     return mapping
@@ -141,9 +132,6 @@ def _upsert_contact_from_row(row, column_map: dict[str, int], result: ImportResu
     full_name = str(get("full_name") or "").strip()
     phone = _normalize_phone(get("phone"))
     email = str(get("email") or "").strip()
-    academic_program = str(get("academic_program") or "").strip()
-    semester = str(get("semester") or "").strip()
-
     if not document_number or not full_name or not phone:
         result.skipped += 1
         result.errors.append(
@@ -158,8 +146,6 @@ def _upsert_contact_from_row(row, column_map: dict[str, int], result: ImportResu
             "full_name": full_name,
             "phone": phone,
             "email": email,
-            "academic_program": academic_program,
-            "semester": semester,
             "source": "excel_campus",
             # Dato oficial de Campus: se asume consentido salvo que ya
             # se haya dado de baja explícitamente (ver update más abajo).
@@ -175,8 +161,6 @@ def _upsert_contact_from_row(row, column_map: dict[str, int], result: ImportResu
     contact.full_name = full_name or contact.full_name
     contact.phone = phone or contact.phone
     contact.email = email or contact.email
-    contact.academic_program = academic_program or contact.academic_program
-    contact.semester = semester or contact.semester
     if contact.whatsapp_opt_in != Contact.OptInStatus.BAJA:
         contact.whatsapp_opt_in = Contact.OptInStatus.SUSCRITO
     contact.save()

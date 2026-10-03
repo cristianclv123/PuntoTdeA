@@ -264,26 +264,28 @@ const OutboundUI = (() => {
                     name: data.name,
                     channel: data.channel,
                     template: data.template,
-                    templateName: data.template_name,
+                    templateName: data.template_name || 'Sin plantilla',
                     defaultParams: data.default_params || {},
 
                     segments: data.segment
                         ? [data.segment_name || data.segment]
                         : [],
 
-                    executedAt: data.scheduled_at || '-',
+                    totalRecipients: data.total_recipients ?? 0,
+                    sent: data.sent_count ?? 0,
+                    delivered: data.delivered_count ?? 0,
+                    read: data.read_count ?? 0,
+                    failed: data.failed_count ?? 0,
 
+                    executedAt: data.scheduled_at || '-',
                     type: data.type || 'Campaña',
 
                     status: data.status,
 
-                    sent: data.sent ?? 0,
-                    delivered: data.delivered ?? 0,
-                    read: data.read ?? 0,
-                    clicks: data.clicks ?? 0,
-                    replies: data.replies ?? 0
+                    // Todavía no existen estos indicadores en CampaignSerializer.
+                    clicks: 0,
+                    replies: 0
                 };
-
                 console.log('Campaña cargada desde Django:', campaign);
             }
         } catch (error) {
@@ -371,7 +373,11 @@ const OutboundUI = (() => {
                 <div class="card outbound-card">
                     <div class="card-body">
                         <h3 class="h6">Audiencias</h3>
-                        <p>${campaign.segments.join(', ')}</p>
+                        <p class="mb-1">${campaign.segments.join(', ') || 'Sin audiencia'}</p>
+                        <p class="small text-muted mb-3">
+                            ${campaign.totalRecipients.toLocaleString('es-CO')} destinatarios
+                        </p>
+                                                
 
                         <h3 class="h6">Ejecución</h3>
                         <p class="mb-0">
@@ -385,10 +391,13 @@ const OutboundUI = (() => {
                 <div class="card outbound-card">
                     <div class="card-body">
                         <h3 class="h6 text-uppercase text-muted">
-                            Plantilla
+                              Plantilla
                         </h3>
+                        <p class="fw-semibold mb-3">
+                            ${campaign.templateName}
+                        </p>
 
-                        <div class="phone-frame">
+                    <div class="phone-frame">
                             <div class="phone-screen">
                                 ${previewHtml(campaign.channel, tpl, campaign.defaultParams)}
                             </div>
@@ -419,12 +428,61 @@ const OutboundUI = (() => {
 
     function initWizard() {
         let templates = [];
+        let segments = [];
         const state = {
             step: 1,
             channel: 'whatsapp',
+            include: [],
+            exclude: [],
             templateId: '',
             vars: {},
         };
+
+        const loadRecipientsFileBtn = document.getElementById('loadRecipientsFileBtn');
+        const recipientsFileInput = document.getElementById('recipientsFileInput');
+        const selectedRecipientsFileName = document.getElementById('selectedRecipientsFileName');
+        let selectedRecipientsFile = null;
+        let importingRecipients = false;
+        if (loadRecipientsFileBtn && recipientsFileInput && selectedRecipientsFileName) {
+            loadRecipientsFileBtn.addEventListener('click', () => recipientsFileInput.click());
+            recipientsFileInput.addEventListener('change', () => {
+                const file = recipientsFileInput.files && recipientsFileInput.files[0];
+                if (!file) return;
+
+                if (!file.name.toLowerCase().endsWith('.xlsx')) {
+                    toast('Selecciona un archivo con formato .xlsx.');
+                    return;
+                }
+
+                selectedRecipientsFile = file;
+                selectedRecipientsFileName.textContent = `Archivo seleccionado: ${file.name}`;
+                selectedRecipientsFileName.classList.remove('d-none');
+            });
+        }
+
+        async function loadSegments() {
+            try {
+                const response = await fetch('/campanas/api/segments/');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                segments = Array.isArray(data)
+                    ? data
+                    : (data.results || []);
+
+                renderSegments();
+                return true;
+            } catch (error) {
+                console.error('Error cargando audiencias:', error);
+                toast('No se pudieron cargar las audiencias.');
+                return false;
+            }
+        }
+
         const picker = document.getElementById('channelPicker');
         picker.innerHTML = Object.entries(CHANNELS).map(([key, meta]) => `
             <button type="button" class="channel-option ${key === state.channel ? 'is-selected' : ''}" data-channel="${key}">
@@ -433,10 +491,54 @@ const OutboundUI = (() => {
             </button>
         `).join('');
 
-        function fillAccounts() {
-            document.getElementById('senderAccount').innerHTML = `<option>${CHANNELS[state.channel].account}</option>`;
+        const includeBox = document.getElementById('includeSegments');
+        const excludeBox = document.getElementById('excludeSegments');
+
+        function chip(s, kind) {
+            return `<button type="button" class="segment-chip" data-kind="${kind}" data-id="${s.id}">
+        ${s.name} · ${(s.contact_count || 0).toLocaleString('es-CO')}
+    </button>`;
         }
+
+        function renderSegments() {
+            includeBox.innerHTML = segments
+                .map((s) => chip(s, 'include'))
+                .join('');
+
+            excludeBox.innerHTML = segments
+                .map((s) => chip(s, 'exclude'))
+                .join('');
+
+            document.querySelectorAll('.segment-chip').forEach((btn) => {
+                const id = Number(btn.dataset.id);
+                const selectedSegments = btn.dataset.kind === 'include' ? state.include : state.exclude;
+                btn.classList.toggle('is-selected', selectedSegments.includes(id));
+                btn.addEventListener('click', () => {
+                    const kind = btn.dataset.kind;
+                    const list = kind === 'include' ? state.include : state.exclude;
+                    const idx = list.indexOf(id);
+
+                    if (idx >= 0) {
+                        list.splice(idx, 1);
+                    } else if (kind === 'include' && list.length >= 5) {
+                        toast('Puedes incluir hasta 5 audiencias.');
+                        return;
+                    } else {
+                        list.push(id);
+                    }
+
+                    btn.classList.toggle('is-selected');
+                });
+            });
+        }
+
+        function fillAccounts() {
+            document.getElementById('senderAccount').innerHTML =
+                `<option>${CHANNELS[state.channel].account}</option>`;
+        }
+
         fillAccounts();
+        loadSegments();
 
         picker.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-channel]');
@@ -553,18 +655,194 @@ const OutboundUI = (() => {
             const name = document.getElementById('campaignName').value || 'Sin nombre';
             const type = document.getElementById('campaignType').value;
             const tpl = currentTpl();
+
+            const includeNames = segments
+                .filter((s) => state.include.includes(Number(s.id)))
+                .map((s) => s.name);
+
+            const excludeNames = segments
+                .filter((s) => state.exclude.includes(Number(s.id)))
+                .map((s) => s.name);
+
+            const size = segments
+                .filter((s) => state.include.includes(Number(s.id)))
+                .reduce((total, s) => total + Number(s.contact_count || 0), 0);
+
             document.getElementById('reviewList').innerHTML = `
-                <dt class="col-sm-4">Nombre</dt><dd class="col-sm-8">${name}</dd>
-                <dt class="col-sm-4">Canal</dt><dd class="col-sm-8">${CHANNELS[state.channel].label}</dd>
-                <dt class="col-sm-4">Tipo</dt><dd class="col-sm-8">${type}</dd>
-                <dt class="col-sm-4">Plantilla</dt><dd class="col-sm-8">${tpl ? tpl.name : 'Sin seleccionar'}</dd>
-            `;
+                <dt class="col-sm-4">Nombre</dt>
+                <dd class="col-sm-8">${name}</dd>
+
+                <dt class="col-sm-4">Canal</dt>
+                <dd class="col-sm-8">${CHANNELS[state.channel].label}</dd>
+
+                <dt class="col-sm-4">Tipo</dt>
+                <dd class="col-sm-8">${type}</dd>
+
+                <dt class="col-sm-4">Audiencias</dt>
+                <dd class="col-sm-8">${includeNames.join(', ') || 'Ninguna'}</dd>
+
+                <dt class="col-sm-4">Excluir</dt>
+                <dd class="col-sm-8">${excludeNames.join(', ') || 'Ninguna'}</dd>
+
+                <dt class="col-sm-4">Plantilla</dt>
+                <dd class="col-sm-8">${tpl ? tpl.name : 'Sin seleccionar'}</dd>
+                `;
+
+            document.getElementById('costEstimate').textContent =
+                `Audiencia estimada: ${size.toLocaleString('es-CO')} destinatarios.`;
+        }
+
+        function getCookie(name) {
+            const cookies = document.cookie ? document.cookie.split(';') : [];
+
+            for (const cookie of cookies) {
+                const [key, ...valueParts] = cookie.trim().split('=');
+
+                if (key === name) {
+                    return decodeURIComponent(valueParts.join('='));
+                }
+            }
+
+            return '';
+        }
+
+        async function importRecipientsFile(nextButton) {
+            if (importingRecipients) return;
+
+            importingRecipients = true;
+            nextButton.disabled = true;
+            toast('Importando archivo...');
+
+            try {
+                const segmentNameInput = document.getElementById('segmentName');
+                const segmentName = segmentNameInput
+                    ? segmentNameInput.value.trim()
+                    : '';
+
+                if (!segmentName) {
+                    toast('Escribe el nombre de la audiencia.');
+                    return false;
+                }
+
+                const formData = new FormData();
+                formData.append('name', segmentName);
+                formData.append('description', 'Importada desde campaña');
+                formData.append('file', selectedRecipientsFile);
+
+                const response = await fetch('/campanas/api/segments/import_excel/', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                });
+
+                if (!response.ok) {
+                    let backendError;
+
+                    try {
+                        backendError = await response.json();
+                    } catch (error) {
+                        backendError = {
+                            detail: 'El servidor rechazó la importación.',
+                        };
+                    }
+
+                    console.error('Error al importar archivo:', backendError);
+
+                    const message = backendError.detail
+                        || Object.entries(backendError)
+                            .map(([field, messages]) =>
+                                `${field}: ${Array.isArray(messages)
+                                    ? messages.join(' ')
+                                    : messages}`
+                            )
+                            .join(' ');
+
+                    toast(message || 'No fue posible importar el archivo.');
+                    return false;
+                }
+
+                const data = await response.json();
+                const segment = data.segment;
+
+                if (!segment || segment.id === undefined || segment.id === null) {
+                    console.error('Respuesta de importación sin segmento:', data);
+                    toast(
+                        'La importación respondió correctamente, pero no se recibió la audiencia creada.'
+                    );
+                    return false;
+                }
+
+                const segmentsLoaded = await loadSegments();
+                const segmentId = Number(segment.id);
+
+                if (!segments.some((item) => Number(item.id) === segmentId)) {
+                    segments.push(segment);
+                }
+
+                let audienceLimitReached = false;
+
+                if (!state.include.includes(segmentId)) {
+                    if (state.include.length < 5) {
+                        state.include.push(segmentId);
+                    } else {
+                        audienceLimitReached = true;
+                    }
+                }
+
+                renderSegments();
+
+                const summary =
+                    `Importación completada: ${data.created || 0} creados, ` +
+                    `${data.updated || 0} actualizados y ` +
+                    `${data.skipped || 0} omitidos.`;
+
+                const reloadWarning = segmentsLoaded
+                    ? ''
+                    : ' No se pudo recargar la lista; la audiencia importada se conservó en ella.';
+
+                toast(
+                    `${summary}` +
+                    `${audienceLimitReached
+                        ? ' Se alcanzó el máximo de 5 audiencias; la nueva audiencia quedó en la lista, pero no se seleccionó.'
+                        : ''}` +
+                    `${reloadWarning}`
+                );
+
+                showStep(2);
+                return true;
+
+            } catch (error) {
+                console.error('Error al importar archivo:', error);
+                toast(
+                    'No se pudo importar el archivo. Verifica la conexión con el servidor.'
+                );
+                return false;
+
+            } finally {
+                importingRecipients = false;
+                nextButton.disabled = false;
+            }
         }
 
         document.getElementById('wizardBack').addEventListener('click', () => showStep(Math.max(1, state.step - 1)));
-        document.getElementById('wizardNext').addEventListener('click', () => {
+        document.getElementById('wizardNext').addEventListener('click', async (event) => {
+            if (importingRecipients) return;
             if (state.step === 1) {
-                if (!document.getElementById('campaignName').value.trim()) return toast('Escribe un nombre de campaña.');
+                if (!document.getElementById('campaignName').value.trim()) {
+                    return toast('Escribe un nombre de campaña.');
+                }
+
+                if (!state.include.length && !selectedRecipientsFile) {
+                    return toast('Selecciona una audiencia o carga un archivo .xlsx.');
+                }
+
+                if (selectedRecipientsFile) {
+                    return importRecipientsFile(event.currentTarget);
+                }
+
                 return showStep(2);
             }
             if (state.step === 2) {
@@ -583,6 +861,12 @@ const OutboundUI = (() => {
             const scheduleAt = document.getElementById('scheduleAt').value;
 
             const name = document.getElementById('campaignName').value.trim();
+
+            if (!state.include.length) {
+                toast('Selecciona al menos una audiencia.');
+                return;
+            }
+
             if (!state.templateId || !Number.isInteger(Number(state.templateId))) {
                 toast('La plantilla seleccionada no está disponible en el backend.');
                 return;
@@ -592,6 +876,7 @@ const OutboundUI = (() => {
                 const payload = {
                     name: name,
                     template: Number(state.templateId),
+                    segment: state.include[0],
                     default_params: state.vars,
                 };
 

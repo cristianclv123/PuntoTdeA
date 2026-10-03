@@ -57,10 +57,12 @@
                         <h2 class="h6 fw-bold mb-3">Base de datos de destinatarios</h2>
 
                         <div class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-success">
+                            <button type="button" class="btn btn-outline-success" id="loadRecipientsFileBtn">
                                 <i class="bi bi-folder-plus me-1"></i>
                                 Cargar archivo
                             </button>
+                            <input type="file" id="recipientsFileInput" class="d-none"
+                                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
 
                             <button type="button" class="btn btn-outline-secondary">
                                 <i class="bi bi-eye me-1"></i>
@@ -69,8 +71,37 @@
                         </div>
 
                         <p class="small text-muted mt-2 mb-0">
-                            Formatos permitidos: .xlsx, .xls
+                            Formatos permitidos: .xlsx
                         </p>
+
+                        <div class="mt-3">
+                            <label for="segmentName" class="form-label fw-semibold">
+                                Nombre de la audiencia
+                            </label>
+
+                            <input type="text" id="segmentName" class="form-control" maxlength="150"
+                                placeholder="Ej. Estudiantes de Ingeniería de Software">
+
+                            <div class="form-text">
+                                Este nombre identificará la audiencia creada a partir del archivo.
+                            </div>
+                        </div>
+
+                        <p id="selectedRecipientsFileName" class="small text-muted mt-1 mb-0 d-none" aria-live="polite">
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                Audiencias a incluir (máx. 5)
+                            </label>
+                            <div id="includeSegments" class="segment-chips"></div>
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semibold">
+                                Audiencias a excluir
+                            </label>
+                            <div id="excludeSegments" class="segment-chips"></div>
+                        </div>
                     </div>
                 </section>
 
@@ -135,6 +166,7 @@
                             Incluir mensaje de exclusión (opt-out) en envíos informativos
                         </label>
                     </div>
+                    <p class="small text-muted mb-0" id="costEstimate"></p>
                 </section>
             </div>
             <div class="card-footer d-flex justify-content-between py-3 px-4"
