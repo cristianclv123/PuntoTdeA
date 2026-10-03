@@ -311,6 +311,7 @@ class BroadcastRecipient(models.Model):
 
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
     provider = models.CharField(max_length=20, blank=True, help_text="twilio | meta | mock")
+
     # Índice para localizar rápidamente el mensaje asociado a notificaciones del proveedor.
     provider_message_id = models.CharField(
         max_length=100,
@@ -344,7 +345,6 @@ class WhatsAppWebhookEvent(models.Model):
     reenviar ante un timeout. Los eventos se guardan antes de aplicarse para
     permitir inspeccionar y recuperar notificaciones fallidas.
     """
-
     class Type(models.TextChoices):
         INBOUND = "inbound", "Mensaje entrante"
         STATUS = "status", "Estado de mensaje"
