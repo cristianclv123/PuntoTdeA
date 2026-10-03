@@ -251,27 +251,6 @@
     background: rgba(61, 255, 138, 0.1);
 }
 
-.segment-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.segment-chip {
-    border: 1px solid var(--border, #333);
-    background: var(--surface-2, #1c1c1c);
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 0.85rem;
-    color: var(--text, #fafafa);
-}
-
-.segment-chip.is-selected {
-    background: var(--tdea-green, #00873e);
-    color: #fff;
-    border-color: var(--tdea-green, #00873e);
-}
-
 .template-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -459,4 +438,3 @@
     border-color: #00873e !important;
     color: #fff !important;
 }
-

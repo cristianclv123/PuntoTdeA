@@ -1,18 +1,20 @@
-"""Lógica de creación y envío de campañas por Meta WhatsApp Cloud API.
+# Lógica de creación/orquestación de campañas
+"""Lógica de creación, resolución de destinatarios y envío de campañas.
 
-La planificación, las colas y el envío en lotes son responsabilidad del módulo
-de campañas. Este servicio conserva su punto de integración síncrono actual y
-delega el envío real al cliente de Meta.
+Por ahora el envío es síncrono usando MockAdapter (sin Redis/Celery todavía).
+Cuando se conecte Celery, solo hay que envolver `send_campaign` en una tarea
+`@shared_task` y trocear `recipients` en lotes — la lógica de negocio de acá
+no cambia.
 """
 
 import random
-
 from django.utils import timezone
 
 from ..adapters.meta_adapter import MetaAdapter
 from ..models import BroadcastRecipient, Campaign, Contact, ContactEvent
 from .logging_service import log_event
 
+# Único lugar donde se decide qué adaptador se usa hoy.
 # La integración de este proyecto usa exclusivamente Meta WhatsApp Cloud API.
 DEFAULT_ADAPTER = MetaAdapter()
 
@@ -55,7 +57,8 @@ def _render_params(campaign: Campaign, contact: Contact) -> dict:
 
 
 def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
-    """Envía una campaña a sus destinatarios pendientes por Meta."""
+    """Envía (o simula el envío de) una campaña a todos sus destinatarios
+    pendientes. Actualiza estados y deja rastro en ContactEvent."""
     adapter = adapter or DEFAULT_ADAPTER
 
     resolve_recipients(campaign)
@@ -107,14 +110,7 @@ def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
 def _simulate_delivery(recipient: BroadcastRecipient, campaign: Campaign) -> None:
     """Solo para el MockAdapter: simula entrega/lectura para que las
     métricas de la campaña (sent/delivered/read) se vean realistas en el
-    demo mientras no hay webhooks reales de Twilio/Meta conectados.
-
-    SIN USO desde la integración con Meta: `send_campaign` ya no la invoca
-    porque el adaptador por defecto es `MetaAdapter` y los estados reales
-    llegan por webhook. Se conserva en el archivo para que el equipo de
-    campañas la revise y decida si se elimina o se reaprovecha para el
-    MockAdapter de las pruebas. Borrarla no cambia el comportamiento.
-    """
+    demo mientras no hay webhooks reales de Twilio/Meta conectados."""
     now = timezone.now()
 
     if random.random() < 0.95:  # ~95% de entrega, similar a datos reales
