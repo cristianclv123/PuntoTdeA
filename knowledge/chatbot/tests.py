@@ -6,11 +6,41 @@ from unittest.mock import Mock, patch
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from cases.models import Conversation as CaseConversation, Message as CaseMessage
+from communications.models import Contact
 from ..models import ChatConversation
 from .whatsapp import handle_message
 
 
+def _manager(model):
+    return getattr(model, '_default_manager')
+
+
 class WhatsAppFlowTests(TestCase):
+    def test_whatsapp_conversation_links_matching_communications_contact(self):
+        contact = _manager(Contact).create(
+            full_name='Estudiante de prueba',
+            document_number='1234567890',
+            phone='+573001112233',
+        )
+
+        handle_message('573001112233', 'Hola')
+
+        conversation = getattr(ChatConversation, '_default_manager').get(
+            channel='whatsapp',
+            external_user_id='573001112233',
+        )
+        self.assertEqual(conversation.contact, contact)
+
+    @patch(
+        'knowledge.chatbot.workflow.generate_response',
+        new=Mock(return_value={
+            'answer': 'La respuesta de prueba está disponible.',
+            'confidence': 0.9,
+            'needs_human_attention': False,
+            'sources': [],
+        }),
+    )
     def test_whatsapp_messages_follow_the_chatbot_states(self):
         self.assertIn('ayudarte', handle_message('573001112233', 'Hola')[0])
         response = handle_message('573001112233', 'Necesito información de matrícula')[0]
@@ -23,12 +53,45 @@ class WhatsAppFlowTests(TestCase):
         conversation.refresh_from_db()
         self.assertEqual(conversation.flow_state, 'help_options')
 
-    def test_advisor_is_only_available_after_confirmation(self):
+    def test_user_can_request_advisor_and_get_a_case_ticket(self):
         handle_message('573001112234', 'Hola')
-        self.assertNotIn('asesor', handle_message('573001112234', 'Quiero un asesor')[0].lower())
-        self.assertIn('¿te puedo ayudar', handle_message('573001112234', 'Quiero un asesor')[0])
-        self.assertIn('nueva pregunta', handle_message('573001112234', 'sí')[0])
-        self.assertIn('solicitud', handle_message('573001112234', 'asesor')[0].lower())
+        self.assertIn('transferiremos', handle_message('573001112234', 'Quiero un asesor')[0])
+        responses = handle_message('573001112234', 'Necesito ayuda con mi matrícula')
+        conversation = _manager(ChatConversation).get(external_user_id='573001112234')
+        case_conversation = _manager(CaseConversation).get(
+            channel__code='whatsapp',
+            external_thread_id='573001112234',
+        )
+        self.assertIn(case_conversation.ticket_number, responses[1])
+        self.assertEqual(conversation.case_conversation, case_conversation)
+        self.assertEqual(conversation.status, ChatConversation.STATUS_PENDING)
+        case_message = _manager(CaseMessage).get(conversation=case_conversation)
+        self.assertEqual(case_message.body, 'Necesito ayuda con mi matrícula')
+
+    @patch(
+        'knowledge.chatbot.workflow.generate_response',
+        new=Mock(return_value={
+            'answer': 'No encontré información suficiente.',
+            'confidence': 0.0,
+            'needs_human_attention': True,
+            'sources': [],
+        }),
+    )
+    def test_low_confidence_answer_creates_case_ticket(self):
+        handle_message('573001112235', 'Hola')
+
+        responses = handle_message('573001112235', 'Pregunta sin respuesta')
+
+        conversation = _manager(ChatConversation).get(external_user_id='573001112235')
+        case_conversation = _manager(CaseConversation).get(
+            channel__code='whatsapp',
+            external_thread_id='573001112235',
+        )
+        self.assertIn(case_conversation.ticket_number, responses[1])
+        self.assertEqual(conversation.case_conversation, case_conversation)
+        self.assertEqual(conversation.flow_state, 'pending')
+        case_message = _manager(CaseMessage).get(conversation=case_conversation)
+        self.assertEqual(case_message.body, 'Pregunta sin respuesta')
 
     @override_settings(META_VERIFY_TOKEN='test-token')
     def test_webhook_verification(self):
