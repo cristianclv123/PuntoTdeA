@@ -20,5 +20,10 @@ EXPOSE 8000
 
 # Daphne (no runserver) porque el proyecto usa Channels/WebSocket.
 # Las migraciones se ejecutan aqui: `preDeployCommand` no existe en plan free.
-# El CMD se sobreescribe en render.yaml para respetar $PORT.
+#
+# Este CMD es la unica fuente de verdad del arranque. NO lo sobreescribas con
+# `dockerCommand` en render.yaml: Render pasa ese valor como una sola cadena y
+# anidar `/bin/bash -c "..."` ahi rompe el escapado de comillas (sale con 127).
+# `${PORT:-8000}` lo resuelve el propio shell, asi que ya respeta el PORT de
+# Render sin necessidade de configuracion extra.
 CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p ${PORT:-8000} PuntoTdeA.asgi:application"]

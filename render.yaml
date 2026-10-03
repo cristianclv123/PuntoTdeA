@@ -24,10 +24,11 @@ services:
     branch: feature/JCFS/IntegracionAPIWA
     # El deploy solo arranca si los checks de GitHub Actions estan en verde.
     autoDeployTrigger: checksPass
-    # Sin preDeployCommand (no existe en plan free), las migraciones corren
-    # dentro del CMD del Dockerfile, antes de levantar Daphne.
-    dockerCommand: >-
-      /bin/bash -c "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p $PORT PuntoTdeA.asgi:application"
+    # SIN `dockerCommand` a proposito. Render ejecuta ese valor como una sola
+    # cadena, y anidar `/bin/bash -c "..."` ahi dentro rompe el escapado de
+    # comillas: bash recibe toda la frase como un unico comando y sale con 127
+    # ("command not found"). El CMD del Dockerfile ya hace migrate + daphne
+    # usando $PORT, asi que Render lo usa tal cual.
     healthCheckPath: /api/whatsapp/health/
     envVars:
       # --- Django ---
