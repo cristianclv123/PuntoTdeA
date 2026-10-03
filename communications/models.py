@@ -311,6 +311,7 @@ class BroadcastRecipient(models.Model):
 
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
     provider = models.CharField(max_length=20, blank=True, help_text="twilio | meta | mock")
+    # Índice para localizar rápidamente el mensaje asociado a notificaciones del proveedor.
     provider_message_id = models.CharField(
         max_length=100,
         blank=True,
@@ -337,7 +338,12 @@ class BroadcastRecipient(models.Model):
 
 
 class WhatsAppWebhookEvent(models.Model):
-    """Evento técnico de Meta usado para trazabilidad e idempotencia."""
+    """Evento recibido desde WhatsApp Cloud API, conservado para trazabilidad.
+
+    La clave única evita procesar dos veces el mismo evento que Meta puede
+    reenviar ante un timeout. Los eventos se guardan antes de aplicarse para
+    permitir inspeccionar y recuperar notificaciones fallidas.
+    """
 
     class Type(models.TextChoices):
         INBOUND = "inbound", "Mensaje entrante"
@@ -348,12 +354,14 @@ class WhatsAppWebhookEvent(models.Model):
     provider_message_id = models.CharField(max_length=150, db_index=True)
     event_type = models.CharField(max_length=20, choices=Type.choices)
     status = models.CharField(max_length=30, blank=True)
+    # Payload original necesario para auditar y reprocesar eventos del webhook.
     payload = models.JSONField(
         default=dict,
         blank=True,
         help_text="Fragmento crudo del evento de Meta, para conservar el motivo de un failed.",
     )
     processed_at = models.DateTimeField(null=True, blank=True)
+    # El índice permite consultar eventos recientes de forma eficiente.
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

@@ -15,8 +15,7 @@ from ..models import BroadcastRecipient, Campaign, Contact, ContactEvent
 from .logging_service import log_event
 
 # Único lugar donde se decide qué adaptador se usa hoy.
-# El día que se conecte Twilio o Meta, se cambia esta línea (o se hace
-# configurable por Campaign) y el resto del servicio sigue igual.
+# La integración de este proyecto usa exclusivamente Meta WhatsApp Cloud API.
 DEFAULT_ADAPTER = MetaAdapter()
 
 
