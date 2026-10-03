@@ -78,7 +78,7 @@ conserva las variables viejas y parece que el cambio nunca se aplicó).
 | `WHATSAPP_API_VERSION` | — | Default `v21.0`. |
 | `META_GRAPH_API_URL` | — | Default `https://graph.facebook.com`. |
 | `META_REQUEST_TIMEOUT` | — | Timeout por llamada, default `10` (segundos). |
-| `ALLOW_WEBHOOK_SIMULATOR` | Simulador de la página de prueba | Por defecto sigue a `DEBUG`. |
+| `ALLOW_WEBHOOK_SIMULATOR` | Simulador de webhooks de `cases/api/views.py` | Por defecto sigue a `DEBUG`. |
 
 El asistente `configurar_meta.ps1` guía el llenado y la validación. El comando
 `check_meta_whatsapp` (con `--validate` para probar contra Graph API) verifica
@@ -196,8 +196,8 @@ docker compose exec -T web python manage.py seed_demo_whatsapp
 Crea 8 contactos, 2 segmentos y 2 campañas. Una campaña tiene un destinatario
 en cada estado de entrega (para ver métricas sin enviar); la otra queda en
 `draft` lista para un envío real. Los `wamid` son sintéticos (`wamid.SEED…`);
-limpiar con `--limpiar`. Estos destinatarios alimentan además el **wamid
-sugerido** del simulador de la página de prueba.
+limpiar con `--limpiar`. Estos destinatarios alimentan la tabla de estados de
+campaña de la página de prueba.
 
 ### 4.7 Retención y limpieza
 
@@ -261,16 +261,18 @@ payload, la firma ni la capa HTTP.
    re-pregunta («Respóndeme sí o no…») y **ese mensaje no se guarda** en el
    historial.
 
-### 5.5 Probar el flujo completo sin un celular
+### 5.5 Probar el flujo completo
 
-Página **WhatsApp (Meta) → Prueba de integración → Simular webhook**, escenario
-**«Guion completo del bot»**: envía los cinco turnos como cinco webhooks
-independientes y firmados por el endpoint real, así la máquina de estados
-avanza de verdad. Requiere `META_APP_SECRET` (sin secreto no hay firma y el
-webhook responde `403`) y el simulador activo (`ALLOW_WEBHOOK_SIMULATOR`, que
-por defecto sigue a `DEBUG`). Como el bot responde al número ingresado, un
-número falso hace que la respuesta no llegue a ningún teléfono real — es lo
+Hace falta un WhatsApp de verdad. Escribile **un saludo** al número de negocio y
+recargá la página **WhatsApp (Meta) → Prueba de integración**: el evento
+`inbound` aparece en *Eventos del webhook* y el hilo en *Conversaciones del bot*.
+Mandá el segundo turno desde un WhatsApp cualquiera (no hace falta el de la
+persona) y seguí la conversación. Como el bot responde al número que escribió,
+el intercambio se ve en la página pero la otra persona no ve nada: es lo
 esperado.
+
+La referencia completa de esa página está en
+[`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md).
 
 ---
 
@@ -298,15 +300,15 @@ docker compose exec -T web python manage.py check_meta_whatsapp --validate
 | `403 Invalid signature` en todo evento | `META_APP_SECRET` vacío/erróneo, o el contenedor no se recreó tras editar `.env`. |
 | `Verification failed` | `META_VERIFY_TOKEN` de Meta ≠ el de `.env`. |
 | Llegan eventos, no cambian estados | `wamid` no coincide con `provider_message_id`; buscar `unmatched` en la tabla de eventos. |
-| El bot responde, no llega nada al celular | Número falso en el simulador, o `WHATSAPP_PHONE_NUMBER_ID` incorrecto. |
+| El bot responde, no llega nada al celular | Escribió un número que no es el de la persona que probó, o `WHATSAPP_PHONE_NUMBER_ID` incorrecto. |
 | El bot responde dos veces | Evento reintentado por Meta (límite conocido, sección 8). |
 | El envío de campaña falla apenas arranca | Plantilla no `approved` o `meta_template_name` que no existe en la cuenta de Meta. |
 
 Consola disponible en la interfaz: **WhatsApp (Meta) → Prueba de integración**
-(simulador, envío de prueba, validación con Graph API, tablas de eventos y
-destinatarios) y **WhatsApp (Meta) → Configuración** (estado de las variables y
-mantenimiento). Recordá `docker compose up -d --force-recreate web` tras tocar
-`.env`.
+(envío de texto y de plantilla, ventana de 24 h, validación con Graph API, y las
+tablas de estados, eventos, conversaciones y destinatarios) y
+**WhatsApp (Meta) → Configuración** (estado de las variables y mantenimiento).
+Recordá `docker compose up -d --force-recreate web` tras tocar `.env`.
 
 ---
 

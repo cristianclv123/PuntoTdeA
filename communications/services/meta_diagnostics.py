@@ -55,18 +55,21 @@ def _graph_error(response: requests.Response) -> str:
 
 
 def _request(path: str, params: dict[str, str]) -> requests.Response:
-    base = _graph_config().rstrip("/")
     version = str(settings.WHATSAPP_API_VERSION or "v21.0")
     return requests.get(
-        f"{base}/{version}/{path.lstrip('/')}",
+        f"{_graph_config()}/{version}/{path.lstrip('/')}",
         params=params,
         timeout=settings.META_REQUEST_TIMEOUT,
     )
 
 
+def _graph_config() -> str:
+    """Raíz de Graph API, sin barra final. Única fuente de verdad del host."""
+    return str(settings.META_GRAPH_API_URL or "https://graph.facebook.com").rstrip("/")
+
+
 def _debug_config() -> str:
-    base = str(settings.META_GRAPH_API_URL or "https://graph.facebook.com").rstrip("/")
-    return f"{base}/debug_token"
+    return f"{_graph_config()}/debug_token"
 
 
 def _access_token() -> str:

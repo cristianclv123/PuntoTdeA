@@ -343,6 +343,13 @@ class WhatsAppWebhookEvent(models.Model):
     provider_message_id = models.CharField(max_length=150, db_index=True)
     event_type = models.CharField(max_length=20, choices=Type.choices)
     status = models.CharField(max_length=30, blank=True)
+    # Fragmento crudo del evento tal como llegó de Meta. Sin esto, el `errors[]`
+    # de un `failed` sin destinatario de campaña se perdería: el estado se
+    # registra, pero no el motivo por el que Meta no pudo entregarlo.
+    payload = models.JSONField(
+        default=dict, blank=True,
+        help_text="Fragmento crudo del evento de Meta, para conservar el motivo de un failed.",
+    )
     processed_at = models.DateTimeField(null=True, blank=True)
     # Indizado: la limpieza por retención borra por antigüedad y la consola lista
     # los más recientes (ordering = -created_at).

@@ -223,19 +223,13 @@ class Command(BaseCommand):
             f'({Campaign.objects.filter(name=CAMPAIGN_SENT).first().total_recipients} destinatarios)'
         )
         self.stdout.write(
-            '  Para probar el flujo de estados, pega uno de estos wamid en el'
+            '  Los wamid son sintéticos (wamid.SEED0002, wamid.SEED0007):'
         )
+        self.stdout.write('  no provienen de Meta, solo ejercitan la lógica de estados.')
         self.stdout.write(
-            '  simulador de /whatsapp-prueba/ → «Estado delivered de campaña»:'
+            '  Para probar el envío real, usa la campaña en borrador, que solo'
         )
-        for wamid in ('wamid.SEED0002', 'wamid.SEED0007'):
-            self.stdout.write(f'      {wamid}')
-        self.stdout.write(
-            '  Los wamid son sintéticos: no provienen de Meta. Para probar el'
-        )
-        self.stdout.write(
-            '  envío real usa la campaña en borrador, que solo tiene pendientes.'
-        )
+        self.stdout.write('  tiene destinatarios pendientes, o la plantilla aprobada.')
 
     # --- pasos ---
 

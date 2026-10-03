@@ -1,28 +1,31 @@
 """Consola de verificación de la integración con Meta WhatsApp Cloud API.
 
-Reúne el estado de la configuración, el envío de mensajes de prueba y el
-simulador del webhook. Es una herramienta interna: no forma parte de la
+Reúne el estado de la configuración, el envío de mensajes reales y lo que Meta
+reporta de vuelta por webhook. Es una herramienta interna: no forma parte de la
 experiencia de los equipos de campañas ni de conocimiento.
 """
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
+import re
+from collections import OrderedDict
+from datetime import timedelta
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from communications.adapters.meta_adapter import send_text_message
-from communications.models import BroadcastRecipient, WhatsAppWebhookEvent
-from communications.services import meta_config, meta_diagnostics
+from communications.adapters.meta_adapter import MetaAdapter, send_text_message
+from communications.adapters.meta_adapter import _normalize_phone
+from communications.models import (
+    BroadcastRecipient,
+    MessageTemplate,
+    WhatsAppWebhookEvent,
+)
+from communications.services import meta_config, meta_diagnostics, meta_errors
 
 
 def _staff_required(view):
@@ -46,44 +49,158 @@ def config(request: HttpRequest):
     )
 
 
-def suggested_wamid() -> str:
-    """Último wamid que todavía puede avanzar para el simulador de estados.
+TEST_SEND_KEY_PREFIX = "test-send:"
+SERVICE_WINDOW = timedelta(hours=24)
 
-    Se prefiere un destinatario en estado `sent`: simular `delivered` o `failed`
-    sobre él produce un cambio visible. Si no lo hay, se sugiere el último wamid
-    disponible.
+
+def record_test_send(phone: str, wamid: str, kind: str, detail: str):
+    """Guarda el `wamid` que devolvió Meta al enviar desde esta página.
+
+    Sin esto el `wamid` se descarta y los estados que Meta reporte después no
+    tienen con qué correlacionarse: el webhook los marca `unmatched` y no hay
+    forma, desde la página, de saber a qué envío pertenecían.
     """
-    recipient = (
-        BroadcastRecipient.objects.exclude(provider_message_id="")
-        .filter(status=BroadcastRecipient.Status.SENT)
-        .order_by("-id")
+    if not wamid:
+        return None
+    event, _ = WhatsAppWebhookEvent.objects.get_or_create(
+        event_key=f"{TEST_SEND_KEY_PREFIX}{wamid}",
+        defaults={
+            "provider_message_id": wamid,
+            "event_type": WhatsAppWebhookEvent.Type.STATUS,
+            "status": kind,
+            "payload": {"to": phone, "detail": detail},
+            "processed_at": timezone.now(),
+        },
+    )
+    return event
+
+
+def service_window(phone: str) -> dict | None:
+    """Estado de la ventana de servicio al cliente de 24 horas.
+
+    Meta solo entrega texto libre dentro de una ventana que abre el usuario
+    cuando escribe primero. Fuera de ella, el envío falla con 131047. La
+    última hora se guarda en el payload del evento entrante, así que esto solo
+    puede afirmar la ventana para números que ya escribieron alguna vez.
+    """
+    normalized = _normalize_phone(phone)
+    if not normalized:
+        return None
+    last_inbound = (
+        WhatsAppWebhookEvent.objects.filter(
+            event_type=WhatsAppWebhookEvent.Type.INBOUND,
+            **{"payload__from": normalized},
+        )
+        .order_by("-created_at")
         .first()
     )
-    if recipient is None:
-        recipient = (
-            BroadcastRecipient.objects.exclude(provider_message_id="")
-            .order_by("-id")
-            .first()
+    if last_inbound is None:
+        return {"known": False, "open": False}
+
+    expires_at = last_inbound.created_at + SERVICE_WINDOW
+    remaining = expires_at - timezone.now()
+    return {
+        "known": True,
+        "open": remaining > timedelta(0),
+        "last_inbound": last_inbound.created_at,
+        "expires_at": expires_at,
+        "remaining": max(remaining, timedelta(0)),
+    }
+
+
+def status_threads(limit: int = 8, per_thread: int = 6) -> list[dict]:
+    """Agrupa los estados por `wamid` para leerlos como una línea de tiempo.
+
+    La tabla plana de eventos obliga a reconstruir a mano qué pasó con cada
+    mensaje. Acá cada `wamid` es una fila con sus estados en orden.
+    """
+    events = list(
+        WhatsAppWebhookEvent.objects.filter(
+            event_type=WhatsAppWebhookEvent.Type.STATUS
+        ).order_by("-created_at")[: limit * per_thread]
+    )
+    threads: OrderedDict[str, dict] = OrderedDict()
+    for event in events:
+        thread = threads.setdefault(
+            event.provider_message_id,
+            {"wamid": event.provider_message_id, "steps": []},
         )
-    return recipient.provider_message_id if recipient else ""
+        if len(thread["steps"]) < per_thread:
+            thread["steps"].append(event)
+    return list(threads.values())[:limit]
+
+
+def approved_templates() -> list[dict]:
+    """Plantillas usables para envío real, con los índices de sus parámetros.
+
+    Los índices se extraen del cuerpo porque el formulario tiene que ofrecer un
+    campo por marcador y `param_count` solo da la cantidad, no cuáles.
+    """
+    result = []
+    for template in MessageTemplate.objects.filter(
+        status=MessageTemplate.Status.APPROVED
+    ):
+        indexes = sorted(
+            {int(i) for i in re.findall(r"\{\{(\d+)\}\}", template.body_text or "")}
+        )
+        result.append(
+            {
+                "obj": template,
+                "indexes": indexes,
+                "needs_header": template.header_type != template.HeaderType.NONE,
+                "body": (template.body_text or "").replace("\n", " ")[:160],
+            }
+        )
+    return result
+
+
+def recent_chats(limit: int = 5) -> list[dict]:
+    """Últimas conversaciones del bot originadas por WhatsApp.
+
+    Import local: `knowledge` ya importa `communications` en su módulo de
+    WhatsApp, así que importarlo arriba cerraría el ciclo al cargar URLs.
+    """
+    from knowledge.models import ChatConversation
+
+    chats = []
+    for conversation in ChatConversation.objects.filter(channel="whatsapp").order_by(
+        "-updated_at"
+    )[:limit]:
+        history = conversation.messages or []
+        chats.append(
+            {
+                "conversation": conversation,
+                "last_user": next(
+                    (m for m in reversed(history) if m.get("author") == "user"), None
+                ),
+                "last_bot": next(
+                    (m for m in reversed(history) if m.get("author") == "bot"), None
+                ),
+                "turns": len(history),
+            }
+        )
+    return chats
 
 
 @_staff_required
 def index(request: HttpRequest):
-    """Estado de configuración, envío de prueba y simulador de webhook."""
+    """Estado de configuración, envío de prueba y estados reales de Meta."""
     context = {
         "config": meta_config.capability_status(),
         "callback_path": meta_config.WEBHOOK_PATH,
         "recent_events": WhatsAppWebhookEvent.objects.all()[:20],
         "event_count": WhatsAppWebhookEvent.objects.count(),
+        "threads": status_threads(),
+        "test_sends": WhatsAppWebhookEvent.objects.filter(
+            event_key__startswith=TEST_SEND_KEY_PREFIX
+        ).order_by("-created_at")[:10],
         "recent_recipients": (
             BroadcastRecipient.objects.exclude(provider_message_id="")
             .select_related("campaign", "contact")
             .order_by("-id")[:10]
         ),
-        "simulator_enabled": settings.ALLOW_WEBHOOK_SIMULATOR,
-        "default_simulated_phone": DEFAULT_SIMULATED_PHONE,
-        "suggested_wamid": suggested_wamid(),
+        "templates": approved_templates(),
+        "chats": recent_chats(),
         "active_nav": "whatsapp-test",
     }
     return render(request, "communications/whatsapp_test.html", context)
@@ -100,242 +217,113 @@ def send_test_message(request: HttpRequest):
         messages.error(request, "Completa el teléfono y el mensaje.")
         return redirect("meta-whatsapp-test")
 
+    window = service_window(phone)
     result = send_text_message(phone, text)
     if result.success:
+        record_test_send(phone, result.provider_message_id, "test_text", text[:200])
         messages.success(
             request,
-            f"Meta aceptó el mensaje. wamid: {result.provider_message_id}",
+            f"Meta aceptó el mensaje. wamid: {result.provider_message_id}. "
+            "Quedó registrado: los estados que Meta reporte se van a ver en la "
+            "tabla de estados de más abajo. Ojo: que Meta lo acepte no garantiza "
+            "que lo entregue; si el número no tiene WhatsApp, el fallo aparece "
+            "después como estado «failed».",
         )
+        if window and window.get("known") and not window.get("open"):
+            messages.warning(
+                request,
+                "La ventana de servicio de ese número estaba vencida: el envío "
+                "puede ser rechazado con el error 131047.",
+            )
     else:
-        messages.error(request, f"No se pudo enviar: {result.error}")
-    return redirect("meta-whatsapp-test")
-
-
-DEFAULT_SIMULATED_PHONE = "573001112233"
-
-# Guion que recorre todos los estados del chatbot. El primer mensaje siempre
-# devuelve el saludo y descarta lo que el usuario escribió, así que el guion
-# tiene que empezar por un saludo real.
-BOT_SCRIPT = (
-    "Hola",
-    "¿Cuáles son los requisitos para matricularme?",
-    "sí",
-    "quiero hablar con un asesor",
-    "Necesito información sobre la Modalidad a Distancia",
-)
-
-
-def _inbound_payload(text: str, phone: str, sequence: int) -> dict:
-    """Un mensaje entrante con la misma forma que envía Meta."""
-    now = int(timezone.now().timestamp())
-    # Usa el Phone Number ID real: si no coincide, el webhook descarta el evento
-    # como proveniente de un número no configurado.
-    metadata: dict[str, str] = {"display_phone_number": phone}
-    phone_number_id = str(settings.WHATSAPP_PHONE_NUMBER_ID or "").strip()
-    if phone_number_id:
-        metadata["phone_number_id"] = phone_number_id
-    return {
-        "object": "whatsapp_business_account",
-        "entry": [
-            {
-                "id": "SIMULATED_WABA_ID",
-                "changes": [
-                    {
-                        "field": "messages",
-                        "value": {
-                            "messaging_product": "whatsapp",
-                            "metadata": metadata,
-                            "messages": [
-                                {
-                                    "id": f"wamid.simulated.inbound.{sequence}.{phone}",
-                                    "from": phone,
-                                    "timestamp": str(now + sequence),
-                                    "type": "text",
-                                    "text": {"body": text},
-                                }
-                            ],
-                        },
-                    }
-                ],
-            }
-        ],
-    }
-
-
-def _status_payload(status: str, reference: str, phone: str) -> dict:
-    """Un estado de entrega con la misma forma que envía Meta."""
-    now = int(timezone.now().timestamp())
-    metadata: dict[str, str] = {"display_phone_number": phone}
-    phone_number_id = str(settings.WHATSAPP_PHONE_NUMBER_ID or "").strip()
-    if phone_number_id:
-        metadata["phone_number_id"] = phone_number_id
-
-    value = {
-        "id": reference or "wamid.NO_ENCONTRADO",
-        "status": status,
-        "timestamp": str(now),
-        "recipient_id": phone,
-        "conversation": {
-            "id": f"conversation.simulated.{now}",
-            "origin": {"type": "marketing"},
-        },
-        "pricing": {"billable": True, "pricing_model": "CBP"},
-    }
-    if status == "failed":
-        value["errors"] = [
-            {
-                "code": 131026,
-                "title": "Message undeliverable",
-                "message": "Número no entregado",
-            }
-        ]
-    return {
-        "object": "whatsapp_business_account",
-        "entry": [
-            {
-                "id": "SIMULATED_WABA_ID",
-                "changes": [
-                    {
-                        "field": "messages",
-                        "value": {
-                            "messaging_product": "whatsapp",
-                            "metadata": metadata,
-                            "statuses": [value],
-                        },
-                    }
-                ],
-            }
-        ],
-    }
-
-
-def _deliver(payload: dict) -> dict:
-    """Firma un payload y lo entrega al webhook real."""
-    body = json.dumps(payload).encode()
-    return _post_to_webhook(body, _sign(body))
-
-
-def _run_bot_script(request: HttpRequest, phone: str) -> HttpResponse:
-    """Recorre la conversación completa del chatbot, turno por turno.
-
-    Cada turno se envía como un webhook independiente y firmado, igual que
-    haría Meta, para que la máquina de estados avance de verdad en lugar de
-    saltarse pasos.
-    """
-    processed = 0
-    failures: list[str] = []
-    for index, line in enumerate(BOT_SCRIPT, start=1):
-        response_data = _deliver(_inbound_payload(line, phone, index))
-        result = response_data.get("result")
-        if response_data.get("status_code") == 200 and isinstance(result, dict):
-            processed += result.get("processed", 0)
-        else:
-            failures.append(f"turno {index}: HTTP {response_data.get('status_code')}")
-
-    if failures:
-        messages.error(
-            request,
-            "El guion se detuvo en: " + "; ".join(failures),
-        )
-    else:
-        messages.success(
-            request,
-            f"Guion del bot completo: {processed} turno(s) procesado(s) desde {phone}. "
-            "Revisa la conversación en /admin/knowledge/chatconversation/.",
-        )
+        messages.error(request, meta_errors.explain(result.error))
     return redirect("meta-whatsapp-test")
 
 
 @_staff_required
 @require_POST
-def simulate_webhook(request: HttpRequest):
-    """Firma payloads con el App Secret y los entrega al webhook real."""
-    scenario = (request.POST.get("scenario") or "inbound").strip()
-    reference = (request.POST.get("reference") or "").strip()
-    phone = (request.POST.get("phone") or DEFAULT_SIMULATED_PHONE).strip()
-    text = (request.POST.get("text") or "").strip()
+def send_test_template(request: HttpRequest):
+    """Envía una plantilla aprobada al número indicado.
 
-    if not settings.ALLOW_WEBHOOK_SIMULATOR:
+    Es la única vía que funciona fuera de la ventana de servicio de 24 horas,
+    porque Meta solo permite texto libre cuando el usuario ya escribió primero.
+    """
+    phone = (request.POST.get("phone") or "").strip()
+    template = MessageTemplate.objects.filter(
+        pk=request.POST.get("template"),
+        status=MessageTemplate.Status.APPROVED,
+    ).first()
+
+    if not phone or template is None:
         messages.error(
-            request,
-            "El simulador está desactivado porque DEBUG está apagado. "
-            "Un payload firmado con el App Secret es indistinguible de uno real de "
-            "Meta, así que solo debe habilitarse en entornos de prueba.",
+            request, "Completa el teléfono y elegí una plantilla aprobada."
         )
         return redirect("meta-whatsapp-test")
 
-    if not meta_config.can_receive_webhooks():
-        messages.error(
-            request,
-            "No se puede simular: falta META_APP_SECRET. Sin ese secreto el webhook "
-            "rechaza toda petición porque no se puede validar la firma.",
+    # Los campos del formulario se llaman param_1, param_2... según los
+    # marcadores del cuerpo, así que se recogen por patrón.
+    params: dict[str, str] = {}
+    for key, value in request.POST.items():
+        match = re.match(r"^param_(\d+)$", key)
+        if match and (value or "").strip():
+            params[match.group(1)] = value.strip()
+
+    result = MetaAdapter().send_template_message(phone, template, params)
+    if result.success:
+        record_test_send(
+            phone,
+            result.provider_message_id,
+            "test_template",
+            f"{template.meta_template_name} {params}",
         )
-        return redirect("meta-whatsapp-test")
-
-    if scenario == "script":
-        return _run_bot_script(request, phone)
-
-    if scenario in {"delivered", "failed"}:
-        payloads = [_status_payload(scenario, reference, phone)]
-    else:
-        body_text = text or "Hola, necesito información de matrículas"
-        payloads = [_inbound_payload(body_text, phone, 1)]
-
-    response_data = _deliver(payloads[0])
-    result = response_data.get("result")
-    status_code = response_data.get("status_code")
-
-    if isinstance(result, dict) and status_code == 200:
-        processed = result.get("processed", 0)
-        duplicates = result.get("duplicates", 0)
-        unmatched = result.get("unmatched", 0)
-        detail = f"procesados={processed} duplicados={duplicates} sin_match={unmatched}"
-        if scenario == "inbound":
-            messages.success(request, f"Webhook aceptó el mensaje del bot. {detail}")
-        elif unmatched:
-            messages.warning(
-                request,
-                "El estado se recibió pero ningún destinatario tiene ese wamid. " + detail,
-            )
-        else:
-            messages.success(request, f"Webhook aplicó el estado '{scenario}'. {detail}")
-    else:
-        messages.error(
+        messages.success(
             request,
-            f"El webhook respondió {status_code}: {result or response_data.get('error')}",
+            f"Meta aceptó la plantilla «{template.meta_template_name}». "
+            f"wamid: {result.provider_message_id}. Quedó registrada para seguir "
+            "sus estados.",
         )
+    else:
+        messages.error(request, meta_errors.explain(result.error))
     return redirect("meta-whatsapp-test")
 
 
-def _sign(body: bytes) -> str:
-    digest = hmac.new(
-        str(settings.META_APP_SECRET or "").encode(), body, hashlib.sha256
-    ).hexdigest()
-    return f"sha256={digest}"
+@_staff_required
+def window_status(request: HttpRequest) -> JsonResponse:
+    """Ventana de servicio de 24 h para un número, sin recargar la página.
 
-
-def _post_to_webhook(body: bytes, signature: str) -> dict:
-    """Reenvía el payload al endpoint usando el cliente interno de Django.
-
-    Se usa el cliente de Django y no `requests` para no depender de que el
-    servidor esté escuchando en `localhost:8000` desde dentro del contenedor.
-    `raise_request_exception=False` evita que un fallo del webhook reviente la
-    página de prueba con un 500 en lugar de reportar el error.
+    Evita mandar a ciegas un texto libre que Meta va a rechazar con 131047: la
+    persona escribe el teléfono y le dice al toque si la ventana está abierta.
     """
-    from django.test import Client  # import local: no se carga en el arranque
-
-    client = Client(raise_request_exception=False)
-    response = client.post(
-        reverse("meta-whatsapp-webhook"),
-        data=body,
-        content_type="application/json",
-        HTTP_X_HUB_SIGNATURE_256=signature,
+    window = service_window(request.GET.get("phone", ""))
+    if window is None or not window["known"]:
+        return JsonResponse(
+            {
+                "known": False,
+                "open": False,
+                "detail": "Ese número todavía no te escribió: Meta solo entrega "
+                "texto libre dentro de la ventana de 24 h que abre el usuario.",
+            }
+        )
+    if window["open"]:
+        hours = int(window["remaining"].total_seconds() // 3600)
+        minutes = int((window["remaining"].total_seconds() % 3600) // 60)
+        return JsonResponse(
+            {
+                "known": True,
+                "open": True,
+                "detail": f"Ventana abierta. Le quedan {hours} h {minutes} min. "
+                "Este texto libre debería llegar.",
+            }
+        )
+    return JsonResponse(
+        {
+            "known": True,
+            "open": False,
+            "last_inbound": window["last_inbound"].isoformat(),
+            "detail": "La ventana venció. Meta va a rechazar el texto libre con "
+            "el error 131047: usá una plantilla.",
+        }
     )
-    try:
-        result = response.json()
-    except (TypeError, ValueError):
-        result = response.content[:200].decode(errors="replace")
-    return {"status_code": response.status_code, "result": result}
 
 
 @_staff_required

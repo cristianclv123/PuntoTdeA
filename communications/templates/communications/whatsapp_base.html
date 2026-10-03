@@ -51,6 +51,40 @@
     .wa-table th { color: #9aa0a6; font-weight: 600; text-transform: uppercase; font-size: .68rem; letter-spacing: .05em; }
     .wa-endpoint { background: #1c1c1c; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .6rem; font-size: .8rem; overflow-x: auto; }
     .wa-note { font-size: .76rem; color: #9aa0a6; line-height: 1.5; margin-top: .7rem; }
+    .wa-note.ok { color: var(--success-text); }
+    .wa-note.warn { color: var(--warning-text); }
+    .wa-note.bad { color: var(--danger-text); }
+    /* Chips de estado de entrega. El color dice en qué punto va el mensaje:
+       enviado, entregado, leído o fallido. */
+    .wa-chip {
+      display: inline-block; font-size: .68rem; font-weight: 600;
+      padding: .15rem .45rem; border-radius: 6px; white-space: nowrap;
+      background: #2a2a2a; color: #cfd3d6;
+    }
+    .wa-chip.sent { background: #2f3640; color: #b0bec5; }
+    .wa-chip.delivered { background: var(--blue-soft); color: var(--blue); }
+    .wa-chip.read { background: var(--success-bg); color: var(--success-text); }
+    .wa-chip.failed { background: var(--danger-bg); color: var(--danger-text); }
+    .wa-chip.test_text, .wa-chip.test_template { background: var(--warning-bg); color: var(--warning-text); }
+    .wa-timeline { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+    .wa-err {
+      font-size: .72rem; color: var(--danger-text);
+      margin-top: .25rem; line-height: 1.4;
+    }
+    .wa-thread-meta { color: #9aa0a6; font-size: .72rem; white-space: nowrap; }
+    /* Burbujas del bot, para leer la conversación sin abrir el admin. */
+    .wa-bubble {
+      border-radius: 10px; padding: .45rem .6rem; font-size: .82rem;
+      line-height: 1.45; margin-top: .35rem;
+    }
+    .wa-bubble.bot { background: #1c1c1c; border: 1px solid var(--border); }
+    .wa-bubble.user { background: var(--blue-soft); color: var(--blue); }
+    .wa-who { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: #9aa0a6; }
+    .wa-copy {
+      background: none; border: 0; color: #9aa0a6; cursor: pointer;
+      font-size: .7rem; padding: 0 .25rem;
+    }
+    .wa-copy:hover { color: var(--blue); }
     .wa-step { display: flex; gap: .7rem; font-size: .85rem; margin-bottom: .55rem; line-height: 1.5; }
     .wa-step b {
       flex: 0 0 1.4rem; height: 1.4rem; border-radius: 50%;

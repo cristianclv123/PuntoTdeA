@@ -39,6 +39,12 @@ services:
       - WHATSAPP_API_VERSION=${WHATSAPP_API_VERSION:-v21.0}
       - META_GRAPH_API_URL=${META_GRAPH_API_URL:-https://graph.facebook.com}
       - META_REQUEST_TIMEOUT=${META_REQUEST_TIMEOUT:-10}
+      # Meta Marketing API (anuncios en WhatsApp Status): nunca en claro aquí.
+      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
+      - META_AD_ACCOUNT_ID=${META_AD_ACCOUNT_ID:-}
+      - META_FB_PAGE_ID=${META_FB_PAGE_ID:-}
+      - META_WHATSAPP_PHONE=${META_WHATSAPP_PHONE:-}
+      - META_BUSINESS_ID=${META_BUSINESS_ID:-}
     depends_on:
       - db
       - redis
