@@ -15,12 +15,15 @@ Meta WhatsApp Cloud API. Front-end con templates Django + `static/css/styles.css
 - Ruta documentada con Docker: `docker compose up -d --build` y luego
   `docker compose exec -T web python manage.py migrate`.
 - Pruebas completas: `docker compose exec -T web python manage.py test`
-  (local: `python manage.py test`; hoy son 80 pruebas, ~2,5 min, con SQLite y sin
+  (local: `python manage.py test`; hoy son 101 pruebas, ~2 min, con SQLite y sin
   servicios externos).
 - Subconjunto usado en docs: `python manage.py test communications knowledge`
 - Un módulo: `python manage.py test communications.tests.test_meta_console`
 - Diagnóstico de Meta: `python manage.py check_meta_whatsapp [--validate]`
-- **No** hay linter, formateador, typecheck ni CI. No inventes esos comandos.
+- **No** hay linter, formateador ni typecheck. No inventes esos comandos.
+- **Sí** hay CI desde octubre de 2026: `.github/workflows/ci.yml` corre
+  `check --deploy`, `collectstatic` y los tests con `DJANGO_DEBUG=false`.
+  Ver `docs/despliegue-render.md`.
 
 ## Gotchas del entorno (fáciles de errar)
 
@@ -64,11 +67,12 @@ Meta WhatsApp Cloud API. Front-end con templates Django + `static/css/styles.css
 ## Pruebas
 
 - Con contenido real: `cases/tests.py`, `knowledge/tests.py`,
-  `knowledge/chatbot/tests.py` y `communications/tests/{test_meta_console,
-  test_meta_integration,test_cleanup_whatsapp_events,test_seed_demo}.py`.
+  `knowledge/chatbot/tests.py`, `announcements/tests.py` y
+  `communications/tests/{test_meta_console,test_meta_integration,
+  test_cleanup_whatsapp_events,test_seed_demo,test_ads_service}.py`.
 - Stubs vacíos (0 bytes): `communications/tests/{test_adapters,
-  test_campaign_service,test_models,test_webhooks}.py`. `announcements/tests.py`
-  y `dashboard/tests.py` son la plantilla por defecto.
+  test_campaign_service,test_models,test_webhooks}.py`. `dashboard/tests.py`
+  es la plantilla por defecto.
 - Los tests de webhook usan `@override_settings` con credenciales Meta falsas.
 
 ## Mapa rápido
@@ -84,6 +88,23 @@ Meta WhatsApp Cloud API. Front-end con templates Django + `static/css/styles.css
   pendiente.
 - `ENUM_NAME_OVERRIDES` de drf-spectacular apunta a enums de modelos:
   renombrarlos rompe `/api/schema/`.
-- `INTERNAL_API_TOKEN` se referencia en `communications/permissions.py` pero no
-  existe en settings: con `DEBUG=False` la API interna (`/campanas/api/`) queda
-  inaccesible.
+- `INTERNAL_API_TOKEN` **ya existe** en settings (leído del entorno). Antes faltaba
+  y con `DEBUG=False` la API interna (`/campanas/api/`) quedaba inaccesible.
+
+## Produccion y despliegue (Render)
+
+- `render.yaml` es el Blueprint: web (Docker) + Key Value + Postgres. El panel
+  pide los `sync: false`; los secretos nunca van en el repo.
+- Plan **gratis**: el servicio duerme a los 15 min, Postgres **expira a los 30
+  días** y no hay disco persistente (se pierden las subidas de media). Ver
+  `docs/despliegue-render.md` para pasar a pago.
+- Con `DEBUG=False` los estaticos los sirve **whitenoise**: sin el
+  `collectstatic` del build, `{% static %}` falla con
+  "Missing staticfiles manifest entry".
+- En plan gratuito **no existe `preDeployCommand`**: las migraciones corren en el
+  `CMD` del Dockerfile y en el `dockerCommand` de `render.yaml`.
+- `SECURE_PROXY_SSL_HEADER` lee `X-Forwarded-Proto`: sin eso, Django cree que la
+  peticion es `http://` y rechaza el CSRF de los formularios de https.
+- Para probar en local como produccion hay que poner
+  `DJANGO_SECURE_SSL_REDIRECT=false`: el test client usa `http://` y sin eso cada
+  prueba que espera 200/302 recibe 301.

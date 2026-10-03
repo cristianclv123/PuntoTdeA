@@ -1,0 +1,60 @@
+name: CI
+
+# Corre en cada push y PR. El job `tests` es el check que vigila Render:
+# con autoDeployTrigger=checksPass, un deploy solo arranca si esto pasa.
+#
+# IMPORTANTE: `feature/JCFS/IntegracionAPIWA` debe seguir listada aqui. Render
+# despliega esa rama y solo arranca si ve un check en verde; si el CI no corre
+# en ella, el servicio simplemente nunca despliega.
+on:
+  push:
+    branches: [main, dev, feature/JCFS/IntegracionAPIWA]
+  pull_request:
+    branches: [main, dev, feature/JCFS/IntegracionAPIWA]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # Se replica el entorno de Render (DEBUG=false) para que las pruebas
+      # cubran el codigo de produccion: whitenoise, CSRF y ALLOWED_HOSTS.
+      DJANGO_DEBUG: "false"
+      DJANGO_SECRET_KEY: ci-secret-key-not-used-in-production
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      # El test client habla http:// y Django con DEBUG=false redirige a https
+      # (301). Sin esto, cada prueba que espera 200/302 falla.
+      DJANGO_SECURE_SSL_REDIRECT: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      # Sin DB_HOST ni DATABASE_URL, settings cae a SQLite en memoria: los
+      # tests no necesitan ni Postgres ni Redis.
+      - name: Comprobar configuracion de Django
+        run: python manage.py check --deploy --fail-level ERROR
+
+      # Con DEBUG=false los templates usan {% static %} contra el manifest de
+      # whitenoise. Sin este collectstatic previo, cada prueba que renderiza un
+      # template falla con "Missing staticfiles manifest entry".
+      - name: Recopilar estaticos
+        run: python manage.py collectstatic --noinput
+
+      - name: Ejecutar pruebas
+        run: python manage.py test --noinput --verbosity 2
