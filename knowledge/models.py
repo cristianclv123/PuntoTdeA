@@ -141,6 +141,20 @@ class ChatConversation(BaseKnowledgeModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel = models.CharField(max_length=30, default='webchat', db_index=True)
     external_user_id = models.CharField(max_length=120, blank=True, db_index=True)
+    contact = models.ForeignKey(
+        'communications.Contact',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='chat_conversations',
+    )
+    case_conversation = models.ForeignKey(
+        'cases.Conversation',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='knowledge_conversations',
+    )
     flow_state = models.CharField(max_length=40, default='waiting_question')
     last_question = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)

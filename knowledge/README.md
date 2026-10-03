@@ -51,7 +51,7 @@ El proveedor LLM queda pendiente: basta inyectar otro `responder` en
 El webhook público es:
 
 ```text
-https://TU_DOMINIO/base-de-conocimiento/chatbot/whatsapp/
+https://TU_DOMINIO/api/whatsapp/webhook/
 ```
 
 Configura estas variables de entorno en el servidor:
@@ -72,4 +72,9 @@ como ngrok o Cloudflare Tunnel.
 El primer mensaje de cada número inicia el saludo. Los siguientes recorren pregunta,
 respuesta, confirmación, escalamiento y horario; el identificador de WhatsApp se
 guarda en `ChatConversation.external_user_id`, por lo que el asesor conserva el
-historial completo.
+historial completo. Si el número coincide de forma única con un contacto existente
+en `communications`, la conversación también queda asociada a ese contacto; el
+chatbot no crea contactos nuevos. Si el bot no encuentra una respuesta con
+suficiente confianza o el usuario completa una solicitud de atención humana, se
+registra el mensaje en el módulo de casos y se informa al usuario el número del
+ticket creado.
