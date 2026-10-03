@@ -59,7 +59,6 @@ CSRF_TRUSTED_ORIGINS = [
         ",".join(
             origin
             for origin in (
-                "https://indicator-rise-tables-insertion.trycloudflare.com",
                 f"https://{_RENDER_HOST}" if _RENDER_HOST else "",
             )
             if origin
