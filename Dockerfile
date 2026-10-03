@@ -26,4 +26,13 @@ EXPOSE 8000
 # anidar `/bin/bash -c "..."` ahi rompe el escapado de comillas (sale con 127).
 # `${PORT:-8000}` lo resuelve el propio shell, asi que ya respeta el PORT de
 # Render sin necessidade de configuracion extra.
-CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p ${PORT:-8000} PuntoTdeA.asgi:application"]
+# El superusuario tambien se crea aqui. El plan free no da Shell y la Postgres
+# free no expone URL externa, asi que el arranque del contenedor es el UNICO
+# momento en que corre codigo en Render: si no va en este CMD, no hay forma de
+# crear el usuario. `createsuperuser --noinput` lee el usuario del entorno
+# (DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD) y nunca muestra la contrasena.
+#
+# El `( ... || echo ... )` es obligatorio: en cada redeploy el comando falla con
+# "That username is already taken", y sin ese parentesis tumbaba el deploy
+# entero. A proposito NO resetea la contrasena de un usuario ya existente.
+CMD ["sh", "-c", "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || echo 'superusuario ya existe, se conserva') && daphne -b 0.0.0.0 -p ${PORT:-8000} PuntoTdeA.asgi:application"]

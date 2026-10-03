@@ -14,6 +14,10 @@ media/
 *.md
 *.ps1
 *.vbs
+# cloudflared.exe pesa 52.8 MB y es un binario de Windows: dentro del
+# contenedor Linux no sirve de nada, pero inflaba el contexto de build a 56 MB.
+CloudFared/
+*.exe
 configurar_meta.ps1
 detener_chatbot.vbs
 iniciar_chatbot.vbs

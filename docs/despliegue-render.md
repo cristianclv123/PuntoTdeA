@@ -136,14 +136,39 @@ Cuando haya usuarios reales subiendo archivos, las dos salidas son:
 
 - El despliegue usa `migrate` dentro del comando de arranque, no
   `preDeployCommand`: **ese campo no existe en planes gratuitos**. Por eso el
-  `CMD` del Dockerfile y el `dockerCommand` de `render.yaml` corren
-  `python manage.py migrate --noinput` antes de levantar Daphne.
-  Al migrar a plan pago, mueve las migraciones a `preDeployCommand`.
+  `CMD` del Dockerfile corre `python manage.py migrate --noinput` antes de
+  levantar Daphne. Al migrar a plan pago, mueve las migraciones a
+  `preDeployCommand`.
+- **No hay Shell ni Postgres externa.** El plan free no da acceso al contenedor
+  y la base no expone URL pública, así que **el arranque es el único momento en
+  que corre código en Render**. Por eso el superusuario se crea ahí también:
+  ```dockerfile
+  CMD ["sh", "-c", "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || echo 'superusuario ya existe, se conserva') && daphne ..."]
+  ```
+  El paréntesis con `|| echo` es obligatorio: en cada redeploy `createsuperuser`
+  falla con *That username is already taken*, y sin él el deploy entero se
+  tumba. A propósito **no** resetea la contraseña de un usuario existente.
 - `SECURE_HSTS_SECONDS` está en `0`. Actívalo cuando confirmes que el dominio
   final responde bien por HTTPS durante unos días, y solo si usas dominio
   propio: activar HSTS en `*.onrender.com` no es posible desde tu app.
 - El Key Value no tiene persistencia en plan free. No importa: el channel layer
   es reconstruible y solo guarda mensajes en vuelo.
+
+## El superusuario
+
+La base de Render arranca vacía, así que el primer despliegue deja a todos sin
+poder entrar. Se resuelve con las variables `DJANGO_SUPERUSER_*` (ver la tabla
+de abajo) y el `createsuperuser --noinput` del `CMD`.
+
+Si no funciona, mira el log del deploy: debe aparecer `Superuser created
+successfully.` la primera vez y `superusuario ya existe, se conserva` en los
+siguientes. **Si no aparece ninguna de las dos, las variables no llegaron** — el
+contenedor sí levanta, pero sin usuario.
+
+La contraseña queda guardada en el panel de Render para siempre. Puedes quitarla
+cuando ya hayas entrado: el `|| echo` hace que en los redeploys siguientes sea un
+no-op. Ten en cuenta que si la Postgres free expira y hay que recrearla, tendrás
+que volver a poner las tres variables.
 
 ## Variables de entorno
 
@@ -153,6 +178,9 @@ Las define `render.yaml`; esta es la referencia de qué hace cada una.
 |---|---|---|
 | `DJANGO_DEBUG` | `false` fijo | Apaga el modo debug. |
 | `DJANGO_SECRET_KEY` | `generateValue` | Firma sesiones y CSRF. |
+| `DJANGO_SUPERUSER_USERNAME` | `sync: false` | Usuario del primer superusuario. |
+| `DJANGO_SUPERUSER_EMAIL` | `sync: false` | Correo del superusuario (el login acepta usuario o correo). |
+| `DJANGO_SUPERUSER_PASSWORD` | `sync: false` | Contraseña del superusuario. |
 | `DATABASE_URL` | `fromDatabase` | Render entrega la cadena de Postgres; `settings.py` la parsea. |
 | `REDIS_URL` | `fromService` | Canal layer de Channels. |
 | `INTERNAL_API_TOKEN` | `generateValue` | **Sin esto la UI de `/campanas/` queda sin datos** en producción. |

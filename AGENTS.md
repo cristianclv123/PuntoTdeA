@@ -102,7 +102,21 @@ Meta WhatsApp Cloud API. Front-end con templates Django + `static/css/styles.css
   `collectstatic` del build, `{% static %}` falla con
   "Missing staticfiles manifest entry".
 - En plan gratuito **no existe `preDeployCommand`**: las migraciones corren en el
-  `CMD` del Dockerfile y en el `dockerCommand` de `render.yaml`.
+  `CMD` del Dockerfile.
+- **No pongas `dockerCommand` en `render.yaml`.** Render lo pasa como una sola
+  cadena, asi que anidar `/bin/bash -c "..."` ahi rompe el escapado de comillas y
+  el contenedor sale con 127 (`command not found`). El `CMD` del Dockerfile es la
+  unica fuente del arranque.
+- **El superusuario se crea en el `CMD`**, con `createsuperuser --noinput` y las
+  variables `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD`. Es la unica
+  opcion: el plan free no tiene Shell y la Postgres free no expone URL externa,
+  asi que el arranque es el unico momento en que corre codigo. El
+  `( ... || echo ... )` es obligatorio porque en cada redeploy el comando falla con
+  "already taken" y sin el tumbaba el deploy. A proposito no resetea la
+  contrasena de un usuario existente.
+- **Quitar una clave de `render.yaml` no la borra de Render.** El valor guardado
+  en el panel sigue mandando; hay que limpiarlo a mano en *Settings*. Solo la
+  rama y los `envVars` se administran bien desde el blueprint.
 - `SECURE_PROXY_SSL_HEADER` lee `X-Forwarded-Proto`: sin eso, Django cree que la
   peticion es `http://` y rechaza el CSRF de los formularios de https.
 - Para probar en local como produccion hay que poner

@@ -36,6 +36,21 @@ services:
         value: "false"
       - key: DJANGO_SECRET_KEY
         generateValue: true
+
+      # --- Superusuario inicial ---
+      # El plan free no tiene Shell y la Postgres free no expone URL externa:
+      # el unico momento en que corre codigo en Render es el arranque del
+      # contenedor. Por eso el CMD del Dockerfile invoca
+      # `createsuperuser --noinput`, que lee estas tres variables.
+      # Sin ellas el deploy igual levanta, pero nadie puede entrar.
+      # En cada redeploy el comando falla con "already taken" y el `|| echo`
+      # del CMD lo convierte en no-op, conservando la contrasena actual.
+      - key: DJANGO_SUPERUSER_USERNAME
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
       # Render publica RENDER_EXTERNAL_HOSTNAME; settings lo usa solo para
       # ALLOWED_HOSTS y CSRF_TRUSTED_ORIGINS, asi que no hay que hardcodear
       # el dominio aqui.
