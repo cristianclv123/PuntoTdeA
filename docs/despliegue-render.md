@@ -15,19 +15,20 @@ configurar nada a mano** salvo los valores marcados `sync: false`.
 
 ## Primer despliegue
 
-1. **Sube el código por PR.** `dev` no recibe push directo: todo entra por Pull
-   Request desde la rama de integración. Y `render.yaml` apunta a `dev`, así que
-   cada PR mergeado a `dev` dispara un deploy.
+1. **Sube el código a `dev`.** Los administradores del repositorio pueden hacer
+   push directo a `dev`; para el resto del equipo se recomienda Pull Request
+   desde la rama de integración. `render.yaml` apunta a `dev`, así que cada push
+   (o merge) a `dev` dispara un deploy.
 
    ```bash
-   git switch feature/JCFS/IntegracionAPIWA
+   git switch dev
    git add -A
    git commit -m "Despliegue en Render"
-   git push origin feature/JCFS/IntegracionAPIWA
+   git push origin dev
    ```
 
-   Luego abre el PR hacia `dev`. El merge genera un push a `dev`, el CI corre
-   sobre ese commit y Render despliega cuando queda verde.
+   El push a `dev` hace correr el CI sobre ese commit y Render despliega cuando
+   queda verde.
 
 2. **Crea el Blueprint** en <https://dashboard.render.com> → *New* → *Blueprint* →
    apunta a `cristianclv123/PuntoTdeA` y elige la rama `dev`.

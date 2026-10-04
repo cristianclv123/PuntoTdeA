@@ -88,8 +88,10 @@ Meta WhatsApp Cloud API. Front-end con templates Django + `static/css/styles.css
   pendiente.
 - `ENUM_NAME_OVERRIDES` de drf-spectacular apunta a enums de modelos:
   renombrarlos rompe `/api/schema/`.
-- `INTERNAL_API_TOKEN` **ya existe** en settings (leído del entorno). Antes faltaba
-  y con `DEBUG=False` la API interna (`/campanas/api/`) quedaba inaccesible.
+- La API interna (`/campanas/api/`) la usa la propia UI de `/campanas/` desde el
+  navegador. `IsInternalService` acepta sesion autenticada **o** el header
+  `X-Internal-Token`; `INTERNAL_API_TOKEN` (leido del entorno) cubre a los
+  consumidores de servicio (BFF) con `DEBUG=False`.
 
 ## Produccion y despliegue (Render)
 

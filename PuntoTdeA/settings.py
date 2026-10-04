@@ -235,8 +235,8 @@ ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
 ).lower() in {"1", "true", "yes"}
 
 # Token compartido con el BFF para la API interna (/campanas/api/).
-# Sin el, `communications.permissions.IsInternalService` rechaza todo cuando
-# DEBUG=False y la UI de campanas se queda sin datos.
+# La UI de campanas entra con la sesion del navegador; este token cubre a los
+# consumidores de servicio (BFF) cuando DEBUG=False.
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 
 LOGIN_URL = "/login/"
