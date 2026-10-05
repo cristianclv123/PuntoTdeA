@@ -1,12 +1,15 @@
 # API interna (consumida solo por el BFF)
+from django.conf import settings
 from django.db.models import Q
 from django.db.models.deletion import ProtectedError
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from .adapters.meta_adapter import MetaAdapter
 from .models import AudienceSegment, BroadcastRecipient, Campaign, Contact, MessageTemplate
 from .permissions import IsInternalService
 from .serializers import (
@@ -18,6 +21,87 @@ from .serializers import (
     SegmentImportSerializer,
 )
 from .services import campaign_service, segmentation_service
+from .services.test_send_registry import record_test_send
+
+
+class TestSendRequestSerializer(serializers.Serializer):
+    template = serializers.IntegerField(min_value=1)
+    params = serializers.JSONField(required=False, default=dict)
+
+    def validate_params(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Los parámetros deben ser un objeto JSON.")
+        return value
+
+
+class TestSendAPIView(APIView):
+    permission_classes = [IsInternalService]
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        payload = TestSendRequestSerializer(data=request.data)
+        if not payload.is_valid():
+            return Response(
+                {"success": False, "message": "La solicitud no es válida.", "errors": payload.errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        test_recipient = settings.WHATSAPP_TEST_RECIPIENT
+        if not test_recipient:
+            return Response(
+                {
+                    "success": False,
+                    "message": "No está configurado el destinatario de pruebas de WhatsApp.",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        template = MessageTemplate.objects.filter(pk=payload.validated_data["template"]).first()
+        if template is None:
+            return Response(
+                {"success": False, "message": "La plantilla indicada no existe."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if template.status != MessageTemplate.Status.APPROVED:
+            return Response(
+                {
+                    "success": False,
+                    "message": "La plantilla debe estar aprobada por Meta para enviar una prueba.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = MetaAdapter().send_template_message(
+            test_recipient,
+            template,
+            payload.validated_data["params"],
+        )
+        if not result.success:
+            return Response(
+                {
+                    "success": False,
+                    "message": result.error or "Meta no pudo enviar el mensaje de prueba.",
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if result.provider_message_id:
+            record_test_send(
+                test_recipient,
+                result.provider_message_id,
+                "test_template",
+                f"{template.meta_template_name} {payload.validated_data['params']}",
+            )
+
+        return Response(
+            {
+                "success": True,
+                "message": "Mensaje de prueba enviado correctamente.",
+                "provider_message_id": result.provider_message_id,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):

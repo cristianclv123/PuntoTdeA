@@ -426,7 +426,12 @@ const OutboundUI = (() => {
         return [...body.matchAll(/\{\{([^}]+)\}\}/g)].map((m) => m[1]);
     }
 
-    function initWizard() {
+    function initWizard(audiencesOnly = false) {
+        if (audiencesOnly) {
+            renderAudiencesPage();
+            return;
+        }
+
         let templates = [];
         let segments = [];
         const state = {
@@ -441,6 +446,7 @@ const OutboundUI = (() => {
         const loadRecipientsFileBtn = document.getElementById('loadRecipientsFileBtn');
         const recipientsFileInput = document.getElementById('recipientsFileInput');
         const selectedRecipientsFileName = document.getElementById('selectedRecipientsFileName');
+        const previewRecipientsFileBtn = document.getElementById('previewRecipientsFileBtn');
         let selectedRecipientsFile = null;
         let importingRecipients = false;
         if (loadRecipientsFileBtn && recipientsFileInput && selectedRecipientsFileName) {
@@ -457,6 +463,129 @@ const OutboundUI = (() => {
                 selectedRecipientsFile = file;
                 selectedRecipientsFileName.textContent = `Archivo seleccionado: ${file.name}`;
                 selectedRecipientsFileName.classList.remove('d-none');
+            });
+        }
+
+        if (previewRecipientsFileBtn) {
+            const previewModalId = 'recipientsSpreadsheetPreviewModal';
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal fade" id="${previewModalId}" tabindex="-1" aria-labelledby="recipientsSpreadsheetPreviewTitle" aria-hidden="true">
+                    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h2 class="modal-title fs-5" id="recipientsSpreadsheetPreviewTitle">Vista previa del archivo</h2>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p id="spreadsheetPreviewFileName" class="small text-muted"></p>
+                                <label for="spreadsheetPreviewSheet" class="form-label">Hoja</label>
+                                <select id="spreadsheetPreviewSheet" class="form-select mb-3"></select>
+                                <div id="spreadsheetPreviewContent" aria-live="polite"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `);
+            const previewModal = bootstrap.Modal.getOrCreateInstance(
+                document.getElementById(previewModalId)
+            );
+            const previewSheetSelect = document.getElementById('spreadsheetPreviewSheet');
+            const previewContent = document.getElementById('spreadsheetPreviewContent');
+            let previewWorkbook = null;
+
+            function renderSpreadsheetPreview(sheetName) {
+                const worksheet = previewWorkbook && previewWorkbook.Sheets[sheetName];
+                if (!worksheet) {
+                    previewContent.innerHTML = '<div class="alert alert-warning">No fue posible leer esta hoja.</div>';
+                    return;
+                }
+
+                const rows = XLSX.utils.sheet_to_json(worksheet, {
+                    header: 1,
+                    defval: '',
+                    blankrows: false,
+                });
+                if (!rows.length) {
+                    previewContent.innerHTML = '<div class="alert alert-info">La hoja seleccionada no contiene datos.</div>';
+                    return;
+                }
+
+                const columns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+                const visibleRows = rows.slice(0, 501);
+                const previewNote = rows.length >= 501
+                    ? '<p class="small text-muted">La vista previa muestra las primeras 500 filas, además del encabezado.</p>'
+                    : '';
+                const headerCells = Array.from({ length: columns }, (_, index) => `
+                    <th scope="col">${escapeHtml(rows[0][index] || `Columna ${index + 1}`)}</th>
+                `).join('');
+                const bodyRows = visibleRows.slice(1).map((row) => `
+                    <tr>${Array.from({ length: columns }, (_, index) => `
+                        <td>${escapeHtml(row[index] === undefined || row[index] === null ? '' : row[index])}</td>
+                    `).join('')}</tr>
+                `).join('');
+
+                previewContent.innerHTML = `${previewNote}
+                    <div class="spreadsheet-preview-scroll">
+                        <table class="table table-sm table-bordered table-striped spreadsheet-preview-table mb-0">
+                            <thead><tr>${headerCells}</tr></thead>
+                            <tbody>${bodyRows}</tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            previewRecipientsFileBtn.addEventListener('click', async () => {
+                if (!selectedRecipientsFile) {
+                    toast('Selecciona un archivo .xlsx para visualizarlo.');
+                    return;
+                }
+                if (!selectedRecipientsFile.name.toLowerCase().endsWith('.xlsx')) {
+                    toast('El archivo seleccionado no es compatible. Usa un archivo .xlsx.');
+                    return;
+                }
+                if (typeof XLSX === 'undefined') {
+                    toast('No fue posible cargar el lector de archivos Excel.');
+                    return;
+                }
+                if (selectedRecipientsFile.size > 20 * 1024 * 1024) {
+                    toast('El archivo es demasiado grande para generar una vista previa (máximo 20 MB).');
+                    return;
+                }
+
+                document.getElementById('spreadsheetPreviewFileName').textContent =
+                    selectedRecipientsFile.name;
+                previewSheetSelect.innerHTML = '';
+                previewContent.innerHTML = `
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <p class="small text-muted mt-2 mb-0">Leyendo archivo localmente...</p>
+                    </div>
+                `;
+                previewModal.show();
+
+                try {
+                    previewWorkbook = XLSX.read(await selectedRecipientsFile.arrayBuffer(), {
+                        type: 'array',
+                        cellDates: true,
+                        sheetRows: 501,
+                    });
+                    if (!previewWorkbook.SheetNames.length) {
+                        previewContent.innerHTML = '<div class="alert alert-info">El archivo no contiene hojas para mostrar.</div>';
+                        return;
+                    }
+
+                    previewSheetSelect.innerHTML = previewWorkbook.SheetNames.map((sheetName) => `
+                        <option value="${escapeHtml(sheetName)}">${escapeHtml(sheetName)}</option>
+                    `).join('');
+                    renderSpreadsheetPreview(previewWorkbook.SheetNames[0]);
+                } catch (error) {
+                    console.error('No fue posible leer el archivo Excel:', error);
+                    previewContent.innerHTML = '<div class="alert alert-danger">No fue posible leer este archivo. Verifica que sea un archivo .xlsx válido.</div>';
+                }
+            });
+
+            previewSheetSelect.addEventListener('change', () => {
+                renderSpreadsheetPreview(previewSheetSelect.value);
             });
         }
 
@@ -498,6 +627,179 @@ const OutboundUI = (() => {
             return `<button type="button" class="segment-chip" data-kind="${kind}" data-id="${s.id}">
         ${s.name} · ${(s.contact_count || 0).toLocaleString('es-CO')}
     </button>`;
+        }
+
+        async function renderAudiencesPage() {
+            const grid = document.getElementById('segmentsGrid');
+            const status = document.getElementById('audiencesStatus');
+            const panel = document.getElementById('audienceContactsPanel');
+            if (!grid || !status || !panel) return;
+
+            const contactsStatus = document.getElementById('audienceContactsStatus');
+            const contactsHead = document.getElementById('audienceContactsHead');
+            const contactsBody = document.getElementById('audienceContactsBody');
+            const contactsTable = document.getElementById('audienceContactsTableWrap');
+            const loadMoreButton = document.getElementById('loadMoreAudienceContacts');
+            const sourceLabels = {
+                excel_import: 'Importación Excel (Campus)',
+                manual: 'Selección manual',
+                dynamic: 'Regla dinámica',
+            };
+            const contactColumns = [
+                ['full_name', 'Nombre'],
+                ['document_number', 'Documento'],
+                ['phone', 'Teléfono'],
+                ['email', 'Correo'],
+                ['academic_program', 'Programa académico'],
+                ['semester', 'Semestre'],
+                ['role', 'Perfil'],
+                ['whatsapp_opt_in', 'Consentimiento WhatsApp'],
+                ['source', 'Origen del contacto'],
+            ];
+            let audiences = [];
+            let nextContactsUrl = null;
+            let activeRequest = 0;
+
+            function formatDate(value) {
+                if (!value) return '—';
+                const date = new Date(value);
+                return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString('es-CO');
+            }
+
+            async function loadContacts(url, append = false) {
+                const requestId = ++activeRequest;
+                loadMoreButton.disabled = true;
+                contactsStatus.innerHTML = `
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                        <span>Cargando contactos...</span>
+                    </div>
+                `;
+                if (!append) {
+                    contactsTable.classList.add('d-none');
+                    contactsBody.innerHTML = '';
+                }
+
+                try {
+                    const response = await fetch(url, {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Error HTTP ${response.status}: ${await response.text()}`);
+                    }
+                    const data = await response.json();
+                    if (requestId !== activeRequest) return;
+
+                    const contacts = Array.isArray(data) ? data : (data.results || []);
+                    nextContactsUrl = Array.isArray(data) ? null : data.next;
+                    if (!append) {
+                        contactsHead.innerHTML = `<tr>${contactColumns.map(([, label]) =>
+                            `<th scope="col">${escapeHtml(label)}</th>`
+                        ).join('')}</tr>`;
+                    }
+                    if (!contacts.length && !append) {
+                        contactsStatus.innerHTML = '<div class="alert alert-info mb-0">Esta audiencia todavía no tiene contactos.</div>';
+                        loadMoreButton.classList.add('d-none');
+                        return;
+                    }
+
+                    contactsBody.insertAdjacentHTML('beforeend', contacts.map((contact) => `
+                        <tr>${contactColumns.map(([field]) =>
+                            `<td>${escapeHtml(contact[field] ?? '—')}</td>`
+                        ).join('')}</tr>
+                    `).join(''));
+                    contactsStatus.innerHTML = '';
+                    contactsTable.classList.remove('d-none');
+                    loadMoreButton.classList.toggle('d-none', !nextContactsUrl);
+                } catch (error) {
+                    if (requestId !== activeRequest) return;
+                    console.error('Error al cargar contactos de la audiencia:', error);
+                    contactsStatus.innerHTML = '<div class="alert alert-danger mb-0">No fue posible cargar los contactos. Intenta nuevamente.</div>';
+                    loadMoreButton.classList.toggle('d-none', !nextContactsUrl);
+                } finally {
+                    if (requestId === activeRequest) loadMoreButton.disabled = false;
+                }
+            }
+
+            function renderAudienceCards() {
+                if (!audiences.length) {
+                    grid.innerHTML = '<div class="col-12"><div class="alert alert-info">No hay audiencias cargadas.</div></div>';
+                    return;
+                }
+                grid.innerHTML = audiences.map((audience) => `
+                    <div class="col-md-6 col-xl-4">
+                        <article class="card outbound-card audience-card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <h2 class="h6 fw-bold mb-0">${escapeHtml(audience.name)}</h2>
+                                    <span class="badge text-bg-light">${escapeHtml(sourceLabels[audience.source_type] || audience.source_type || 'Sin origen')}</span>
+                                </div>
+                                <p class="small text-muted flex-grow-1 mb-3">${escapeHtml(audience.description || 'Sin descripción')}</p>
+                                <div class="small text-muted mb-3">
+                                    <div><strong>Contactos:</strong> ${Number(audience.contact_count || 0).toLocaleString('es-CO')}</div>
+                                    <div><strong>Creada:</strong> ${formatDate(audience.created_at)}</div>
+                                </div>
+                                <button type="button" class="btn btn-outline-success btn-sm" data-view-audience="${escapeHtml(audience.id)}">
+                                    <i class="bi bi-eye me-1"></i> Ver contactos
+                                </button>
+                            </div>
+                        </article>
+                    </div>
+                `).join('');
+            }
+
+            grid.addEventListener('click', async (event) => {
+                const button = event.target.closest('[data-view-audience]');
+                if (!button || !grid.contains(button)) return;
+                const audienceId = button.dataset.viewAudience;
+                const audience = audiences.find((item) => String(item.id) === audienceId);
+                if (!audience) return;
+
+                document.querySelectorAll('.audience-card').forEach((card) => {
+                    card.classList.toggle('is-selected', card === button.closest('.audience-card'));
+                });
+                document.getElementById('audienceContactsTitle').textContent = `Contactos: ${audience.name}`;
+                document.getElementById('audienceContactsDescription').textContent =
+                    `${sourceLabels[audience.source_type] || audience.source_type || 'Origen no especificado'} · ${formatDate(audience.created_at)}`;
+                document.getElementById('audienceContactsCount').textContent =
+                    `${Number(audience.contact_count || 0).toLocaleString('es-CO')} contactos`;
+                panel.classList.remove('d-none');
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                nextContactsUrl = `/campanas/api/segments/${encodeURIComponent(audienceId)}/contacts/`;
+                await loadContacts(nextContactsUrl);
+            });
+
+            loadMoreButton.addEventListener('click', () => {
+                if (nextContactsUrl) loadContacts(nextContactsUrl, true);
+            });
+
+            status.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <div class="spinner-border text-success mb-2" role="status"></div>
+                    <p class="mb-0">Cargando audiencias...</p>
+                </div>
+            `;
+            try {
+                const response = await fetch('/campanas/api/segments/', {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok) {
+                    throw new Error(`Error HTTP ${response.status}: ${await response.text()}`);
+                }
+                const data = await response.json();
+                audiences = Array.isArray(data) ? data : (data.results || []);
+                if (!Array.isArray(audiences)) {
+                    throw new Error('La respuesta de audiencias no tiene un formato válido.');
+                }
+                status.innerHTML = '';
+                renderAudienceCards();
+            } catch (error) {
+                console.error('Error al cargar audiencias:', error);
+                grid.innerHTML = '';
+                status.innerHTML = '<div class="alert alert-danger">No fue posible cargar las audiencias. Intenta nuevamente.</div>';
+            }
         }
 
         function renderSegments() {
@@ -851,7 +1153,44 @@ const OutboundUI = (() => {
             }
             launch();
         });
-        document.getElementById('wizardTest').addEventListener('click', () => toast('Prueba enviada a la cuenta institucional de demostración.'));
+        const wizardTestButton = document.getElementById('wizardTest');
+        wizardTestButton.addEventListener('click', async () => {
+            if (!state.templateId || !Number.isInteger(Number(state.templateId))) {
+                toast('Selecciona una plantilla antes de enviar la prueba.');
+                return;
+            }
+
+            const originalText = wizardTestButton.textContent;
+            wizardTestButton.disabled = true;
+            wizardTestButton.textContent = 'Enviando...';
+            try {
+                const response = await fetch('/campanas/test-send/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        template: Number(state.templateId),
+                        params: state.vars,
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    toast(data.message || 'No se pudo enviar el mensaje de prueba.');
+                    return;
+                }
+                toast(data.message || 'Mensaje de prueba enviado correctamente.');
+            } catch (error) {
+                console.error('Error al enviar mensaje de prueba:', error);
+                toast('No se pudo enviar el mensaje de prueba. Verifica la conexión con el servidor.');
+            } finally {
+                wizardTestButton.disabled = false;
+                wizardTestButton.textContent = originalText;
+            }
+        });
         document.querySelectorAll('.wizard-step').forEach((btn) => {
             btn.addEventListener('click', () => showStep(Number(btn.dataset.step)));
         });
@@ -914,6 +1253,10 @@ const OutboundUI = (() => {
         }
 
         showStep(1);
+    }
+
+    function initAudiencesPage() {
+        initWizard(true);
     }
 
     function initTemplatesPage() {
@@ -1364,5 +1707,5 @@ const OutboundUI = (() => {
         draw();
     }
 
-    return { renderDashboard, renderCampaignCards, renderCampaignsPage, renderCampaignDetail, initWizard, initTemplatesPage, renderSegments, renderLogs };
+    return { renderDashboard, renderCampaignCards, renderCampaignsPage, renderCampaignDetail, initWizard, initAudiencesPage, initTemplatesPage, renderSegments, renderLogs };
 })();

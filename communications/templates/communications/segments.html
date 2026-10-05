@@ -3,7 +3,7 @@
 
 {% block title %}Audiencias{% endblock %}
 {% block page_heading %}Audiencias{% endblock %}
-{% block page_lead %}Resuelve públicos institucionales y lanza una campaña desde el segmento.{% endblock %}
+{% block page_lead %}Consulta las audiencias cargadas y revisa sus contactos.{% endblock %}
 
 {% block hero_actions %}
 <a href="{% url 'communications:campaign_new' %}" class="btn btn-success fw-semibold rounded-pill px-4">
@@ -12,12 +12,33 @@
 {% endblock %}
 
 {% block outbound_content %}
-<div class="row g-3" id="segmentsGrid">
-    <div class="col-12 text-center text-muted py-5">
-        <div class="spinner-border text-success mb-2" role="status">
-            <span class="visually-hidden">Cargando...</span>
+<div class="row g-4">
+    <div class="col-12">
+        <div id="audiencesStatus" class="mb-3" aria-live="polite"></div>
+        <div class="row g-3" id="segmentsGrid"></div>
+    </div>
+    <div class="col-12 d-none" id="audienceContactsPanel">
+        <div class="card outbound-card">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                    <div>
+                        <h2 class="h5 fw-bold mb-1" id="audienceContactsTitle">Contactos</h2>
+                        <p class="small text-muted mb-0" id="audienceContactsDescription"></p>
+                    </div>
+                    <span class="badge text-bg-light" id="audienceContactsCount"></span>
+                </div>
+                <div id="audienceContactsStatus" aria-live="polite"></div>
+                <div class="table-responsive d-none" id="audienceContactsTableWrap">
+                    <table class="table table-sm table-striped outbound-table mb-0">
+                        <thead id="audienceContactsHead"></thead>
+                        <tbody id="audienceContactsBody"></tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-outline-success btn-sm mt-3 d-none" id="loadMoreAudienceContacts">
+                    Cargar más contactos
+                </button>
+            </div>
         </div>
-        <p class="mb-0">Cargando audiencias y segmentos institucionales…</p>
     </div>
 </div>
 {% endblock %}
@@ -25,10 +46,10 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.renderSegments === 'function') {
-            OutboundUI.renderSegments();
+        if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initAudiencesPage === 'function') {
+            OutboundUI.initAudiencesPage();
         } else {
-            console.error('El módulo OutboundUI o la función renderSegments no están disponibles.');
+            console.error('El módulo OutboundUI o la función initAudiencesPage no están disponibles.');
         }
     });
 </script>

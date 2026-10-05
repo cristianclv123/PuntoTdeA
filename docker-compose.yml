@@ -37,6 +37,7 @@ services:
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}
       - WHATSAPP_API_VERSION=${WHATSAPP_API_VERSION:-v21.0}
+      - WHATSAPP_TEST_RECIPIENT=${WHATSAPP_TEST_RECIPIENT}
       - META_GRAPH_API_URL=${META_GRAPH_API_URL:-https://graph.facebook.com}
       - META_REQUEST_TIMEOUT=${META_REQUEST_TIMEOUT:-10}
       # Meta Marketing API (anuncios en WhatsApp Status): nunca en claro aquí.
