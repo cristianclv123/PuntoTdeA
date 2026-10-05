@@ -26,6 +26,10 @@ from communications.models import (
     WhatsAppWebhookEvent,
 )
 from communications.services import meta_config, meta_diagnostics, meta_errors
+from communications.services.test_send_registry import (
+    TEST_SEND_KEY_PREFIX,
+    record_test_send,
+)
 
 
 def _staff_required(view):
@@ -49,31 +53,7 @@ def config(request: HttpRequest):
     )
 
 
-TEST_SEND_KEY_PREFIX = "test-send:"
 SERVICE_WINDOW = timedelta(hours=24)
-
-
-def record_test_send(phone: str, wamid: str, kind: str, detail: str):
-    """Guarda el `wamid` que devolvió Meta al enviar desde esta página.
-
-    Sin esto el `wamid` se descarta y los estados que Meta reporte después no
-    tienen con qué correlacionarse: el webhook los marca `unmatched` y no hay
-    forma, desde la página, de saber a qué envío pertenecían.
-    """
-    if not wamid:
-        return None
-    event, _ = WhatsAppWebhookEvent.objects.get_or_create(
-        event_key=f"{TEST_SEND_KEY_PREFIX}{wamid}",
-        defaults={
-            "provider_message_id": wamid,
-            "event_type": WhatsAppWebhookEvent.Type.STATUS,
-            "status": kind,
-            "payload": {"to": phone, "detail": detail},
-            "processed_at": timezone.now(),
-        },
-    )
-    return event
-
 
 def service_window(phone: str) -> dict | None:
     """Estado de la ventana de servicio al cliente de 24 horas.
