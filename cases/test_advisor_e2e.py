@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from itertools import count
 
 from django.contrib.auth import get_user_model
 from django.test import Client, RequestFactory, TestCase, override_settings
@@ -13,6 +14,14 @@ from communications.adapters.base import SendResult
 from communications.models import MessageTemplate
 
 User = get_user_model()
+
+
+def _unique_send_result(*_args, **_kwargs):
+    token = next(_unique_send_result.counter)
+    return SendResult(success=True, provider_message_id=f"wamid.auto.{token}")
+
+
+_unique_send_result.counter = count(1)
 
 
 class AdvisorE2EMixin:
@@ -139,7 +148,7 @@ class OutboundClaimReplyCloseE2ETests(AdvisorE2EMixin, TestCase):
 
     @patch("cases.services.ingestion.send_text_message")
     def test_reply_calls_meta_and_stores_wamid(self, send_text):
-        send_text.return_value = SendResult(success=True, provider_message_id="wamid.out.123")
+        send_text.side_effect = _unique_send_result
         claim_conversation(self.conversation.id, self.owner)
 
         res = self._auth(self.owner).post(
@@ -148,10 +157,11 @@ class OutboundClaimReplyCloseE2ETests(AdvisorE2EMixin, TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 201)
-        send_text.assert_called_once_with("573001112233", "Claro, te ayudo con el certificado")
+        send_text.assert_any_call("573001112233", "Claro, te ayudo con el certificado")
+        self.assertGreaterEqual(send_text.call_count, 2)
         message = Message.objects.get(pk=res.data["id"])
         self.assertEqual(message.direction, Message.Direction.OUTBOUND)
-        self.assertEqual(message.external_id, "wamid.out.123")
+        self.assertTrue(message.external_id.startswith("wamid.auto."))
 
     @patch("cases.services.ingestion.send_text_message")
     def test_reply_meta_failure_does_not_persist_message(self, send_text):
@@ -228,7 +238,7 @@ class OutboundClaimReplyCloseE2ETests(AdvisorE2EMixin, TestCase):
 
     @patch("cases.services.ingestion.send_text_message")
     def test_staff_can_reply_without_being_owner(self, send_text):
-        send_text.return_value = SendResult(success=True, provider_message_id="wamid.staff")
+        send_text.side_effect = _unique_send_result
         claim_conversation(self.conversation.id, self.owner)
         res = self._auth(self.staff).post(
             f"/api/cases/tickets/{self.conversation.id}/reply/",
@@ -236,7 +246,8 @@ class OutboundClaimReplyCloseE2ETests(AdvisorE2EMixin, TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 201)
-        send_text.assert_called_once()
+        send_text.assert_any_call("573001112233", "Respuesta de staff")
+        self.assertGreaterEqual(send_text.call_count, 2)
 
 
 class HtmlClaimCloseE2ETests(AdvisorE2EMixin, TestCase):
@@ -248,7 +259,7 @@ class HtmlClaimCloseE2ETests(AdvisorE2EMixin, TestCase):
 
     @patch("cases.services.ingestion.send_text_message")
     def test_html_claim_reply_close(self, send_text):
-        send_text.return_value = SendResult(success=True, provider_message_id="wamid.html")
+        send_text.side_effect = _unique_send_result
         self.client.login(username="asesor_owner", password="secret123")
         claim_res = self.client.post(reverse("cases:claim", args=[self.conversation.id]))
         self.assertEqual(claim_res.status_code, 302)
@@ -258,7 +269,8 @@ class HtmlClaimCloseE2ETests(AdvisorE2EMixin, TestCase):
             {"action": "reply", "body": "Te confirmo por WhatsApp"},
         )
         self.assertEqual(reply_res.status_code, 302)
-        send_text.assert_called_once_with("573001112233", "Te confirmo por WhatsApp")
+        send_text.assert_any_call("573001112233", "Te confirmo por WhatsApp")
+        self.assertGreaterEqual(send_text.call_count, 2)
 
         close_res = self.client.post(
             reverse("cases:detail", args=[self.conversation.id]),

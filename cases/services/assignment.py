@@ -1,13 +1,17 @@
 """Asignación atómica de conversaciones a asesores."""
 
+import logging
+
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from cases.models import Conversation, Department
-from cases.services.case_events import mark_claimed, mark_closed
+from cases.services.case_events import advisor_label, mark_claimed, mark_closed
 from cases.services.realtime import broadcast_conversation_update
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class ClaimError(Exception):
@@ -41,6 +45,31 @@ def advisor_can_reply(conversation: Conversation, user) -> bool:
     )
 
 
+def claim_greeting_body(user) -> str:
+    name = advisor_label(user)
+    return (
+        f"Hola, soy {name}, asesora de soporte al cliente de Punto TdeA. "
+        "¿En qué te podemos ayudar?"
+    )
+
+
+def _send_claim_greeting(conversation: Conversation, user) -> None:
+    from cases.services.ingestion import create_outbound_message
+
+    try:
+        create_outbound_message(
+            conversation,
+            claim_greeting_body(user),
+            user=user,
+        )
+    except ValidationError as exc:
+        logger.warning(
+            "No se pudo enviar el saludo al tomar el caso %s: %s",
+            conversation.pk,
+            "; ".join(exc.messages) if hasattr(exc, "messages") else exc,
+        )
+
+
 def _locked_conversation(conversation_id: int) -> Conversation | None:
     return (
         Conversation.objects.select_for_update(of=("self",))
@@ -51,7 +80,7 @@ def _locked_conversation(conversation_id: int) -> Conversation | None:
 
 
 @transaction.atomic
-def claim_conversation(conversation_id: int, user) -> Conversation:
+def _assign_claim(conversation_id: int, user) -> tuple[Conversation, bool]:
     if user is None or not getattr(user, "is_authenticated", False):
         raise ClaimError("unauthenticated", "Debes iniciar sesión para tomar el chat.")
 
@@ -72,12 +101,20 @@ def claim_conversation(conversation_id: int, user) -> Conversation:
             )
         mark_claimed(conversation, user, assign=True, force=True)
         broadcast_conversation_update(conversation)
-        return conversation
+        return conversation, True
 
     if conversation.assigned_to_id is None:
         mark_claimed(conversation, user)
         broadcast_conversation_update(conversation)
+        return conversation, True
 
+    return conversation, False
+
+
+def claim_conversation(conversation_id: int, user) -> Conversation:
+    conversation, send_greeting = _assign_claim(conversation_id, user)
+    if send_greeting:
+        _send_claim_greeting(conversation, user)
     return conversation
 
 

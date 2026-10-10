@@ -458,7 +458,7 @@ class ClaimQueueTests(TestCase):
                 conversation=self.conversation,
                 direction=Message.Direction.OUTBOUND,
             ).count(),
-            0,
+            1,
         )
 
     def test_queue_lists_unassigned(self):
@@ -496,5 +496,5 @@ class ClaimQueueTests(TestCase):
                 conversation=self.conversation,
                 direction=Message.Direction.OUTBOUND,
             ).count(),
-            1,
+            2,
         )

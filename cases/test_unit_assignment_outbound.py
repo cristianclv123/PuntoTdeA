@@ -11,6 +11,7 @@ from cases.services.assignment import (
     CloseError,
     advisor_can_reply,
     claim_conversation,
+    claim_greeting_body,
     close_conversation,
     user_can_act_on_conversation,
 )
@@ -117,6 +118,42 @@ class ClaimConversationUnitTests(AssignmentOutboundFixtures):
         self.assertEqual(ctx.exception.code, "already_assigned")
         taken = claim_conversation(conversation.id, self.staff)
         self.assertEqual(taken.assigned_to_id, self.staff.id)
+
+    @patch("cases.services.ingestion.send_text_message")
+    def test_claim_sends_whatsapp_greeting_once(self, send_text):
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.hi")
+        conversation = self._conv()
+        self.owner.first_name = "Ana"
+        self.owner.last_name = "Dueña"
+        self.owner.save(update_fields=["first_name", "last_name"])
+
+        claim_conversation(conversation.id, self.owner)
+        expected = claim_greeting_body(self.owner)
+        send_text.assert_called_once_with("573004445566", expected)
+        greeting = Message.objects.get(
+            conversation=conversation,
+            direction=Message.Direction.OUTBOUND,
+        )
+        self.assertEqual(greeting.body, expected)
+        self.assertIn("Ana Dueña", expected)
+        self.assertIn("asesora de soporte al cliente de Punto TdeA", expected)
+
+        claim_conversation(conversation.id, self.owner)
+        send_text.assert_called_once()
+
+    @patch("cases.services.ingestion.send_text_message")
+    def test_claim_succeeds_if_greeting_meta_fails(self, send_text):
+        send_text.return_value = SendResult(success=False, error="Sin token")
+        conversation = self._conv()
+        claimed = claim_conversation(conversation.id, self.owner)
+        self.assertEqual(claimed.assigned_to_id, self.owner.id)
+        self.assertEqual(
+            Message.objects.filter(
+                conversation=conversation,
+                direction=Message.Direction.OUTBOUND,
+            ).count(),
+            0,
+        )
 
 
 class CloseConversationUnitTests(AssignmentOutboundFixtures):
