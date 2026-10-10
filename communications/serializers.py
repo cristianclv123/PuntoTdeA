@@ -23,20 +23,18 @@ class ContactSerializer(serializers.ModelSerializer):
 
 
 class MessageTemplateSerializer(serializers.ModelSerializer):
+    """Serializer de un borrador local de plantilla (aún no enviada a Meta)."""
+
     param_count = serializers.ReadOnlyField()
 
     class Meta:
         model = MessageTemplate
         fields = [
-            "id", "name", "meta_template_name", "language", "category",
+            "id", "name", "category",
             "body_text", "variable_types", "header_type", "header_media_url", "buttons",
-            "status", "meta_template_id", "meta_status", "meta_rejection_reason",
-            "meta_synced_at", "param_count", "created_at", "updated_at",
+            "param_count", "created_at", "updated_at",
         ]
-        read_only_fields = [
-            "id", "meta_template_id", "meta_status", "meta_rejection_reason",
-            "meta_synced_at", "created_at", "updated_at",
-        ]
+        read_only_fields = ["id", "param_count", "created_at", "updated_at"]
 
 
 class AudienceSegmentSerializer(serializers.ModelSerializer):
@@ -73,7 +71,11 @@ class BroadcastRecipientSerializer(serializers.ModelSerializer):
 
 
 class CampaignSerializer(serializers.ModelSerializer):
-    template_name = serializers.CharField(source="template.name", read_only=True)
+    # `template` se mantiene como alias del id de Meta para no romper a los
+    # clientes que ya lo enviaban; ahora se guarda en `template_meta_id`.
+    template = serializers.CharField(
+        source="template_meta_id", required=False, allow_blank=True, max_length=64
+    )
     segment_name = serializers.CharField(source="segment.name", read_only=True)
 
     total_recipients = serializers.ReadOnlyField()
@@ -86,7 +88,8 @@ class CampaignSerializer(serializers.ModelSerializer):
         model = Campaign
         fields = [
             "id", "name", "channel",
-            "template", "template_name", "segment", "segment_name",
+            "template", "template_name", "template_language", "template_snapshot",
+            "segment", "segment_name",
             "default_params", "status", "scheduled_at", "rate_limit_per_minute",
             "created_by", "created_at", "updated_at", "sent_at",
             "total_recipients", "sent_count", "delivered_count",

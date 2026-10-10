@@ -122,6 +122,13 @@ const OutboundUI = (() => {
         const count = document.getElementById('campaignsCount');
         if (!list || !empty || !error || !count) return;
 
+        const errorText = document.getElementById('campaignsErrorText');
+        const errorClose = error.querySelector('.btn-close');
+        if (errorClose && !errorClose.dataset.bound) {
+            errorClose.dataset.bound = '1';
+            errorClose.addEventListener('click', () => error.classList.add('d-none'));
+        }
+
         try {
             const campaigns = await fetchCampaigns();
             count.textContent = `${campaigns.length} campaña${campaigns.length === 1 ? '' : 's'}`;
@@ -130,7 +137,7 @@ const OutboundUI = (() => {
         } catch (requestError) {
             list.innerHTML = '';
             count.textContent = 'Error';
-            error.textContent = requestError.message;
+            if (errorText) errorText.textContent = requestError.message;
             error.classList.remove('d-none');
         }
     }
@@ -265,6 +272,8 @@ const OutboundUI = (() => {
                     channel: data.channel,
                     template: data.template,
                     templateName: data.template_name || 'Sin plantilla',
+                    templateSnapshot: data.template_snapshot || {},
+                    templateLanguage: data.template_language || 'es_CO',
                     defaultParams: data.default_params || {},
 
                     segments: data.segment
@@ -313,31 +322,17 @@ const OutboundUI = (() => {
          *    la lógica visual que ya tenías.
          */
         let tpl = null;
-        try {
-            const templatesResponse = await fetch('/campanas/api/templates/', {
-                headers: { Accept: 'application/json' },
-                credentials: 'same-origin',
-            });
-            if (!templatesResponse.ok) {
-                throw new Error(`No se pudieron cargar las plantillas (${templatesResponse.status}).`);
-            }
-            const templatesData = await templatesResponse.json();
-            const templates = Array.isArray(templatesData) ? templatesData : templatesData.results;
-            if (!Array.isArray(templates)) {
-                throw new Error('La respuesta de plantillas no tiene un formato válido.');
-            }
-            const selectedTemplate = templates.find(
-                (template) => String(template.id) === String(campaign.template)
-            );
-            if (selectedTemplate) {
-                tpl = {
-                    ...selectedTemplate,
-                    body: selectedTemplate.body_text || '',
-                    buttons: Array.isArray(selectedTemplate.buttons) ? selectedTemplate.buttons : [],
-                };
-            }
-        } catch (error) {
-            console.warn('No fue posible cargar la plantilla de la campaña:', error);
+        const snapshot = campaign.templateSnapshot || {};
+        if (campaign.templateName || snapshot.body_text) {
+            tpl = {
+                name: campaign.templateName || '',
+                body: snapshot.body_text || '',
+                buttons: Array.isArray(snapshot.buttons)
+                    ? snapshot.buttons
+                        .map((button) => (typeof button === 'string' ? button : (button && button.text) || ''))
+                        .filter(Boolean)
+                    : [],
+            };
         }
 
         root.innerHTML = `
@@ -415,7 +410,7 @@ const OutboundUI = (() => {
         Object.entries(vars).forEach(([k, v]) => {
             body = body.replaceAll(`{{${k}}}`, v || `{{${k}}}`);
         });
-        const buttons = (tpl.buttons || []).map((b) => `<span>${b}</span>`).join('');
+        const buttons = (tpl.buttons || []).map((b) => `<span>${escapeHtml((b && b.text) ? b.text : b)}</span>`).join('');
         if (channel === 'whatsapp') {
             return `<div class="wa-bubble">${body}<span class="wa-meta">TdeA · ahora</span></div>${buttons ? `<div class="wa-buttons">${buttons}</div>` : ''}`;
         }
@@ -434,6 +429,11 @@ const OutboundUI = (() => {
 
         let templates = [];
         let segments = [];
+        const TEMPLATE_CATEGORY_LABELS = {
+            marketing: 'Marketing',
+            utility: 'Utilidad',
+            authentication: 'Autenticación',
+        };
         const state = {
             step: 1,
             channel: 'whatsapp',
@@ -867,29 +867,32 @@ const OutboundUI = (() => {
 
         async function loadTemplates() {
             try {
-                const response = await fetch('/campanas/api/templates/', {
+                const response = await fetch('/campanas/api/templates/meta/', {
                     headers: { Accept: 'application/json' },
                     credentials: 'same-origin',
                 });
-                if (!response.ok) {
-                    throw new Error(`No se pudieron cargar las plantillas (${response.status}).`);
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.success === false) {
+                    throw new Error(data.message || `No se pudieron cargar las plantillas (${response.status}).`);
                 }
-                const data = await response.json();
-                const results = Array.isArray(data) ? data : data.results;
-                if (!Array.isArray(results)) {
-                    throw new Error('La respuesta de plantillas no tiene un formato válido.');
-                }
-                templates = results.map((template) => ({
-                    ...template,
-                    type: template.category,
-                    body: template.body_text || '',
-                }));
+                const results = Array.isArray(data.templates) ? data.templates : [];
+                templates = results
+                    .filter((template) => String(template.status || '').toUpperCase() === 'APPROVED')
+                    .map((template) => ({
+                        id: String(template.meta_id || ''),
+                        name: template.name || '',
+                        category: template.category || '',
+                        language: template.language || 'es_CO',
+                        type: TEMPLATE_CATEGORY_LABELS[template.category] || template.category || 'Plantilla',
+                        body: template.body_text || '',
+                        buttons: Array.isArray(template.buttons) ? template.buttons : [],
+                    }));
                 renderTemplates();
             } catch (error) {
                 templates = [];
                 renderTemplates();
                 console.error('Error al cargar plantillas:', error);
-                toast('No fue posible cargar las plantillas.');
+                toast('No fue posible cargar las plantillas de Meta.');
             }
         }
 
@@ -1155,7 +1158,7 @@ const OutboundUI = (() => {
         });
         const wizardTestButton = document.getElementById('wizardTest');
         wizardTestButton.addEventListener('click', async () => {
-            if (!state.templateId || !Number.isInteger(Number(state.templateId))) {
+            if (!state.templateId) {
                 toast('Selecciona una plantilla antes de enviar la prueba.');
                 return;
             }
@@ -1173,7 +1176,7 @@ const OutboundUI = (() => {
                     },
                     credentials: 'same-origin',
                     body: JSON.stringify({
-                        template: Number(state.templateId),
+                        template: state.templateId,
                         params: state.vars,
                     }),
                 });
@@ -1206,15 +1209,30 @@ const OutboundUI = (() => {
                 return;
             }
 
-            if (!state.templateId || !Number.isInteger(Number(state.templateId))) {
-                toast('La plantilla seleccionada no está disponible en el backend.');
+            if (!state.templateId) {
+                toast('Selecciona una plantilla.');
+                return;
+            }
+
+            const selectedTemplate = currentTpl();
+            if (!selectedTemplate) {
+                toast('La plantilla seleccionada ya no está disponible en Meta.');
                 return;
             }
 
             try {
                 const payload = {
                     name: name,
-                    template: Number(state.templateId),
+                    template: state.templateId,
+                    template_name: selectedTemplate.name || '',
+                    template_language: selectedTemplate.language || 'es_CO',
+                    template_snapshot: {
+                        name: selectedTemplate.name || '',
+                        language: selectedTemplate.language || 'es_CO',
+                        category: selectedTemplate.category || '',
+                        body_text: selectedTemplate.body || '',
+                        buttons: Array.isArray(selectedTemplate.buttons) ? selectedTemplate.buttons : [],
+                    },
                     segment: state.include[0],
                     default_params: state.vars,
                 };
@@ -1262,580 +1280,712 @@ const OutboundUI = (() => {
     function initTemplatesPage() {
         const newTemplateBtn = document.getElementById('newTemplateBtn');
         const templateList = document.getElementById('templateList');
-        const refreshStatesBtn = document.getElementById('refreshTemplatesBtn');
+        const refreshBtn = document.getElementById('refreshTemplatesBtn');
+        const alertBox = document.getElementById('templatesAlert');
         if (!newTemplateBtn || !templateList) return;
 
-        const modalId = 'createTemplateModal';
-        if (!document.getElementById(modalId)) {
-            document.body.insertAdjacentHTML('beforeend', `
-                <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="createTemplateModalLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-lg modal-dialog-centered">
-                        <div class="modal-content">
-                            <form id="createTemplateForm">
-                                <div class="modal-header">
-                                    <h2 class="modal-title fs-5" id="createTemplateModalLabel">Nueva plantilla</h2>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div id="createTemplateError" class="alert alert-danger d-none" role="alert"></div>
-                                    <div class="row g-3">
-                                        <div class="col-md-6">
-                                            <label for="templateName" class="form-label">Nombre interno</label>
-                                            <input id="templateName" name="name" class="form-control" maxlength="150" required>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label for="templateMetaName" class="form-label">Nombre en Meta</label>
-                                            <input id="templateMetaName" name="meta_template_name" class="form-control" maxlength="150" required>
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label for="templateLanguage" class="form-label">Idioma</label>
-                                            <input id="templateLanguage" name="language" class="form-control" maxlength="10" value="es_CO" required>
-                                        </div>
-                                        <div class="col-md-8">
-                                            <label for="templateCategory" class="form-label">Categoría</label>
-                                            <select id="templateCategory" name="category" class="form-select" required>
-                                                <option value="utility" selected>Utilidad</option>
-                                                <option value="marketing">Marketing</option>
-                                                <option value="authentication">Autenticación</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-12">
-                                            <p class="small text-muted mb-0">
-                                                El estado (pendiente, aprobada o rechazada) lo controla Meta.
-                                                Guarda la plantilla y usa <strong>Enviar a Meta</strong> para enviarla a aprobación.
-                                            </p>
-                                        </div>
-                                        <div class="col-12">
-                                            <label for="templateBody" class="form-label">Contenido del mensaje</label>
-                                            <textarea id="templateBody" name="body_text" class="form-control" rows="5" required></textarea>
-
-                                            <div id="templateVariables" class="mt-3"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                    <button type="submit" class="btn btn-success" id="saveTemplateBtn">Guardar plantilla</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            `);
-        }
-
-        const modalElement = document.getElementById(modalId);
-        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-        const form = document.getElementById('createTemplateForm');
-        const formError = document.getElementById('createTemplateError');
-        const saveButton = document.getElementById('saveTemplateBtn');
-        const modalTitle = document.getElementById('createTemplateModalLabel');
-        const templateVariables = document.getElementById('templateVariables');
-        let editingTemplateId = null;
-
-        function renderVariableTypes(variableTypes = {}) {
-            const bodyText = form.querySelector('[name="body_text"]').value || '';
-
-            const matches = [...bodyText.matchAll(/\{\{(\d+)\}\}/g)];
-            const variableNumbers = [...new Set(matches.map(match => match[1]))]
-                .sort((a, b) => Number(a) - Number(b));
-
-            if (variableNumbers.length === 0) {
-                templateVariables.innerHTML = '';
-                return;
-            }
-
-            templateVariables.innerHTML = `
-                <div class="border rounded p-3 bg-light">
-                    <h3 class="h6 fw-bold mb-3">Variables detectadas</h3>
-
-                    ${variableNumbers.map(number => `
-                        <div class="row align-items-center mb-2">
-                            <div class="col-sm-4">
-                                <label for="variableType${number}" class="form-label mb-0">
-                                    Variable {{${number}}}
-                                </label>
-                            </div>
-
-                            <div class="col-sm-8">
-                                <select
-                                    id="variableType${number}"
-                                    class="form-select template-variable-type"
-                                    data-variable-number="${number}"
-                                    required>
-                                    <option value="">Selecciona un tipo</option>
-                                    <option value="text" ${variableTypes[number] === 'text' ? 'selected' : ''}>
-                                        Texto
-                                    </option>
-                                    <option value="number" ${variableTypes[number] === 'number' ? 'selected' : ''}>
-                                        Número
-                                    </option>
-                                    <option value="date" ${variableTypes[number] === 'date' ? 'selected' : ''}>
-                                        Fecha
-                                    </option>
-                                    <option value="datetime" ${variableTypes[number] === 'datetime' ? 'selected' : ''}>
-                                        Fecha y hora
-                                    </option>
-                                </select>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-
-        form.querySelector('[name="body_text"]').addEventListener('input', () => {
-            renderVariableTypes();
-        });
-
-        let templatesCache = [];
-        let pollTimer = null;
-
-        const TEMPLATE_STATUS_LABELS = {
-            draft: 'Borrador',
-            pending: 'Pendiente de aprobación',
-            approved: 'Aprobada',
-            rejected: 'Rechazada',
+        const CATEGORY_LABELS = {
+            marketing: 'Marketing',
+            utility: 'Utilidad',
+            authentication: 'Autenticación',
         };
 
-        const TEMPLATE_STATUS_CLASSES = {
-            draft: 'text-bg-secondary',
-            pending: 'text-bg-warning',
-            approved: 'text-bg-success',
-            rejected: 'text-bg-danger',
+        const META_STATUS_LABELS = {
+            APPROVED: 'Aprobada',
+            PENDING: 'Pendiente',
+            REJECTED: 'Rechazada',
+            PAUSED: 'Pausada',
+            DISABLED: 'Deshabilitada',
+            IN_APPEAL: 'En apelación',
+            PENDING_DELETION: 'Pendiente de eliminación',
+            DELETED: 'Eliminada',
+            LIMIT_EXCEEDED: 'Límite excedido',
         };
 
-        function templateStatusBadge(status) {
-            const key = String(status || 'draft');
-            const label = TEMPLATE_STATUS_LABELS[key] || key;
-            const cssClass = TEMPLATE_STATUS_CLASSES[key] || 'text-bg-secondary';
-            return `<span class="badge ${cssClass}">${escapeHtml(label)}</span>`;
+        // Orden y etiquetas en plural para el filtro por estado de Meta.
+        const META_STATUS_FILTERS = [
+            ['APPROVED', 'Aprobadas'],
+            ['PENDING', 'Pendientes'],
+            ['REJECTED', 'Rechazadas'],
+            ['PAUSED', 'Pausadas'],
+            ['DISABLED', 'Deshabilitadas'],
+            ['IN_APPEAL', 'En apelación'],
+            ['PENDING_DELETION', 'Pendientes de eliminación'],
+            ['DELETED', 'Eliminadas'],
+            ['LIMIT_EXCEEDED', 'Límite excedido'],
+        ];
+
+        const filterTabs = Array.from(document.querySelectorAll('#templatesFilterTabs [data-filter]'));
+        const statusFilters = document.getElementById('templateStatusFilters');
+
+        let drafts = [];
+        let metaTemplates = [];
+        let mode = 'create';
+        let editingId = null;
+        let activeFilter = 'all';
+        let activeStatus = 'all';
+
+        function showAlert(message, kind = 'ok') {
+            if (!alertBox) return;
+            alertBox.innerHTML = `
+                <div class="wa-alert ${kind} is-dismissible">
+                    <span>${escapeHtml(message)}</span>
+                    <button type="button" class="wa-alert-close" data-dismiss-alert aria-label="Cerrar mensaje" title="Cerrar">&#215;</button>
+                </div>`;
         }
 
-        function formatSyncedAt(value) {
-            if (!value) return '';
-            const date = new Date(value);
-            if (Number.isNaN(date.getTime())) return '';
-            return date.toLocaleString();
+        if (alertBox) {
+            alertBox.addEventListener('click', (event) => {
+                if (event.target.closest('[data-dismiss-alert]')) clearAlert();
+            });
         }
 
-        // Mientras haya plantillas pendientes, se consulta a Meta cada 20 s
-        // para reflejar la aprobación sin recargar la página a mano.
-        function managePolling(templates) {
-            const hasPending = templates.some((template) =>
-                String(template.meta_status || '').toUpperCase() === 'PENDING'
-                || template.status === 'pending'
-            );
-            if (hasPending && pollTimer === null) {
-                pollTimer = window.setInterval(() => refreshStates(true), 20000);
-            } else if (!hasPending && pollTimer !== null) {
-                window.clearInterval(pollTimer);
-                pollTimer = null;
-            }
+        function clearAlert() {
+            if (alertBox) alertBox.innerHTML = '';
         }
 
-        function renderTemplateCard(template) {
-            const metaId = template.meta_template_id || '';
-            const metaStatus = template.meta_status || '';
-            const metaInfo = metaId
-                ? `<div class="small text-muted mb-2">
-                       Meta ID: ${escapeHtml(metaId)}${metaStatus ? ` · Estado Meta: ${escapeHtml(metaStatus)}` : ''}${template.meta_synced_at ? ` · ${escapeHtml(formatSyncedAt(template.meta_synced_at))}` : ''}
+        function extractError(data, fallback) {
+            if (!data || typeof data !== 'object') return fallback;
+            if (typeof data.message === 'string' && data.message) return data.message;
+            if (typeof data.detail === 'string' && data.detail) return data.detail;
+            const parts = Object.entries(data).map(([field, messages]) => {
+                const value = Array.isArray(messages) ? messages.join(' ') : messages;
+                return `${field}: ${value}`;
+            });
+            return parts.length ? parts.join(' ') : fallback;
+        }
+
+        async function requestJson(url, options = {}) {
+            const { headers: extraHeaders, ...rest } = options;
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                ...rest,
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    ...(extraHeaders || {}),
+                },
+            });
+            const data = await response.json().catch(() => ({}));
+            return { response, data };
+        }
+
+        function templateCard(kind, template) {
+            const isDraft = kind === 'draft';
+            const id = isDraft ? template.id : template.meta_id;
+            const source = isDraft
+                ? '<span class="template-source template-source--draft">Borrador local</span>'
+                : '<span class="template-source template-source--meta">Meta</span>';
+            const category = CATEGORY_LABELS[template.category] || template.category || 'Sin categoría';
+            const statusRow = isDraft
+                ? `<div class="d-flex align-items-center gap-2 flex-wrap">
+                       <span class="template-status template-status--draft">Borrador</span>
+                       <span class="template-category">${escapeHtml(category)} · ${escapeHtml(template.param_count ?? 0)} variable(s)</span>
                    </div>`
-                : '<div class="small text-muted mb-2">Aún no enviada a Meta.</div>';
-            const rejection = template.meta_rejection_reason
-                ? `<div class="alert alert-danger py-1 px-2 small mb-2">${escapeHtml(template.meta_rejection_reason)}</div>`
+                : `<div class="d-flex align-items-center gap-2 flex-wrap">
+                       <span class="template-status template-status--${escapeHtml(String(template.status || 'pending').toLowerCase())}">${escapeHtml(META_STATUS_LABELS[String(template.status || '').toUpperCase()] || template.status || 'Sin estado')}</span>
+                       <span class="template-category">${escapeHtml(category)}</span>
+                   </div>`;
+            const rejection = !isDraft && template.rejected_reason
+                ? `<div class="template-rejection">${escapeHtml(template.rejected_reason)}</div>`
                 : '';
-            const metaButton = metaId
-                ? `<button type="button" class="btn btn-outline-primary btn-sm" data-sync-template="${escapeHtml(template.id)}">
-                       <i class="bi bi-arrow-repeat me-1"></i>Actualizar estado
-                   </button>`
-                : `<button type="button" class="btn btn-outline-success btn-sm" data-send-template="${escapeHtml(template.id)}">
+            const metaLine = !isDraft
+                ? `<div class="template-meta-line">ID Meta: ${escapeHtml(template.meta_id)} · ${escapeHtml(template.language || '')}</div>`
+                : '';
+            const sendButton = isDraft
+                ? `<button type="button" class="btn btn-outline-success btn-sm" data-action="send" data-kind="draft" data-id="${escapeHtml(template.id)}">
                        <i class="bi bi-send me-1"></i>Enviar a Meta
-                   </button>`;
+                   </button>`
+                : '';
+            const duplicateButton = !isDraft
+                ? `<button type="button" class="btn btn-outline-primary btn-sm" data-action="duplicate" data-kind="meta" data-id="${escapeHtml(template.meta_id)}">
+                       <i class="bi bi-files me-1"></i>Duplicar como borrador
+                   </button>`
+                : '';
 
             return `
                 <div class="col-md-6 col-xl-4">
-                    <div class="card outbound-card h-100 shadow-sm">
-                        <div class="card-body d-flex flex-column">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h3 class="h6 fw-bold mb-0">${escapeHtml(template.name)}</h3>
-                                <span class="badge text-bg-light">${escapeHtml(template.category)}</span>
-                            </div>
-                            <p class="small text-muted mb-2">${escapeHtml(template.meta_template_name)}</p>
-                            <div class="bg-light rounded p-3 mb-3 flex-grow-1">
-                                <p class="small mb-0">${escapeHtml(template.body_text)}</p>
-                            </div>
-                            <div class="small text-muted mb-2">
-                                Variables: ${escapeHtml(template.param_count)} · ${templateStatusBadge(template.status)}
-                            </div>
-                            ${metaInfo}
-                            ${rejection}
-                            <div class="d-flex gap-2 mt-auto">
-                                ${metaButton}
-                                <button type="button" class="btn btn-outline-success btn-sm" data-template-id="${escapeHtml(template.id)}" title="Editar">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <button type="button" class="btn btn-outline-danger btn-sm" data-delete-template="${escapeHtml(template.id)}" title="Eliminar">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
+                    <article class="template-card h-100">
+                        <div class="template-card-head">
+                            <h3>${escapeHtml(template.name)}</h3>
+                            ${source}
                         </div>
-                    </div>
-                </div>
-            `;
+                        ${statusRow}
+                        <p class="template-body">${escapeHtml(template.body_text || 'Sin contenido')}</p>
+                        ${rejection}
+                        ${metaLine}
+                        <div class="template-actions">
+                            ${sendButton}
+                            ${duplicateButton}
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-action="edit" data-kind="${kind}" data-id="${escapeHtml(id)}" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-action="delete" data-kind="${kind}" data-id="${escapeHtml(id)}" data-name="${escapeHtml(template.name || '')}" title="Eliminar">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </article>
+                </div>`;
         }
 
-        async function loadTemplates(successMessage = '') {
+        function renderList() {
+            const visibleDrafts = (activeFilter === 'all' || activeFilter === 'draft') ? drafts : [];
+            let visibleMeta = (activeFilter === 'all' || activeFilter === 'meta') ? metaTemplates : [];
+            if (activeFilter === 'meta' && activeStatus !== 'all') {
+                visibleMeta = visibleMeta.filter(
+                    (template) => String(template.status || '').toUpperCase() === activeStatus
+                );
+            }
+            const cards = [
+                ...visibleDrafts.map((template) => templateCard('draft', template)),
+                ...visibleMeta.map((template) => templateCard('meta', template)),
+            ];
+            if (!cards.length) {
+                const emptyMessage = (activeFilter === 'all')
+                    ? 'Todavía no hay plantillas ni borradores.'
+                    : 'No hay plantillas que coincidan con el filtro seleccionado.';
+                templateList.innerHTML = `<div class="col-12"><div class="wa-alert warn">${emptyMessage}</div></div>`;
+                return;
+            }
+            templateList.innerHTML = cards.join('');
+        }
+
+        function updateFilterTabs() {
+            filterTabs.forEach((tab) => {
+                tab.classList.toggle('is-active', tab.dataset.filter === activeFilter);
+            });
+        }
+
+        function renderStatusFilters() {
+            if (!statusFilters) return;
+            if (activeFilter !== 'meta') {
+                statusFilters.hidden = true;
+                statusFilters.innerHTML = '';
+                return;
+            }
+
+            if (!metaTemplates.length) {
+                statusFilters.hidden = true;
+                statusFilters.innerHTML = '';
+                return;
+            }
+
+            const counts = {};
+            metaTemplates.forEach((template) => {
+                const status = String(template.status || '').toUpperCase();
+                counts[status] = (counts[status] || 0) + 1;
+            });
+
+            // Si el estado elegido ya no existe, volvemos a "Todos".
+            if (activeStatus !== 'all' && !counts[activeStatus]) {
+                activeStatus = 'all';
+            }
+
+            const knownOrder = META_STATUS_FILTERS.map(([value]) => value);
+            const chips = [
+                `<button type="button" class="template-status-chip${activeStatus === 'all' ? ' is-active' : ''}" data-status="all">Todos (${metaTemplates.length})</button>`,
+            ];
+
+            META_STATUS_FILTERS.forEach(([value, label]) => {
+                if (!counts[value]) return;
+                chips.push(`<button type="button" class="template-status-chip${activeStatus === value ? ' is-active' : ''}" data-status="${value}">${label} (${counts[value]})</button>`);
+            });
+
+            Object.keys(counts)
+                .filter((status) => status && !knownOrder.includes(status))
+                .sort()
+                .forEach((status) => {
+                    chips.push(`<button type="button" class="template-status-chip${activeStatus === status ? ' is-active' : ''}" data-status="${escapeHtml(status)}">${escapeHtml(status)} (${counts[status]})</button>`);
+                });
+
+            statusFilters.innerHTML = chips.join('');
+            statusFilters.hidden = false;
+        }
+
+        async function fetchDrafts() {
+            const response = await fetch('/campanas/api/templates/', {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) {
+                throw new Error(`No se pudieron cargar los borradores (${response.status}).`);
+            }
+            const data = await response.json();
+            const results = Array.isArray(data) ? data : (data.results || []);
+            return Array.isArray(results) ? results : [];
+        }
+
+        async function fetchMetaTemplates() {
+            const response = await fetch('/campanas/api/templates/meta/', {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.success === false) {
+                throw new Error(data.message || `Meta no devolvió las plantillas (${response.status}).`);
+            }
+            return Array.isArray(data.templates) ? data.templates : [];
+        }
+
+        async function load(successMessage = '') {
+            clearAlert();
             templateList.innerHTML = `
                 <div class="col-12 text-center py-5">
                     <div class="spinner-border text-success" role="status"></div>
                     <p class="text-muted mt-2 mb-0">Cargando plantillas...</p>
-                </div>
-            `;
+                </div>`;
             try {
-                const response = await fetch('/campanas/api/templates/', {
-                    headers: { Accept: 'application/json' },
-                    credentials: 'same-origin',
-                });
-                if (!response.ok) {
-                    throw new Error(`Error HTTP ${response.status}`);
+                const draftResults = await fetchDrafts();
+                let metaResults = [];
+                let metaError = '';
+                try {
+                    metaResults = await fetchMetaTemplates();
+                } catch (error) {
+                    console.error('Error al cargar las plantillas de Meta:', error);
+                    metaError = error.message || 'Meta no respondió.';
                 }
-                const data = await response.json();
-                const templates = Array.isArray(data) ? data : data.results;
-                if (!Array.isArray(templates)) {
-                    throw new Error('La respuesta de plantillas no tiene un formato válido.');
+                drafts = draftResults;
+                metaTemplates = metaResults;
+                updateFilterTabs();
+                renderStatusFilters();
+                renderList();
+                if (metaError) {
+                    showAlert(`No se pudieron leer las plantillas de Meta: ${metaError}`, 'warn');
+                } else if (successMessage) {
+                    showAlert(successMessage, 'ok');
                 }
-                templatesCache = templates;
+            } catch (error) {
+                console.error('Error al cargar los borradores:', error);
+                templateList.innerHTML = '';
+                showAlert(error.message || 'No fue posible cargar los borradores.', 'bad');
+            }
+        }
 
-                const messageMarkup = successMessage
-                    ? `<div class="col-12"><div class="alert alert-success" role="status">${escapeHtml(successMessage)}</div></div>`
-                    : '';
-                if (templates.length === 0) {
-                    templateList.innerHTML = `${messageMarkup}
-                        <div class="col-12">
-                            <div class="alert alert-info">No hay plantillas registradas.</div>
+        // ---- Diálogo de crear / editar ----
+        const panel = templateList.closest('.outbound-panel') || document.body;
+        const dialogId = 'templateDialog';
+        if (!document.getElementById(dialogId)) {
+            panel.insertAdjacentHTML('beforeend', `
+                <dialog class="template-dialog" id="${dialogId}">
+                    <form class="template-dialog-form" id="templateForm">
+                        <div class="template-dialog-head">
+                            <h3 id="templateDialogTitle">Nueva plantilla</h3>
+                            <button type="button" class="template-dialog-close" id="templateDialogClose" aria-label="Cerrar">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
                         </div>
-                    `;
-                    managePolling(templates);
-                    return;
-                }
-
-                templateList.innerHTML = messageMarkup + templates.map(renderTemplateCard).join('');
-                managePolling(templates);
-            } catch (error) {
-                console.error('Error al cargar plantillas:', error);
-                templateList.innerHTML = `
-                    ${successMessage ? `<div class="col-12"><div class="alert alert-success" role="status">${escapeHtml(successMessage)}</div></div>` : ''}
-                    <div class="col-12"><div class="alert alert-danger">No fue posible cargar las plantillas.</div></div>
-                `;
-            }
-        }
-
-        async function refreshStates(silent = false) {
-            if (refreshStatesBtn) refreshStatesBtn.disabled = true;
-            try {
-                const response = await fetch('/campanas/api/templates/consultar-estados/', {
-                    method: 'POST',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                    credentials: 'same-origin',
-                });
-                if (!response.ok) {
-                    throw new Error(`Error HTTP ${response.status}`);
-                }
-                await loadTemplates(silent ? '' : 'Estados actualizados desde Meta.');
-            } catch (error) {
-                console.error('Error al actualizar estados:', error);
-                if (!silent) {
-                    templateList.insertAdjacentHTML('afterbegin', `
-                        <div class="col-12">
-                            <div class="alert alert-danger" role="alert">No fue posible actualizar los estados desde Meta.</div>
+                        <div id="templateDialogError" class="template-dialog-error d-none" role="alert"></div>
+                        <div class="template-fields">
+                            <div class="field-group">
+                                <label class="field-label" for="templateNameInput">Nombre del borrador</label>
+                                <input id="templateNameInput" class="field-input" maxlength="150">
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label" for="templateCategoryInput">Categoría</label>
+                                <select id="templateCategoryInput" class="field-select">
+                                    <option value="utility">Utilidad</option>
+                                    <option value="marketing">Marketing</option>
+                                    <option value="authentication">Autenticación</option>
+                                </select>
+                            </div>
                         </div>
-                    `);
+                        <div class="field-group">
+                            <label class="field-label" for="templateBodyInput">Contenido del mensaje</label>
+                            <textarea id="templateBodyInput" class="field-textarea" rows="4"></textarea>
+                        </div>
+                        <div id="templateVariablesBox"></div>
+                        <div class="template-dialog-actions">
+                            <button type="button" class="btn btn-outline-secondary" id="templateCancel">Cancelar</button>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-outline-success" id="templateSaveDraft">Guardar como borrador</button>
+                                <button type="button" class="btn btn-success" id="templateSaveMeta">Guardar y enviar a Meta</button>
+                            </div>
+                        </div>
+                    </form>
+                </dialog>`);
+        }
+
+        const dialog = document.getElementById(dialogId);
+        const form = document.getElementById('templateForm');
+        const dialogTitle = document.getElementById('templateDialogTitle');
+        const dialogError = document.getElementById('templateDialogError');
+        const nameInput = document.getElementById('templateNameInput');
+        const categoryInput = document.getElementById('templateCategoryInput');
+        const bodyInput = document.getElementById('templateBodyInput');
+        const variablesBox = document.getElementById('templateVariablesBox');
+        const saveDraftBtn = document.getElementById('templateSaveDraft');
+        const saveMetaBtn = document.getElementById('templateSaveMeta');
+
+        form.addEventListener('submit', (event) => event.preventDefault());
+        document.getElementById('templateDialogClose').addEventListener('click', () => dialog.close());
+        document.getElementById('templateCancel').addEventListener('click', () => dialog.close());
+
+        function showDialogError(message) {
+            dialogError.textContent = message;
+            dialogError.classList.remove('d-none');
+        }
+
+        function renderVariables(variableTypes = {}) {
+            const body = bodyInput.value || '';
+            const numbers = [...new Set([...body.matchAll(/\{\{(\d+)\}\}/g)].map((match) => match[1]))]
+                .sort((a, b) => Number(a) - Number(b));
+            if (!numbers.length) {
+                variablesBox.innerHTML = '';
+                return;
+            }
+            variablesBox.innerHTML = `
+                <div class="template-variables">
+                    <div class="field-label mb-2">Ejemplos por variable</div>
+                    ${numbers.map((number) => `
+                        <div class="field-group mb-2">
+                            <label class="field-label" for="variableType${number}">Variable {{${number}}}</label>
+                            <select id="variableType${number}" class="field-select template-variable-type" data-variable-number="${number}">
+                                <option value="">Selecciona un tipo</option>
+                                <option value="text" ${variableTypes[number] === 'text' ? 'selected' : ''}>Texto</option>
+                                <option value="number" ${variableTypes[number] === 'number' ? 'selected' : ''}>Número</option>
+                                <option value="date" ${variableTypes[number] === 'date' ? 'selected' : ''}>Fecha</option>
+                                <option value="datetime" ${variableTypes[number] === 'datetime' ? 'selected' : ''}>Fecha y hora</option>
+                            </select>
+                        </div>`).join('')}
+                </div>`;
+        }
+
+        bodyInput.addEventListener('input', () => renderVariables());
+
+        function openDialog(nextMode, options = {}) {
+            mode = nextMode;
+            editingId = options.id || null;
+            dialogError.classList.add('d-none');
+            dialogError.textContent = '';
+
+            nameInput.value = options.name || '';
+            categoryInput.value = options.category || 'utility';
+            bodyInput.value = options.bodyText || '';
+
+            const editingMeta = mode === 'edit-meta';
+            const editingDraft = mode === 'edit-draft';
+
+            dialogTitle.textContent = editingMeta
+                ? 'Editar plantilla en Meta'
+                : (editingDraft ? 'Editar borrador' : 'Nueva plantilla');
+
+            // En una plantilla de Meta no se pueden cambiar nombre ni categoría.
+            nameInput.disabled = editingMeta;
+            categoryInput.disabled = editingMeta;
+
+            saveDraftBtn.classList.toggle('d-none', editingMeta);
+            saveDraftBtn.textContent = editingDraft ? 'Guardar borrador' : 'Guardar como borrador';
+
+            saveMetaBtn.textContent = editingMeta
+                ? 'Guardar cambios'
+                : (editingDraft ? 'Enviar a Meta' : 'Guardar y enviar a Meta');
+
+            renderVariables(options.variableTypes || {});
+            dialog.showModal();
+        }
+
+        function collectPayload() {
+            const name = nameInput.value.trim();
+            if (!name && mode !== 'edit-meta') {
+                throw new Error('Escribe un nombre para el borrador.');
+            }
+            const bodyText = bodyInput.value;
+            if (!bodyText.trim()) {
+                throw new Error('El contenido del mensaje es obligatorio.');
+            }
+            const variableTypes = {};
+            for (const select of variablesBox.querySelectorAll('.template-variable-type')) {
+                if (!select.value) {
+                    throw new Error(`Selecciona el tipo de la variable {{${select.dataset.variableNumber}}}.`);
                 }
-            } finally {
-                if (refreshStatesBtn) refreshStatesBtn.disabled = false;
+                variableTypes[select.dataset.variableNumber] = select.value;
+            }
+            return {
+                name,
+                category: categoryInput.value,
+                body_text: bodyText,
+                variable_types: variableTypes,
+            };
+        }
+
+        async function createDraft(payload) {
+            const { response, data } = await requestJson('/campanas/api/templates/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+                throw new Error(extractError(data, 'No fue posible guardar el borrador.'));
+            }
+            return data;
+        }
+
+        async function updateDraft(id, payload) {
+            const { response, data } = await requestJson(`/campanas/api/templates/${encodeURIComponent(id)}/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+                throw new Error(extractError(data, 'No fue posible actualizar el borrador.'));
+            }
+            return data;
+        }
+
+        async function sendDraftToMeta(id) {
+            const { response, data } = await requestJson(`/campanas/api/templates/${encodeURIComponent(id)}/enviar-a-meta/`, {
+                method: 'POST',
+            });
+            if (!response.ok || data.success === false) {
+                throw new Error(data.message || extractError(data, 'Meta no aceptó la plantilla.'));
+            }
+            return data;
+        }
+
+        async function editMetaTemplate(id, payload) {
+            const { response, data } = await requestJson(`/campanas/api/templates/meta/${encodeURIComponent(id)}/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    body_text: payload.body_text,
+                    variable_types: payload.variable_types,
+                }),
+            });
+            if (!response.ok || data.success === false) {
+                throw new Error(data.message || extractError(data, 'Meta no aceptó la edición.'));
+            }
+            return data;
+        }
+
+        async function deleteDraft(id) {
+            const { response, data } = await requestJson(`/campanas/api/templates/${encodeURIComponent(id)}/`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                throw new Error(extractError(data, 'No fue posible eliminar el borrador.'));
             }
         }
 
-        newTemplateBtn.addEventListener('click', () => {
-            editingTemplateId = null;
-            form.reset();
-            formError.textContent = '';
-            formError.classList.add('d-none');
-            modalTitle.textContent = 'Nueva plantilla';
-            saveButton.textContent = 'Guardar plantilla';
-            modal.show();
-        });
-
-        if (refreshStatesBtn) {
-            refreshStatesBtn.addEventListener('click', () => refreshStates(false));
+        async function deleteMetaTemplate(id, name) {
+            const query = name ? `?name=${encodeURIComponent(name)}` : '';
+            const { response, data } = await requestJson(`/campanas/api/templates/meta/${encodeURIComponent(id)}/${query}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok || data.success === false) {
+                throw new Error(data.message || extractError(data, 'Meta no eliminó la plantilla.'));
+            }
+            return data;
         }
 
-        templateList.addEventListener('click', async (event) => {
-            const editButton = event.target.closest('[data-template-id]');
-            if (!editButton || !templateList.contains(editButton)) return;
-
-            editingTemplateId = editButton.dataset.templateId;
-            form.reset();
-            formError.textContent = '';
-            formError.classList.add('d-none');
-            modalTitle.textContent = 'Editar plantilla';
-            saveButton.textContent = 'Guardar cambios';
-            saveButton.disabled = true;
-            modal.show();
-
-            try {
-                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(editingTemplateId)}/`, {
-                    headers: { Accept: 'application/json' },
-                    credentials: 'same-origin',
+        function confirmDialog(title, message) {
+            return new Promise((resolve) => {
+                const el = document.createElement('dialog');
+                el.className = 'template-dialog';
+                el.innerHTML = `
+                    <form class="template-dialog-form">
+                        <div class="template-dialog-head"><h3>${escapeHtml(title)}</h3></div>
+                        <p class="small" style="margin:0;color:#d4d4d4;">${escapeHtml(message)}</p>
+                        <div class="template-dialog-actions">
+                            <button type="button" class="btn btn-outline-secondary" data-choice="cancel">Cancelar</button>
+                            <button type="button" class="btn btn-danger" data-choice="confirm">Eliminar</button>
+                        </div>
+                    </form>`;
+                let answered = false;
+                el.addEventListener('click', (event) => {
+                    const choice = event.target.closest('[data-choice]');
+                    if (!choice) return;
+                    answered = true;
+                    el.close();
+                    resolve(choice.dataset.choice === 'confirm');
                 });
-                if (!response.ok) {
-                    const responseText = await response.text();
-                    let backendError = responseText;
-                    try {
-                        backendError = JSON.parse(responseText);
-                    } catch (parseError) {
-                        console.warn('La respuesta de error no era JSON:', parseError);
-                    }
-                    console.error('Error al cargar plantilla:', backendError);
-                    formError.textContent = typeof backendError === 'string'
-                        ? backendError
-                        : (backendError.detail || JSON.stringify(backendError));
-                    formError.classList.remove('d-none');
-                    return;
-                }
-
-                const template = await response.json();
-                form.querySelector('[name="name"]').value = template.name || '';
-                form.querySelector('[name="meta_template_name"]').value = template.meta_template_name || '';
-                form.querySelector('[name="language"]').value = template.language || '';
-                form.querySelector('[name="category"]').value = template.category || '';
-                form.querySelector('[name="body_text"]').value = template.body_text || '';
-                renderVariableTypes(template.variable_types || {});
-            } catch (error) {
-                console.error('Error al cargar plantilla:', error);
-                formError.textContent = 'No fue posible cargar la plantilla. Intenta nuevamente.';
-                formError.classList.remove('d-none');
-            } finally {
-                saveButton.disabled = false;
-            }
-        });
-
-        templateList.addEventListener('click', async (event) => {
-            const sendButton = event.target.closest('[data-send-template]');
-            if (!sendButton || !templateList.contains(sendButton) || sendButton.disabled) return;
-
-            const templateId = sendButton.dataset.sendTemplate;
-            const original = sendButton.innerHTML;
-            sendButton.disabled = true;
-            sendButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
-
-            try {
-                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(templateId)}/enviar-a-meta/`, {
-                    method: 'POST',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                    credentials: 'same-origin',
+                el.addEventListener('cancel', () => {
+                    answered = true;
+                    resolve(false);
                 });
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || `Error HTTP ${response.status}`);
-                }
-                await loadTemplates(data.message || 'Plantilla enviada a Meta.');
-            } catch (error) {
-                console.error('Error al enviar la plantilla a Meta:', error);
-                sendButton.disabled = false;
-                sendButton.innerHTML = original;
-                templateList.insertAdjacentHTML('afterbegin', `
-                    <div class="col-12">
-                        <div class="alert alert-danger" role="alert">${escapeHtml(error.message || 'No fue posible enviar la plantilla a Meta.')}</div>
-                    </div>
-                `);
-            }
-        });
-
-        templateList.addEventListener('click', async (event) => {
-            const syncButton = event.target.closest('[data-sync-template]');
-            if (!syncButton || !templateList.contains(syncButton) || syncButton.disabled) return;
-
-            const templateId = syncButton.dataset.syncTemplate;
-            const original = syncButton.innerHTML;
-            syncButton.disabled = true;
-            syncButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Consultando...';
-
-            try {
-                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(templateId)}/consultar-estado/`, {
-                    method: 'POST',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                    credentials: 'same-origin',
+                el.addEventListener('close', () => {
+                    if (!answered) resolve(false);
+                    el.remove();
                 });
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok || !data.success) {
-                    throw new Error(data.message || `Error HTTP ${response.status}`);
-                }
-                await loadTemplates(data.message || 'Estado actualizado.');
+                document.body.appendChild(el);
+                el.showModal();
+            });
+        }
+
+        async function handleSaveDraft() {
+            let payload;
+            try {
+                payload = collectPayload();
             } catch (error) {
-                console.error('Error al consultar el estado:', error);
-                syncButton.disabled = false;
-                syncButton.innerHTML = original;
-                templateList.insertAdjacentHTML('afterbegin', `
-                    <div class="col-12">
-                        <div class="alert alert-danger" role="alert">${escapeHtml(error.message || 'No fue posible consultar el estado en Meta.')}</div>
-                    </div>
-                `);
-            }
-        });
-
-        templateList.addEventListener('click', async (event) => {
-            const deleteButton = event.target.closest('[data-delete-template]');
-            if (!deleteButton || !templateList.contains(deleteButton) || deleteButton.disabled) return;
-
-            const templateId = deleteButton.dataset.deleteTemplate;
-            if (!window.confirm('¿Estás seguro de que deseas eliminar esta plantilla? Esta acción no se puede deshacer.')) {
+                showDialogError(error.message);
                 return;
             }
 
-            deleteButton.disabled = true;
+            saveDraftBtn.disabled = true;
+            saveMetaBtn.disabled = true;
             try {
-                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(templateId)}/`, {
-                    method: 'DELETE',
-                    headers: {
-                        Accept: 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                    credentials: 'same-origin',
+                if (mode === 'edit-draft') {
+                    await updateDraft(editingId, payload);
+                } else {
+                    await createDraft(payload);
+                }
+                dialog.close();
+                await load('Borrador guardado.');
+            } catch (error) {
+                showDialogError(error.message);
+            } finally {
+                saveDraftBtn.disabled = false;
+                saveMetaBtn.disabled = false;
+            }
+        }
+
+        async function handleSaveMeta() {
+            let payload;
+            try {
+                payload = collectPayload();
+            } catch (error) {
+                showDialogError(error.message);
+                return;
+            }
+
+            saveDraftBtn.disabled = true;
+            saveMetaBtn.disabled = true;
+            try {
+                if (mode === 'edit-meta') {
+                    await editMetaTemplate(editingId, payload);
+                    dialog.close();
+                    await load('Cambios enviados a Meta. La plantilla vuelve a revisión.');
+                    return;
+                }
+
+                let draftId = editingId;
+                if (mode === 'edit-draft') {
+                    await updateDraft(draftId, payload);
+                } else {
+                    const created = await createDraft(payload);
+                    draftId = created.id;
+                }
+                const result = await sendDraftToMeta(draftId);
+                dialog.close();
+                await load(result.message || 'Plantilla enviada a Meta.');
+            } catch (error) {
+                showDialogError(error.message);
+            } finally {
+                saveDraftBtn.disabled = false;
+                saveMetaBtn.disabled = false;
+            }
+        }
+
+        saveDraftBtn.addEventListener('click', handleSaveDraft);
+        saveMetaBtn.addEventListener('click', handleSaveMeta);
+
+        newTemplateBtn.addEventListener('click', () => openDialog('create'));
+
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => load());
+        }
+
+        templateList.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-action]');
+            if (!button || !templateList.contains(button) || button.disabled) return;
+            const action = button.dataset.action;
+            const kind = button.dataset.kind;
+            const id = button.dataset.id;
+
+            if (action === 'edit') {
+                if (kind === 'draft') {
+                    const template = drafts.find((item) => String(item.id) === String(id));
+                    if (!template) return;
+                    openDialog('edit-draft', {
+                        id: template.id,
+                        name: template.name,
+                        category: template.category,
+                        bodyText: template.body_text,
+                        variableTypes: template.variable_types || {},
+                    });
+                } else {
+                    const template = metaTemplates.find((item) => String(item.meta_id) === String(id));
+                    if (!template) return;
+                    openDialog('edit-meta', {
+                        id: template.meta_id,
+                        name: template.name,
+                        category: template.category,
+                        bodyText: template.body_text,
+                        variableTypes: Object.fromEntries((template.indexes || []).map((index) => [index, 'text'])),
+                    });
+                }
+                return;
+            }
+
+            if (action === 'duplicate') {
+                const template = metaTemplates.find((item) => String(item.meta_id) === String(id));
+                if (!template) return;
+                openDialog('create', {
+                    name: `${template.name} (copia)`,
+                    category: template.category,
+                    bodyText: template.body_text,
+                    variableTypes: Object.fromEntries((template.indexes || []).map((index) => [index, 'text'])),
                 });
-
-                if (!response.ok) {
-                    const responseText = await response.text();
-                    let backendError = responseText;
-                    try {
-                        backendError = JSON.parse(responseText);
-                    } catch (parseError) {
-                        console.warn('La respuesta de error no era JSON:', parseError);
-                    }
-                    console.error('Error al eliminar plantilla:', backendError);
-                    const message = typeof backendError === 'string'
-                        ? backendError
-                        : (backendError.detail || JSON.stringify(backendError));
-                    templateList.insertAdjacentHTML('afterbegin', `
-                        <div class="col-12">
-                            <div class="alert alert-danger" role="alert">${escapeHtml(message || 'No fue posible eliminar la plantilla.')}</div>
-                        </div>
-                    `);
-                    return;
-                }
-
-                await loadTemplates('Plantilla eliminada correctamente.');
-            } catch (error) {
-                console.error('Error al eliminar plantilla:', error);
-                templateList.insertAdjacentHTML('afterbegin', `
-                    <div class="col-12">
-                        <div class="alert alert-danger" role="alert">No fue posible conectar con el servidor. Intenta nuevamente.</div>
-                    </div>
-                `);
-            } finally {
-                deleteButton.disabled = false;
-            }
-        });
-
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            formError.textContent = '';
-            formError.classList.add('d-none');
-            saveButton.disabled = true;
-
-            const formData = new FormData(form);
-
-            const variableTypes = {};
-            const variableTypeSelects = form.querySelectorAll('.template-variable-type');
-
-            for (const select of variableTypeSelects) {
-                const variableNumber = select.dataset.variableNumber;
-                const type = select.value;
-
-                if (!type) {
-                    formError.textContent = `Debes seleccionar un tipo para la variable {{${variableNumber}}}.`;
-                    formError.classList.remove('d-none');
-                    saveButton.disabled = false;
-                    return;
-                }
-
-                variableTypes[variableNumber] = type;
+                showAlert('Duplicando una plantilla de Meta como borrador local.', 'warn');
+                return;
             }
 
-            const payload = {
-                name: formData.get('name'),
-                meta_template_name: formData.get('meta_template_name'),
-                language: formData.get('language'),
-                category: formData.get('category'),
-                body_text: formData.get('body_text'),
-                variable_types: variableTypes,
-            };
+            if (action === 'send') {
+                const original = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+                try {
+                    const result = await sendDraftToMeta(id);
+                    await load(result.message || 'Plantilla enviada a Meta.');
+                } catch (error) {
+                    button.disabled = false;
+                    button.innerHTML = original;
+                    showAlert(error.message || 'No fue posible enviar la plantilla a Meta.', 'bad');
+                }
+                return;
+            }
 
-            try {
-                const isEditing = editingTemplateId !== null;
-                const response = await fetch(
-                    isEditing
-                        ? `/campanas/api/templates/${encodeURIComponent(editingTemplateId)}/`
-                        : '/campanas/api/templates/',
-                    {
-                        method: isEditing ? 'PATCH' : 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Accept: 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken'),
-                        },
-                        credentials: 'same-origin',
-                        body: JSON.stringify(payload),
-                    }
+            if (action === 'delete') {
+                const kindLabel = kind === 'draft' ? 'borrador local' : 'plantilla de Meta';
+                const confirmed = await confirmDialog(
+                    'Eliminar plantilla',
+                    `¿Eliminar este ${kindLabel}? Esta acción no se puede deshacer.`
                 );
-
-                if (!response.ok) {
-                    const responseText = await response.text();
-                    let backendError = responseText;
-                    try {
-                        backendError = JSON.parse(responseText);
-                    } catch (parseError) {
-                        console.warn('La respuesta de error no era JSON:', parseError);
+                if (!confirmed) return;
+                try {
+                    if (kind === 'draft') {
+                        await deleteDraft(id);
+                        await load('Borrador eliminado.');
+                    } else {
+                        await deleteMetaTemplate(id, button.dataset.name || '');
+                        await load('Plantilla eliminada de Meta.');
                     }
-                    console.error(isEditing ? 'Error al editar plantilla:' : 'Error al crear plantilla:', backendError);
-                    const message = typeof backendError === 'string'
-                        ? backendError
-                        : (backendError.detail || JSON.stringify(backendError));
-                    formError.textContent = message || (isEditing
-                        ? 'No fue posible editar la plantilla.'
-                        : 'No fue posible crear la plantilla.');
-                    formError.classList.remove('d-none');
-                    return;
+                } catch (error) {
+                    showAlert(error.message || 'No fue posible eliminar la plantilla.', 'bad');
                 }
-
-                modal.hide();
-                form.reset();
-                editingTemplateId = null;
-                await loadTemplates(isEditing
-                    ? 'Plantilla actualizada correctamente.'
-                    : 'Plantilla creada correctamente.');
-            } catch (error) {
-                console.error(editingTemplateId !== null ? 'Error al editar plantilla:' : 'Error al crear plantilla:', error);
-                formError.textContent = editingTemplateId !== null
-                    ? 'No fue posible actualizar la plantilla. Intenta nuevamente.'
-                    : 'No fue posible conectar con el servidor. Intenta nuevamente.';
-                formError.classList.remove('d-none');
-            } finally {
-                saveButton.disabled = false;
             }
         });
 
-        loadTemplates();
+        filterTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                activeFilter = tab.dataset.filter;
+                activeStatus = 'all';
+                updateFilterTabs();
+                renderStatusFilters();
+                renderList();
+            });
+        });
+
+        if (statusFilters) {
+            statusFilters.addEventListener('click', (event) => {
+                const chip = event.target.closest('[data-status]');
+                if (!chip) return;
+                activeStatus = chip.dataset.status;
+                renderStatusFilters();
+                renderList();
+            });
+        }
+
+        load();
     }
 
     function renderSegments() {

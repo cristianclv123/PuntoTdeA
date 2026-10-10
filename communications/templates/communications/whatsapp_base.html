@@ -46,6 +46,14 @@
     .wa-alert.ok { background: var(--success-bg); color: var(--success-text); }
     .wa-alert.bad { background: var(--danger-bg); color: var(--danger-text); }
     .wa-alert.warn { background: var(--warning-bg); color: var(--warning-text); }
+    .wa-alert.is-dismissible {
+      display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+    }
+    .wa-alert-close {
+      flex: 0 0 auto; border: 0; background: transparent; color: inherit;
+      opacity: .7; font-size: 1rem; line-height: 1; padding: 0 2px; cursor: pointer;
+    }
+    .wa-alert-close:hover { opacity: 1; }
     .wa-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
     .wa-table th, .wa-table td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--border); }
     .wa-table th { color: #9aa0a6; font-weight: 600; text-transform: uppercase; font-size: .68rem; letter-spacing: .05em; }
@@ -145,10 +153,11 @@
 
 {% block content %}
   {% if messages %}
-    <div style="margin-bottom:1rem">
+    <div style="margin-bottom:1rem" id="waMessages">
       {% for message in messages %}
-        <div class="wa-alert {% if message.tags == 'success' %}ok{% elif message.tags == 'warning' %}warn{% else %}bad{% endif %}">
-          {{ message }}
+        <div class="wa-alert {% if message.tags == 'success' %}ok{% elif message.tags == 'warning' %}warn{% else %}bad{% endif %} is-dismissible">
+          <span>{{ message }}</span>
+          <button type="button" class="wa-alert-close" data-dismiss-alert aria-label="Cerrar mensaje" title="Cerrar">&#215;</button>
         </div>
       {% endfor %}
     </div>
@@ -157,4 +166,13 @@
   <div>
     {% block wa_content %}{% endblock %}
   </div>
+
+  <script>
+    document.querySelectorAll('#waMessages [data-dismiss-alert]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        var alert = button.closest('.wa-alert');
+        if (alert) alert.remove();
+      });
+    });
+  </script>
 {% endblock %}

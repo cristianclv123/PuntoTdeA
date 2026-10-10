@@ -112,25 +112,26 @@ CONTACTS = [
     },
 ]
 
+# Borradores locales de plantilla. Desde el rediseño, la base local solo guarda
+# borradores: las plantillas ya enviadas viven únicamente en Meta. Para que las
+# campañas de demostración tengan algo que enviar, cada una guarda un snapshot
+# con los datos de la plantilla (ver `_crear_campanas`).
 TEMPLATES = [
     {
         'name': 'Recordatorio de matrícula',
-        'meta_template_name': 'recordatorio_matricula_2026',
+        'meta_name': 'recordatorio_matricula_2026',
         'category': MessageTemplate.Category.UTILITY,
         'body_text': (
             'Hola {{1}}, tu matrícula para {{2}} sigue pendiente. '
             'Ingresa al portal del estudiante antes de la fecha límite.'
         ),
-        'status': MessageTemplate.Status.APPROVED,
         'variable_types': {'1': 'text', '2': 'text'},
     },
     {
         'name': 'Borrador de bienvenida',
-        'meta_template_name': 'bienvenida_nuevos_2026',
+        'meta_name': 'bienvenida_nuevos_2026',
         'category': MessageTemplate.Category.MARKETING,
         'body_text': '¡Bienvenido/a a Punto TdeA, {{1}}!',
-        # En borrador: el envío real la rechaza a propósito.
-        'status': MessageTemplate.Status.DRAFT,
         'variable_types': {'1': 'text'},
     },
 ]
@@ -180,6 +181,18 @@ def _stamp(hours_ago):
     if hours_ago is None:
         return None
     return timezone.now() - timedelta(hours=hours_ago)
+
+
+def _snapshot(item):
+    """Copia de la plantilla que se guarda en la campaña para poder enviarla."""
+    return {
+        'category': item['category'],
+        'body_text': item['body_text'],
+        'variable_types': item.get('variable_types', {}),
+        'header_type': MessageTemplate.HeaderType.NONE,
+        'header_media_url': '',
+        'buttons': [],
+    }
 
 
 class Command(BaseCommand):
@@ -271,31 +284,28 @@ class Command(BaseCommand):
     def _crear_plantillas(self) -> None:
         for item in TEMPLATES:
             MessageTemplate.objects.update_or_create(
-                meta_template_name=item['meta_template_name'],
+                name=item['name'],
                 defaults={
-                    'name': item['name'],
                     'category': item['category'],
                     'body_text': item['body_text'],
-                    'status': item['status'],
+                    'variable_types': item['variable_types'],
                     'header_type': MessageTemplate.HeaderType.NONE,
-                    'language': 'es_CO',
                 },
             )
 
     def _crear_campanas(self, contacts: dict) -> None:
-        template = MessageTemplate.objects.get(
-            meta_template_name='recordatorio_matricula_2026'
-        )
+        sent_template = TEMPLATES[0]
+        draft_template = TEMPLATES[1]
         segment = AudienceSegment.objects.get(name=SEGMENTS[0]['name'])
-        draft_template = MessageTemplate.objects.get(
-            meta_template_name='bienvenida_nuevos_2026'
-        )
         opted_in_segment = AudienceSegment.objects.get(name=SEGMENTS[1]['name'])
 
         sent, _ = Campaign.objects.update_or_create(
             name=CAMPAIGN_SENT,
             defaults={
-                'template': template,
+                'template_meta_id': '',
+                'template_name': sent_template['meta_name'],
+                'template_language': 'es_CO',
+                'template_snapshot': _snapshot(sent_template),
                 'segment': segment,
                 'status': Campaign.Status.SENT,
                 'default_params': {
@@ -347,7 +357,10 @@ class Command(BaseCommand):
         Campaign.objects.update_or_create(
             name='Demo: bienvenida a admitidos (borrador)',
             defaults={
-                'template': draft_template,
+                'template_meta_id': '',
+                'template_name': draft_template['meta_name'],
+                'template_language': 'es_CO',
+                'template_snapshot': _snapshot(draft_template),
                 'segment': opted_in_segment,
                 'status': Campaign.Status.DRAFT,
                 'default_params': {'1': 'contact.full_name'},
@@ -387,21 +400,8 @@ class Command(BaseCommand):
         names = list(campaigns.values_list('name', flat=True))
         campaigns.delete()
         AudienceSegment.objects.filter(name__startswith='Demo:').delete()
-        demo_template_names = [
-            t['meta_template_name'] for t in TEMPLATES
-        ]
-
-        # Solo eliminar plantillas del seed que no estén siendo utilizadas
-        # por campañas que no sean de demostración.
-        for template in MessageTemplate.objects.filter(
-            meta_template_name__in=demo_template_names
-        ):
-            used_by_real_campaign = Campaign.objects.filter(
-                template=template
-            ).exclude(name__startswith='Demo:').exists()
-
-            if not used_by_real_campaign:
-                template.delete()
+        # Los borradores del seed se identifican por su nombre interno.
+        MessageTemplate.objects.filter(name__in=[t['name'] for t in TEMPLATES]).delete()
         ContactEvent.objects.filter(payload=SEED_MARKER).delete()
         # Cuenta antes de borrar: delete() devuelve un total que incluye los
         # borrados en cascada y daría un número que no corresponde a contactos.

@@ -9,7 +9,6 @@ from communications.models import (
     Campaign,
     Contact,
     ContactEvent,
-    MessageTemplate,
 )
 
 
@@ -95,9 +94,9 @@ class SeedDemoCommandTests(TestCase):
             draft.segment.contacts.filter(whatsapp_opt_in=Contact.OptInStatus.BAJA).count(),
             0,
         )
-        self.assertEqual(
-            draft.template.status, MessageTemplate.Status.DRAFT
-        )
+        # La plantilla vive en Meta: la campaña solo conserva su snapshot local.
+        self.assertEqual(draft.template_name, 'bienvenida_nuevos_2026')
+        self.assertIn('body_text', draft.template_snapshot)
 
     def test_limpiar_removes_only_seeded_data(self):
         self._run()

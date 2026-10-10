@@ -54,24 +54,24 @@
           <label class="wa-label" for="wa-template">Plantilla</label>
           <select class="wa-select" id="wa-template" name="template">
             {% for t in templates %}
-              <option value="{{ t.obj.pk }}" data-params="{{ t.indexes|length }}">
-                {{ t.obj.meta_template_name }} — {{ t.obj.get_category_display }}
+              <option value="{{ t.meta_id }}" data-params="{{ t.indexes|length }}">
+                {{ t.name }} — {{ t.category }}
               </option>
             {% endfor %}
           </select>
         </div>
         {% for t in templates %}
-          <div class="wa-params" data-template="{{ t.obj.pk }}" hidden>
+          <div class="wa-params" data-template="{{ t.meta_id }}" hidden>
             {% for index in t.indexes %}
               <div class="wa-field">
-                <label class="wa-label" for="wa-param-{{ t.obj.pk }}-{{ index }}">Parámetro {{ index }}</label>
-                <input class="wa-input" id="wa-param-{{ t.obj.pk }}-{{ index }}" name="param_{{ index }}" placeholder="Valor para {_{{ index }}}">
+                <label class="wa-label" for="wa-param-{{ t.meta_id }}-{{ index }}">Parámetro {{ index }}</label>
+                <input class="wa-input" id="wa-param-{{ t.meta_id }}-{{ index }}" name="param_{{ index }}" placeholder="Valor para {_{{ index }}}">
               </div>
             {% endfor %}
             {% if t.needs_header %}
               <div class="wa-note warn">
-                Esta plantilla tiene encabezado multimedia: necesita
-                <code>header_media_url</code> configurada, o Meta la rechaza.
+                Esta plantilla tiene encabezado multimedia: el encabezado se toma
+                de la definición en Meta.
               </div>
             {% endif %}
             <p class="wa-note">Cuerpo: {{ t.body }}</p>
@@ -85,11 +85,11 @@
       </form>
     {% else %}
       <div class="wa-alert warn" style="margin:0">
-        No hay plantillas aprobadas en la base. Creá una en
-        <code>/admin/communications/messagetemplate/</code> con el nombre y el
-        idioma exactos de tu cuenta de Meta, y marcá su estado como
-        <strong>Aprobada</strong>. Sin plantillas aprobadas no hay forma de
-        escribirle a alguien que no te haya escrito primero.
+        No hay plantillas aprobadas en Meta. Crealas desde
+        <a href="{% url 'plantillas' %}">Gestionar plantillas</a> o directamente
+        en el Administrador de WhatsApp de Meta, y esperá la aprobación. Sin
+        plantillas aprobadas no hay forma de escribirle a alguien que no te
+        haya escrito primero.
       </div>
     {% endif %}
   </section>
