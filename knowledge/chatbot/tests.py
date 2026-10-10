@@ -451,9 +451,16 @@ class WhatsAppInactivityTests(TestCase):
         conversations = _manager(ChatConversation).filter(
             channel='whatsapp',
             external_user_id='573001112244',
+            status=ChatConversation.STATUS_ACTIVE,
         ).order_by('-updated_at', '-created_at')
         new_conversation = conversations.first()
-        self.assertEqual(conversations.count(), 2)
+        self.assertEqual(
+            _manager(ChatConversation).filter(
+                channel='whatsapp',
+                external_user_id='573001112244',
+            ).count(),
+            2,
+        )
         self.assertEqual(previous.status, ChatConversation.STATUS_ENDED)
         self.assertNotEqual(new_conversation.pk, previous.pk)
         self.assertEqual(new_conversation.last_question, 'Necesito ayuda con mi matrícula')
