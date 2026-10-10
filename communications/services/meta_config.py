@@ -60,6 +60,13 @@ def can_verify_subscription() -> bool:
     return bool(_setting("META_VERIFY_TOKEN"))
 
 
+def can_manage_templates() -> bool:
+    """True cuando se pueden crear y consultar plantillas en Meta."""
+    return bool(
+        _setting("META_ACCESS_TOKEN") and _setting("WHATSAPP_BUSINESS_ACCOUNT_ID")
+    )
+
+
 def setting_statuses() -> list[SettingStatus]:
     verify_token = _setting("META_VERIFY_TOKEN")
     app_secret = _setting("META_APP_SECRET")
@@ -109,6 +116,15 @@ def setting_statuses() -> list[SettingStatus]:
             "Identificador del número emisor en Meta.",
         ),
         SettingStatus(
+            "WHATSAPP_BUSINESS_ACCOUNT_ID",
+            "WABA ID",
+            _masked(_setting("WHATSAPP_BUSINESS_ACCOUNT_ID"), 5),
+            bool(_setting("WHATSAPP_BUSINESS_ACCOUNT_ID")),
+            False,
+            "Cuenta de WhatsApp Business: se usa para crear y consultar plantillas.",
+            required=False,
+        ),
+        SettingStatus(
             "WHATSAPP_API_VERSION",
             "Versión de la API",
             _setting("WHATSAPP_API_VERSION") or "v21.0",
@@ -141,6 +157,7 @@ def capability_status() -> dict[str, Any]:
         "can_send": can_send,
         "can_receive": can_receive,
         "can_verify": can_verify_subscription(),
+        "can_manage_templates": can_manage_templates(),
         "webhook_path": WEBHOOK_PATH,
         # Solo las obligatorias: las opcionales se listan aparte para no
         # hacer creer que la integración está incompleta sin ellas.
@@ -183,6 +200,13 @@ def readiness_lines() -> list[tuple[str, bool, str]]:
             f"{'Enviar mensajes':<25} {'disponible' if is_fully_configured() else 'no disponible':<15}",
             is_fully_configured(),
             "Requiere META_ACCESS_TOKEN y WHATSAPP_PHONE_NUMBER_ID.",
+        )
+    )
+    lines.append(
+        (
+            f"{'Gestionar plantillas':<25} {'disponible' if can_manage_templates() else 'no disponible':<15}",
+            can_manage_templates(),
+            "Requiere META_ACCESS_TOKEN y WHATSAPP_BUSINESS_ACCOUNT_ID.",
         )
     )
     return lines

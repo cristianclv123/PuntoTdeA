@@ -121,8 +121,8 @@ class Command(BaseCommand):
             return
 
         with transaction.atomic():
-            # El orden importa: `Campaign.segment` y `Campaign.template` son
-            # PROTECT, así que las campañas tienen que caer antes que los segmentos.
+            # El orden importa: `Campaign.segment` es PROTECT, así que las
+            # campañas tienen que caer antes que los segmentos.
             campanas_nombres = list(campanas.values_list("name", flat=True))
             campanas.delete()
             segmentos.delete()

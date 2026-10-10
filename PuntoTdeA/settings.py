@@ -197,7 +197,6 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX": "/api/",
     "ENUM_NAME_OVERRIDES": {
         "ConversationStatusEnum": "cases.models.Conversation.Status",
-        "MessageTemplateStatusEnum": "communications.models.MessageTemplate.Status",
         "CampaignStatusEnum": "communications.models.Campaign.Status",
         "BroadcastRecipientStatusEnum": "communications.models.BroadcastRecipient.Status",
         "KnowledgeArticleStatusEnum": "knowledge.models.KnowledgeArticle.STATUS_CHOICES",
@@ -216,6 +215,9 @@ META_APP_ID = os.environ.get("META_APP_ID", "")
 META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+# WABA (WhatsApp Business Account): necesaria para dar de alta plantillas y
+# consultar su aprobación (POST/GET /{WABA}/message_templates).
+WHATSAPP_BUSINESS_ACCOUNT_ID = os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", "")
 WHATSAPP_TEST_RECIPIENT = os.environ.get("WHATSAPP_TEST_RECIPIENT", "")
 WHATSAPP_API_VERSION = os.environ.get("WHATSAPP_API_VERSION", "v21.0")
 META_GRAPH_API_URL = os.environ.get("META_GRAPH_API_URL", "https://graph.facebook.com")
