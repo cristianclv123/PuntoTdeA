@@ -90,6 +90,7 @@ def _serialize_conversation(conversation: Conversation) -> dict:
         "phone": contact.phone,
         "role": contact.academic_program,
         "last_message": last.body if last else "",
+        "last_direction": last.direction if last else "",
         "theme": conversation.theme or "General",
         "department_name": conversation.department.name if conversation.department else "Sin dependencia",
         "priority": conversation.priority,

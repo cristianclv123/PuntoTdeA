@@ -49,7 +49,7 @@ def claim_greeting_body(user) -> str:
     name = advisor_label(user)
     return (
         f"Hola, soy {name}, asesora de soporte al cliente de Punto TdeA. "
-        "¿En qué te podemos ayudar?"
+        "A partir de ahora estás hablando con un asesor. ¿En qué te podemos ayudar?"
     )
 
 
