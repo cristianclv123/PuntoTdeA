@@ -9,6 +9,7 @@ import requests
 from django.conf import settings
 
 from .base import ChannelAdapter, SendResult
+from ..services.meta_errors import explain
 
 
 def _configuration_error() -> str:
@@ -43,9 +44,11 @@ def _request_error(response: requests.Response | None, error: Exception) -> str:
             detail = response.json().get("error", {}).get("message", "")
         except (TypeError, ValueError):
             detail = response.text[:300]
+
         if detail:
-            return f"Meta API: {detail}"
-    return f"Meta API: {error}"
+            return explain(detail)
+
+    return explain(str(error))
 
 
 def _post_message(payload: dict[str, Any]) -> SendResult:

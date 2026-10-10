@@ -1,0 +1,4 @@
+# Los scripts de shell deben conservar saltos de linea LF. Con core.autocrlf=true
+# (Windows) git los convertiria a CRLF y dentro de Linux el shell falla con
+# "not found" al leer el \r. Render clona en Linux: forzamos LF para todos.
+*.sh text eol=lf

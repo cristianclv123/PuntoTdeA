@@ -18,8 +18,9 @@ services:
     dockerContext: .
     region: oregon
     plan: free
-    # Render despliega esta rama: `dev`, que es la rama de integracion. Este
-    # cambio entra por PR, nunca push directo a dev.
+    # Render despliega esta rama: `dev`, que es la rama de integracion. Los
+    # administradores del repo pueden hacer push directo a `dev`; para el resto
+    # del equipo se recomienda PR.
     #
     # OJO: hay DOS ramas distintas en juego y cambiar solo una no hace nada.
     #   1. Esta linea (`branch:`) -> de que rama despliega el SERVICIO.

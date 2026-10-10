@@ -29,7 +29,7 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
         model = MessageTemplate
         fields = [
             "id", "name", "meta_template_name", "language", "category",
-            "body_text", "header_type", "header_media_url", "buttons",
+            "body_text", "variable_types", "header_type", "header_media_url", "buttons",
             "status", "param_count", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]

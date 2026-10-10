@@ -216,6 +216,7 @@ META_APP_ID = os.environ.get("META_APP_ID", "")
 META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_TEST_RECIPIENT = os.environ.get("WHATSAPP_TEST_RECIPIENT", "")
 WHATSAPP_API_VERSION = os.environ.get("WHATSAPP_API_VERSION", "v21.0")
 META_GRAPH_API_URL = os.environ.get("META_GRAPH_API_URL", "https://graph.facebook.com")
 META_REQUEST_TIMEOUT = float(os.environ.get("META_REQUEST_TIMEOUT", "10"))
@@ -235,8 +236,8 @@ ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
 ).lower() in {"1", "true", "yes"}
 
 # Token compartido con el BFF para la API interna (/campanas/api/).
-# Sin el, `communications.permissions.IsInternalService` rechaza todo cuando
-# DEBUG=False y la UI de campanas se queda sin datos.
+# La UI de campanas entra con la sesion del navegador; este token cubre a los
+# consumidores de servicio (BFF) cuando DEBUG=False.
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
 
 LOGIN_URL = "/login/"
@@ -289,6 +290,7 @@ MEDIA_UPLOADS_ENABLED = os.environ.get("MEDIA_UPLOADS_ENABLED", "true").lower() 
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 30 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

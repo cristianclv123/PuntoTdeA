@@ -63,7 +63,7 @@ CONTACTS = [
         'document_number': '1000000004',
         'full_name': 'Diego Fernando Hoyos',
         'phone': '+573001112204',
-        'email': '',
+        'email': 'diego.hoyos@correo.eafit.edu.co',
         'academic_program': 'Ingeniería Civil',
         'semester': '10',
         'role': Contact.Role.EGRESADO,
@@ -83,7 +83,7 @@ CONTACTS = [
         'document_number': '1000000006',
         'full_name': 'Sebastián Díaz Correa',
         'phone': '+573001112206',
-        'email': '',
+        'email': 'sebastian.diaz@correo.eafit.edu.co',
         'academic_program': 'Ingeniería en Sistemas',
         'semester': '2',
         'role': Contact.Role.ASPIRANTE,
@@ -104,7 +104,7 @@ CONTACTS = [
         'document_number': '1000000008',
         'full_name': 'Andrés Felipe Villa',
         'phone': '+573001112208',
-        'email': '',
+        'email': 'andres.villa@correo.eafit.edu.co',
         'academic_program': 'Medicina',
         'semester': '1',
         'role': Contact.Role.ASPIRANTE,
@@ -122,6 +122,7 @@ TEMPLATES = [
             'Ingresa al portal del estudiante antes de la fecha límite.'
         ),
         'status': MessageTemplate.Status.APPROVED,
+        'variable_types': {'1': 'text', '2': 'text'},
     },
     {
         'name': 'Borrador de bienvenida',
@@ -130,6 +131,7 @@ TEMPLATES = [
         'body_text': '¡Bienvenido/a a Punto TdeA, {{1}}!',
         # En borrador: el envío real la rechaza a propósito.
         'status': MessageTemplate.Status.DRAFT,
+        'variable_types': {'1': 'text'},
     },
 ]
 
@@ -385,9 +387,21 @@ class Command(BaseCommand):
         names = list(campaigns.values_list('name', flat=True))
         campaigns.delete()
         AudienceSegment.objects.filter(name__startswith='Demo:').delete()
-        MessageTemplate.objects.filter(
-            meta_template_name__in=[t['meta_template_name'] for t in TEMPLATES]
-        ).delete()
+        demo_template_names = [
+            t['meta_template_name'] for t in TEMPLATES
+        ]
+
+        # Solo eliminar plantillas del seed que no estén siendo utilizadas
+        # por campañas que no sean de demostración.
+        for template in MessageTemplate.objects.filter(
+            meta_template_name__in=demo_template_names
+        ):
+            used_by_real_campaign = Campaign.objects.filter(
+                template=template
+            ).exclude(name__startswith='Demo:').exists()
+
+            if not used_by_real_campaign:
+                template.delete()
         ContactEvent.objects.filter(payload=SEED_MARKER).delete()
         # Cuenta antes de borrar: delete() devuelve un total que incluye los
         # borrados en cascada y daría un número que no corresponde a contactos.
