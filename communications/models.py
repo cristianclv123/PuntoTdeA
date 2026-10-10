@@ -102,7 +102,14 @@ class ContactEvent(models.Model):
 
 
 class MessageTemplate(models.Model):
-    """Plantilla aprobada por Meta para envíos de WhatsApp (HU-06 / T-06.2)."""
+    """Borrador local de una plantilla de WhatsApp (HU-06 / T-06.2).
+
+    La base de datos local solo guarda trabajo en progreso. Cuando un borrador
+    se envía a Meta y Meta responde correctamente, el registro se elimina: a
+    partir de ahí la plantilla vive únicamente en la cuenta de Meta, que es la
+    fuente de verdad. Por eso este modelo no replica el estado ni el idioma,
+    solo conserva lo que se puede editar antes de enviar.
+    """
 
     class Category(models.TextChoices):
         MARKETING = "marketing", "Marketing"
@@ -115,18 +122,8 @@ class MessageTemplate(models.Model):
         VIDEO = "video", "Video"
         DOCUMENT = "document", "Documento (PDF)"
 
-    class Status(models.TextChoices):
-        DRAFT = "draft", "Borrador local"
-        PENDING = "pending", "Pendiente de aprobación"
-        APPROVED = "approved", "Aprobada"
-        REJECTED = "rejected", "Rechazada"
-
     id = models.BigAutoField(primary_key=True)
     name = models.CharField("Nombre interno", max_length=150)
-    meta_template_name = models.CharField(
-        "Nombre en Meta Business Manager", max_length=150, unique=True
-    )
-    language = models.CharField(max_length=10, default="es_CO")
     category = models.CharField(max_length=20, choices=Category.choices, default=Category.UTILITY)
 
     body_text = models.TextField(
@@ -146,34 +143,13 @@ class MessageTemplate(models.Model):
         help_text='Lista de botones URL, ej. [{"text": "Ver más", "url": "https://..."}]',
     )
 
-    status = models.CharField(max_length=15, choices=Status.choices, default=Status.DRAFT)
-
-    # --- Espejo del estado en Meta (WhatsApp Business Account) ---
-    # Meta es la fuente de verdad de la aprobación: al pulsar "Enviar a Meta"
-    # se crea la plantilla por API y aquí se guarda lo que responde. `status`
-    # es la traducción local de `meta_status`; el valor crudo se conserva para
-    # mostrarlo tal cual (PENDING, APPROVED, REJECTED, PAUSED...).
-    meta_template_id = models.CharField(
-        "ID en Meta",
-        max_length=64,
-        blank=True,
-        db_index=True,
-        help_text="ID que devuelve Meta al crear la plantilla.",
-    )
-    meta_status = models.CharField(
-        "Estado en Meta",
-        max_length=32,
-        blank=True,
-        help_text="Valor crudo de Meta: PENDING, APPROVED, REJECTED, PAUSED...",
-    )
-    meta_rejection_reason = models.TextField("Motivo de rechazo de Meta", blank=True)
-    meta_synced_at = models.DateTimeField("Última consulta a Meta", null=True, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
+        verbose_name = "borrador de plantilla"
+        verbose_name_plural = "borradores de plantilla"
 
     def __str__(self):
         return self.name
@@ -251,9 +227,21 @@ class Campaign(models.Model):
     name = models.CharField(max_length=150)
     channel = models.CharField(max_length=20, default="whatsapp", editable=False)
 
-    template = models.ForeignKey(
-        MessageTemplate, on_delete=models.PROTECT, related_name="campaigns"
+    # La plantilla es un "snapshot": las plantillas ya enviadas solo existen en
+    # Meta, así que la campaña guarda lo necesario para enviarla sin depender
+    # de una fila local. `template_meta_id`/`template_name` identifican la
+    # plantilla en Meta y `template_snapshot` conserva cuerpo, variables y
+    # encabezado tal como estaban al crear la campaña.
+    template_meta_id = models.CharField("ID de la plantilla en Meta", max_length=64, blank=True)
+    template_name = models.CharField("Nombre de la plantilla en Meta", max_length=150, blank=True)
+    template_language = models.CharField("Idioma de la plantilla", max_length=10, default="es_CO")
+    template_snapshot = models.JSONField(
+        "Copia de la plantilla",
+        default=dict,
+        blank=True,
+        help_text="Cuerpo, variables y encabezado de la plantilla al crear la campaña.",
     )
+
     segment = models.ForeignKey(
         AudienceSegment, on_delete=models.PROTECT, related_name="campaigns"
     )

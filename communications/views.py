@@ -1,6 +1,5 @@
 import json
 
-from channels.auth import login
 from django.conf import settings
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse
@@ -8,7 +7,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
 from .adapters.meta_adapter import MetaAdapter
-from .models import MessageTemplate
+from .services import meta_templates
 from .services.test_send_registry import record_test_send
 
 
@@ -40,7 +39,11 @@ def campaign_detail(request):
 
 @login_required
 def templates(request):
-    return render(request, "communications/templates.html")
+    return render(
+        request,
+        "communications/templates.html",
+        {"nav_section": "templates", "active_nav": "templates"},
+    )
 
 
 @login_required
@@ -87,13 +90,9 @@ def test_send(request):
 
     template_id = payload.get("template")
     params = payload.get("params", {})
-    if (
-        isinstance(template_id, bool)
-        or not isinstance(template_id, int)
-        or template_id < 1
-    ):
+    if not isinstance(template_id, str) or not template_id.strip():
         return JsonResponse(
-            {"success": False, "message": "Debes indicar un ID de plantilla válido."},
+            {"success": False, "message": "Debes indicar una plantilla válida."},
             status=400,
         )
     if not isinstance(params, dict):
@@ -112,13 +111,16 @@ def test_send(request):
             status=503,
         )
 
-    template = MessageTemplate.objects.filter(pk=template_id).first()
-    if template is None:
+    fetched = meta_templates.get_template(template_id)
+    if not fetched.ok or not fetched.template:
         return JsonResponse(
-            {"success": False, "message": "La plantilla indicada no existe."},
-            status=404,
+            {
+                "success": False,
+                "message": fetched.message or "La plantilla indicada no existe.",
+            },
+            status=502 if fetched.kind == meta_templates.KIND_META else 404,
         )
-    if template.status != MessageTemplate.Status.APPROVED:
+    if fetched.template.get("status") != "APPROVED":
         return JsonResponse(
             {
                 "success": False,
@@ -127,6 +129,7 @@ def test_send(request):
             status=400,
         )
 
+    template = meta_templates.to_template_ref(fetched.template)
     result = MetaAdapter().send_template_message(test_recipient, template, params)
     if not result.success:
         return JsonResponse(
@@ -142,7 +145,7 @@ def test_send(request):
             test_recipient,
             result.provider_message_id,
             "test_template",
-            f"{template.meta_template_name} {params}",
+            f"{template.name} {params}",
         )
 
     return JsonResponse(

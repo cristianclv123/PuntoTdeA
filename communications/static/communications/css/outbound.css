@@ -492,3 +492,287 @@
     border-color: #00873e !important;
     color: #fff !important;
 }
+
+/* Alertas reutilizables (mismo aspecto que la consola de WhatsApp) */
+.wa-alert {
+    border-radius: 10px;
+    padding: .7rem .9rem;
+    font-size: .84rem;
+    margin-bottom: .5rem;
+}
+
+.wa-alert.is-dismissible {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.wa-alert-close {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    opacity: .7;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+}
+
+.wa-alert-close:hover {
+    opacity: 1;
+}
+
+.wa-alert.ok { background: var(--success-bg); color: var(--success-text); }
+.wa-alert.bad { background: var(--danger-bg); color: var(--danger-text); }
+.wa-alert.warn { background: var(--warning-bg); color: var(--warning-text); }
+
+/* Página "Gestionar plantillas": borradores locales + plantillas de Meta */
+.templates-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.templates-header h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.templates-header p {
+    margin: 4px 0 0;
+    font-size: 0.84rem;
+    color: #a3a3a3;
+}
+
+.templates-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    margin-bottom: 16px;
+}
+
+.template-filter-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--border, #333);
+    border-radius: 999px;
+    background: var(--surface, #141414);
+}
+
+.template-filter-tab {
+    border: 0;
+    background: transparent;
+    color: #a3a3a3;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 6px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.template-filter-tab:hover { color: #fff; }
+
+.template-filter-tab.is-active {
+    background: rgba(61, 255, 138, 0.16);
+    color: #86efac;
+}
+
+.template-status-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.template-status-filters[hidden] { display: none; }
+
+.template-status-chip {
+    border: 1px solid var(--border, #333);
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 5px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.template-status-chip:hover {
+    border-color: #4b5563;
+    color: #fff;
+}
+
+.template-status-chip.is-active {
+    background: rgba(61, 255, 138, 0.16);
+    border-color: rgba(61, 255, 138, 0.4);
+    color: #86efac;
+}
+
+.templates-page .template-card {
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.template-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.template-card-head h3 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text, #fafafa);
+}
+
+.template-source {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+.template-source--draft { background: rgba(96, 165, 250, 0.18); color: #93c5fd; }
+.template-source--meta { background: rgba(61, 255, 138, 0.14); color: #86efac; }
+
+.template-status {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+
+.template-status--approved { background: var(--success-bg); color: var(--success-text); }
+.template-status--pending { background: var(--warning-bg); color: var(--warning-text); }
+.template-status--rejected { background: var(--danger-bg); color: var(--danger-text); }
+.template-status--paused { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+.template-status--draft { background: rgba(96, 165, 250, 0.18); color: #93c5fd; }
+
+.template-category {
+    font-size: 0.72rem;
+    color: #a3a3a3;
+    text-transform: capitalize;
+}
+
+.template-body {
+    background: var(--surface, #141414);
+    border: 1px solid var(--border, #333);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    color: var(--text, #fafafa);
+    flex-grow: 1;
+}
+
+.template-meta-line {
+    font-size: 0.72rem;
+    color: #a3a3a3;
+    word-break: break-all;
+}
+
+.template-rejection {
+    font-size: 0.76rem;
+    color: var(--danger-text);
+    background: var(--danger-bg);
+    border-radius: 8px;
+    padding: 6px 9px;
+}
+
+.template-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 4px;
+}
+
+.template-actions .btn {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+}
+
+.template-variables {
+    border: 1px solid var(--border, #333);
+    border-radius: 10px;
+    padding: 12px;
+    background: var(--surface, #141414);
+}
+
+.template-dialog-actions {
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.template-dialog-error {
+    font-size: 0.8rem;
+    color: var(--danger-text);
+    background: var(--danger-bg);
+    border-radius: 10px;
+    padding: .6rem .8rem;
+}
+
+/* Diálogo de plantillas: más ancho y horizontal que el genérico, para que las
+   variables se acomoden en columnas y no obliguen a hacer scroll vertical. */
+.templates-page .template-dialog {
+    width: min(900px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+}
+
+.templates-page .template-dialog-form {
+    gap: 14px;
+    padding: 20px 22px;
+}
+
+.templates-page .template-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    gap: 14px;
+}
+
+.templates-page .template-dialog .field-textarea {
+    min-height: 110px;
+}
+
+.templates-page .template-variables {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px 14px;
+}
+
+.templates-page .template-variables > .field-label:first-child {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+}
+
+.templates-page .template-variables .field-group {
+    margin-bottom: 0 !important;
+}
+
+@media (max-width: 640px) {
+    .templates-page .template-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+

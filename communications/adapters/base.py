@@ -21,6 +21,23 @@ class SendResult:
     error: str = ""
 
 
+@dataclass
+class TemplateRef:
+    """Datos mínimos de una plantilla para armar un envío.
+
+    Se construye tanto desde un borrador local como desde el snapshot de una
+    campaña o desde una plantilla leída de Meta, para que el adaptador no
+    dependa de un modelo concreto.
+    """
+
+    name: str
+    language: str = "es_CO"
+    body_text: str = ""
+    header_type: str = "none"
+    header_media_url: str = ""
+
+
+
 class ChannelAdapter(ABC):
     """Contrato que debe cumplir cualquier adaptador de canal de mensajería."""
 

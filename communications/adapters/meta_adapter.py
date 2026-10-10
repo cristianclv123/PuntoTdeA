@@ -105,9 +105,22 @@ class MetaAdapter(ChannelAdapter):
     provider_name = "meta"
 
     @staticmethod
-    def _parameter_values(template, params: dict) -> tuple[list[dict[str, str]], str]:
+    def _template_fields(template) -> dict[str, str]:
+        """Lee los datos del envío desde un borrador, snapshot o ``TemplateRef``."""
+        return {
+            "name": getattr(template, "meta_template_name", "")
+            or getattr(template, "name", "")
+            or "",
+            "language": getattr(template, "language", "") or "es_CO",
+            "body_text": getattr(template, "body_text", "") or "",
+            "header_type": getattr(template, "header_type", "") or "none",
+            "header_media_url": getattr(template, "header_media_url", "") or "",
+        }
+
+    @staticmethod
+    def _parameter_values(body_text: str, params: dict) -> tuple[list[dict[str, str]], str]:
         indexes = sorted(
-            {int(index) for index in re.findall(r"\{\{(\d+)\}\}", template.body_text or "")}
+            {int(index) for index in re.findall(r"\{\{(\d+)\}\}", body_text or "")}
         )
         values = []
         for index in indexes:
@@ -121,25 +134,27 @@ class MetaAdapter(ChannelAdapter):
         normalized_phone = _normalize_phone(to)
         if not normalized_phone:
             return None, "Número de teléfono vacío."
-        if template.status != template.Status.APPROVED:
-            return None, "La plantilla debe estar aprobada por Meta antes de enviarse."
+
+        fields = self._template_fields(template)
+        if not fields["name"]:
+            return None, "La plantilla no tiene un nombre válido en Meta."
 
         components: list[dict[str, Any]] = []
-        parameters, error = self._parameter_values(template, params or {})
+        parameters, error = self._parameter_values(fields["body_text"], params or {})
         if error:
             return None, error
         if parameters:
             components.append({"type": "body", "parameters": parameters})
 
-        if template.header_type != template.HeaderType.NONE:
-            if not template.header_media_url:
+        if fields["header_type"] != "none":
+            if not fields["header_media_url"]:
                 return None, "La plantilla tiene encabezado multimedia pero no una URL configurada."
-            media_type = template.header_type
+            media_type = fields["header_type"]
             components.append(
                 {
                     "type": "header",
                     "parameters": [
-                        {"type": media_type, media_type: {"link": template.header_media_url}}
+                        {"type": media_type, media_type: {"link": fields["header_media_url"]}}
                     ],
                 }
             )
@@ -149,8 +164,8 @@ class MetaAdapter(ChannelAdapter):
             "to": normalized_phone,
             "type": "template",
             "template": {
-                "name": template.meta_template_name,
-                "language": {"code": template.language},
+                "name": fields["name"],
+                "language": {"code": fields["language"]},
             },
         }
         if components:

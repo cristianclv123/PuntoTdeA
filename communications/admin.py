@@ -41,8 +41,8 @@ class AudienceSegmentAdmin(admin.ModelAdmin):
 
 @admin.register(MessageTemplate)
 class MessageTemplateAdmin(admin.ModelAdmin):
-    list_display = ("name", "meta_template_name", "category", "status", "meta_status", "param_count")
-    list_filter = ("category", "status", "meta_status")
+    list_display = ("name", "category", "param_count", "updated_at")
+    list_filter = ("category", "header_type")
 
 
 class BroadcastRecipientInline(admin.TabularInline):
@@ -54,7 +54,7 @@ class BroadcastRecipientInline(admin.TabularInline):
 
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
-    list_display = ("name", "template", "segment", "status", "scheduled_at", "sent_count", "delivered_count", "read_count")
+    list_display = ("name", "template_name", "segment", "status", "scheduled_at", "sent_count", "delivered_count", "read_count")
     list_filter = ("status", "channel")
     inlines = [BroadcastRecipientInline]
     actions = ["enviar_campana_seleccionada"]

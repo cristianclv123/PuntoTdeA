@@ -220,7 +220,6 @@ SPECTACULAR_SETTINGS = {
     },
     "ENUM_NAME_OVERRIDES": {
         "ConversationStatusEnum": "cases.models.Conversation.Status",
-        "MessageTemplateStatusEnum": "communications.models.MessageTemplate.Status",
         "CampaignStatusEnum": "communications.models.Campaign.Status",
         "BroadcastRecipientStatusEnum": "communications.models.BroadcastRecipient.Status",
         "KnowledgeArticleStatusEnum": "knowledge.models.KnowledgeArticle.STATUS_CHOICES",

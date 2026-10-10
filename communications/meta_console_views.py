@@ -22,10 +22,10 @@ from communications.adapters.meta_adapter import MetaAdapter, send_text_message
 from communications.adapters.meta_adapter import _normalize_phone
 from communications.models import (
     BroadcastRecipient,
-    MessageTemplate,
     WhatsAppWebhookEvent,
 )
 from communications.services import meta_config, meta_diagnostics, meta_errors
+from communications.services import meta_templates
 from communications.services.test_send_registry import (
     TEST_SEND_KEY_PREFIX,
     record_test_send,
@@ -111,27 +111,32 @@ def status_threads(limit: int = 8, per_thread: int = 6) -> list[dict]:
 
 
 def approved_templates() -> list[dict]:
-    """Plantillas usables para envío real, con los índices de sus parámetros.
+    """Plantillas aprobadas en Meta, con los índices de sus parámetros.
 
-    Los índices se extraen del cuerpo porque el formulario tiene que ofrecer un
-    campo por marcador y `param_count` solo da la cantidad, no cuáles.
+    Meta es la fuente de verdad: la lista se lee en vivo de la cuenta. Si la
+    integración no está configurada o Meta no responde, se devuelve una lista
+    vacía para no romper el resto de la consola.
     """
-    result = []
-    for template in MessageTemplate.objects.filter(
-        status=MessageTemplate.Status.APPROVED
-    ):
-        indexes = sorted(
-            {int(i) for i in re.findall(r"\{\{(\d+)\}\}", template.body_text or "")}
-        )
-        result.append(
+    result = meta_templates.list_templates()
+    if not result.ok:
+        return []
+
+    approved = []
+    for template in result.templates:
+        if template.get("status") != "APPROVED":
+            continue
+        approved.append(
             {
-                "obj": template,
-                "indexes": indexes,
-                "needs_header": template.header_type != template.HeaderType.NONE,
-                "body": (template.body_text or "").replace("\n", " ")[:160],
+                "meta_id": template.get("meta_id", ""),
+                "name": template.get("name", ""),
+                "category": template.get("category", ""),
+                "language": template.get("language", ""),
+                "indexes": template.get("indexes", []),
+                "needs_header": template.get("header_type", "none") != "none",
+                "body": (template.get("body_text") or "").replace("\n", " ")[:160],
             }
         )
-    return result
+    return approved
 
 
 def recent_chats(limit: int = 5) -> list[dict]:
@@ -229,12 +234,14 @@ def send_test_template(request: HttpRequest):
     porque Meta solo permite texto libre cuando el usuario ya escribió primero.
     """
     phone = (request.POST.get("phone") or "").strip()
-    template = MessageTemplate.objects.filter(
-        pk=request.POST.get("template"),
-        status=MessageTemplate.Status.APPROVED,
-    ).first()
-
-    if not phone or template is None:
+    meta_id = (request.POST.get("template") or "").strip()
+    fetched = meta_templates.get_template(meta_id) if meta_id else None
+    if (
+        not phone
+        or fetched is None
+        or not fetched.ok
+        or fetched.template.get("status") != "APPROVED"
+    ):
         messages.error(
             request, "Completa el teléfono y elegí una plantilla aprobada."
         )
@@ -248,17 +255,18 @@ def send_test_template(request: HttpRequest):
         if match and (value or "").strip():
             params[match.group(1)] = value.strip()
 
+    template = meta_templates.to_template_ref(fetched.template)
     result = MetaAdapter().send_template_message(phone, template, params)
     if result.success:
         record_test_send(
             phone,
             result.provider_message_id,
             "test_template",
-            f"{template.meta_template_name} {params}",
+            f"{template.name} {params}",
         )
         messages.success(
             request,
-            f"Meta aceptó la plantilla «{template.meta_template_name}». "
+            f"Meta aceptó la plantilla «{template.name}». "
             f"wamid: {result.provider_message_id}. Quedó registrada para seguir "
             "sus estados.",
         )

@@ -1,7 +1,6 @@
 # API interna (consumida solo por el BFF)
 from django.conf import settings
 from django.db.models import Q
-from django.db.models.deletion import ProtectedError
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
@@ -25,7 +24,8 @@ from .services.test_send_registry import record_test_send
 
 
 class TestSendRequestSerializer(serializers.Serializer):
-    template = serializers.IntegerField(min_value=1)
+    # El id de la plantilla es el que asigna Meta (string), no una fila local.
+    template = serializers.CharField(max_length=64)
     params = serializers.JSONField(required=False, default=dict)
 
     def validate_params(self, value):
@@ -91,14 +91,22 @@ class TestSendAPIView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        template = MessageTemplate.objects.filter(pk=payload.validated_data["template"]).first()
-        if template is None:
-            return Response(
-                {"success": False, "message": "La plantilla indicada no existe."},
-                status=status.HTTP_404_NOT_FOUND,
+        meta_id = payload.validated_data["template"]
+        fetched = meta_templates.get_template(meta_id)
+        if not fetched.ok or not fetched.template:
+            http_status = (
+                status.HTTP_502_BAD_GATEWAY
+                if fetched.kind == meta_templates.KIND_META
+                else status.HTTP_404_NOT_FOUND
             )
-
-        if template.status != MessageTemplate.Status.APPROVED:
+            return Response(
+                {
+                    "success": False,
+                    "message": fetched.message or "La plantilla indicada no existe.",
+                },
+                status=http_status,
+            )
+        if fetched.template.get("status") != "APPROVED":
             return Response(
                 {
                     "success": False,
@@ -107,6 +115,7 @@ class TestSendAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        template = meta_templates.to_template_ref(fetched.template)
         result = MetaAdapter().send_template_message(
             test_recipient,
             template,
@@ -126,7 +135,7 @@ class TestSendAPIView(APIView):
                 test_recipient,
                 result.provider_message_id,
                 "test_template",
-                f"{template.meta_template_name} {payload.validated_data['params']}",
+                f"{template.name} {payload.validated_data['params']}",
             )
 
         return Response(
@@ -163,79 +172,122 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
 
 @extend_schema(auth=INTERNAL_AUTH)
 class MessageTemplateViewSet(viewsets.ModelViewSet):
+    """Borradores locales de plantilla (aún no enviadas a Meta).
+
+    La base local solo guarda trabajo en progreso. Al enviar un borrador a Meta
+    y recibir respuesta correcta, el borrador se elimina: la plantilla pasa a
+    vivir únicamente en Meta.
+    """
+
     queryset = MessageTemplate.objects.all()
     serializer_class = MessageTemplateSerializer
     permission_classes = [IsInternalService]
 
-    #: Traducción del tipo de fallo del servicio al código HTTP de respuesta.
-    _STATUS_BY_KIND = {
-        meta_templates.KIND_CONFIG: status.HTTP_503_SERVICE_UNAVAILABLE,
-        meta_templates.KIND_BUILD: status.HTTP_400_BAD_REQUEST,
-        meta_templates.KIND_NOT_FOUND: status.HTTP_404_NOT_FOUND,
-    }
+    @extend_schema(request=None)
+    @action(detail=True, methods=["post"], url_path="enviar-a-meta")
+    def enviar_a_meta(self, request, pk=None):
+        """POST /api/templates/{id}/enviar-a-meta/: crea la plantilla en Meta.
 
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        try:
-            instance.delete()
-        except ProtectedError:
-            return Response(
-                {
-                    "detail": "No se puede eliminar esta plantilla porque está siendo utilizada por una campaña."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    def _sync_response(self, template, result):
-        """Respuesta común para las acciones que hablan con Meta."""
-        template.refresh_from_db()
+        Si Meta la acepta, el borrador local se elimina.
+        """
+        draft = self.get_object()
+        result = meta_templates.create_from_draft(draft)
         payload = {
             "success": result.ok,
             "message": result.message,
             "meta_id": result.meta_id,
             "meta_status": result.meta_status,
-            "template": self.get_serializer(template).data,
         }
         if result.ok:
+            payload["meta_name"] = meta_templates.slugify_meta_name(draft.name)
+            draft.delete()
             return Response(payload, status=status.HTTP_200_OK)
-        http_status = self._STATUS_BY_KIND.get(
-            result.kind, status.HTTP_502_BAD_GATEWAY
-        )
+
+        http_status = {
+            meta_templates.KIND_CONFIG: status.HTTP_503_SERVICE_UNAVAILABLE,
+            meta_templates.KIND_BUILD: status.HTTP_400_BAD_REQUEST,
+        }.get(result.kind, status.HTTP_502_BAD_GATEWAY)
         return Response(payload, status=http_status)
 
-    @extend_schema(request=None, responses=MessageTemplateSerializer)
-    @action(detail=True, methods=["post"], url_path="enviar-a-meta")
-    def enviar_a_meta(self, request, pk=None):
-        """POST /api/templates/{id}/enviar-a-meta/: crea la plantilla en Meta."""
-        template = self.get_object()
-        return self._sync_response(template, meta_templates.create_template(template))
 
-    @extend_schema(request=None, responses=MessageTemplateSerializer)
-    @action(detail=True, methods=["post"], url_path="consultar-estado")
-    def consultar_estado(self, request, pk=None):
-        """POST /api/templates/{id}/consultar-estado/: lee el estado desde Meta."""
-        template = self.get_object()
-        return self._sync_response(
-            template, meta_templates.fetch_template_status(template)
+class MetaTemplateListView(APIView):
+    """GET /api/templates/meta/: lista las plantillas reales de la cuenta de Meta."""
+
+    permission_classes = [IsInternalService]
+
+    def get(self, request):
+        result = meta_templates.list_templates()
+        if not result.ok:
+            http_status = (
+                status.HTTP_503_SERVICE_UNAVAILABLE
+                if result.kind == meta_templates.KIND_CONFIG
+                else status.HTTP_502_BAD_GATEWAY
+            )
+            return Response(
+                {"success": False, "message": result.message, "templates": []},
+                status=http_status,
+            )
+        return Response({"success": True, "templates": result.templates})
+
+
+class MetaTemplateDetailView(APIView):
+    """GET/POST/DELETE de una plantilla concreta en Meta."""
+
+    permission_classes = [IsInternalService]
+
+    def _error_status(self, kind):
+        return {
+            meta_templates.KIND_CONFIG: status.HTTP_503_SERVICE_UNAVAILABLE,
+            meta_templates.KIND_BUILD: status.HTTP_400_BAD_REQUEST,
+        }.get(kind, status.HTTP_502_BAD_GATEWAY)
+
+    def get(self, request, meta_id):
+        result = meta_templates.get_template(meta_id)
+        if not result.ok:
+            return Response(
+                {"success": False, "message": result.message},
+                status=self._error_status(result.kind),
+            )
+        return Response({"success": True, "template": result.template})
+
+    def post(self, request, meta_id):
+        """Edita el cuerpo de una plantilla existente en Meta."""
+        body_text = request.data.get("body_text")
+        if not isinstance(body_text, str) or not body_text.strip():
+            return Response(
+                {"success": False, "message": "El cuerpo de la plantilla es obligatorio."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        result = meta_templates.edit_template(
+            meta_id,
+            body_text,
+            request.data.get("variable_types") or {},
+            request.data.get("buttons") or [],
+        )
+        if not result.ok:
+            return Response(
+                {"success": False, "message": result.message},
+                status=self._error_status(result.kind),
+            )
+        return Response(
+            {
+                "success": True,
+                "message": result.message,
+                "meta_id": result.meta_id,
+                "meta_status": result.meta_status,
+            }
         )
 
-    @extend_schema(request=None)
-    @action(detail=False, methods=["post"], url_path="consultar-estados")
-    def consultar_estados(self, request):
-        """POST /api/templates/consultar-estados/: refresca las ya enlazadas."""
-        updated = []
-        for template, result in meta_templates.refresh_linked():
-            updated.append(
-                {
-                    "id": template.pk,
-                    "ok": result.ok,
-                    "status": template.status,
-                    "meta_status": template.meta_status,
-                    "message": result.message,
-                }
+    def delete(self, request, meta_id):
+        result = meta_templates.delete_template(
+            meta_id, request.query_params.get("name", "")
+        )
+        if not result.ok:
+            return Response(
+                {"success": False, "message": result.message},
+                status=self._error_status(result.kind),
             )
-        return Response({"success": True, "count": len(updated), "updated": updated})
+        return Response({"success": True, "message": result.message})
 
 
 @extend_schema(auth=INTERNAL_AUTH)
@@ -293,7 +345,7 @@ class AudienceSegmentViewSet(viewsets.ModelViewSet):
 
 @extend_schema(auth=INTERNAL_AUTH)
 class CampaignViewSet(viewsets.ModelViewSet):
-    queryset = Campaign.objects.select_related("template", "segment").all()
+    queryset = Campaign.objects.select_related("segment").all()
     serializer_class = CampaignSerializer
     permission_classes = [IsInternalService]
 
