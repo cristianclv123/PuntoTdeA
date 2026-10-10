@@ -41,9 +41,9 @@ def _record_event(conversation, user, action_label: str, *, at=None):
     return when
 
 
-def mark_claimed(conversation, user, *, assign: bool = True):
+def mark_claimed(conversation, user, *, assign: bool = True, force: bool = False):
     """Registra la toma del caso (timestamps + evento en chat/comentarios)."""
-    if conversation.claimed_at and conversation.claimed_by_id:
+    if conversation.claimed_at and conversation.claimed_by_id and not force:
         if assign and conversation.assigned_to_id is None:
             conversation.assigned_to = user
             conversation.save(update_fields=["assigned_to", "updated_at"])

@@ -5,7 +5,7 @@
 | Pieza | Dónde vive | Plan |
 |---|---|---|
 | `render.yaml` | Blueprint declarativo (web + Key Value + Postgres) | free |
-| `Dockerfile` | Imagen con whitenoise, collectstatic, migraciones y Daphne | — |
+| `Dockerfile` + `entrypoint.sh` | Imagen con whitenoise y collectstatic; el arranque (migraciones + Daphne) vive en `entrypoint.sh` | — |
 | `.github/workflows/ci.yml` | 90 pruebas + `check --deploy` + `collectstatic` | — |
 | `.github/workflows/cd.yml` | Dispara el deploy cuando CI pasa en `main` | — |
 | `PuntoTdeA/settings.py` | Ajustes de producción ( whitenoise, proxy, `DATABASE_URL`) | — |
@@ -145,20 +145,21 @@ Cuando haya usuarios reales subiendo archivos, las dos salidas son:
 
 ## Restricciones conocidas del plan gratuito
 
-- El despliegue usa `migrate` dentro del comando de arranque, no
-  `preDeployCommand`: **ese campo no existe en planes gratuitos**. Por eso el
-  `CMD` del Dockerfile corre `python manage.py migrate --noinput` antes de
-  levantar Daphne. Al migrar a plan pago, mueve las migraciones a
-  `preDeployCommand`.
+- El despliegue usa `migrate` dentro del comando de arranque (`entrypoint.sh`),
+  no `preDeployCommand`: **ese campo no existe en planes gratuitos**. El
+  `entrypoint.sh` corre `python manage.py migrate --noinput` (con reintentos, por
+  si la BD aún no responde) antes de levantar Daphne. Al migrar a plan pago,
+  mueve las migraciones a `preDeployCommand` y quítalas del entrypoint.
 - **No hay Shell ni Postgres externa.** El plan free no da acceso al contenedor
   y la base no expone URL pública, así que **el arranque es el único momento en
-  que corre código en Render**. Por eso el superusuario se crea ahí también:
-  ```dockerfile
-  CMD ["sh", "-c", "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || echo 'superusuario ya existe, se conserva') && daphne ..."]
+  que corre código en Render**. Por eso el superusuario se crea ahí también, en
+  `entrypoint.sh`:
+  ```sh
+  python manage.py createsuperuser --noinput || echo 'superusuario ya existe, se conserva'
   ```
-  El paréntesis con `|| echo` es obligatorio: en cada redeploy `createsuperuser`
-  falla con *That username is already taken*, y sin él el deploy entero se
-  tumba. A propósito **no** resetea la contraseña de un usuario existente.
+  El `|| echo` es obligatorio: en cada redeploy `createsuperuser` falla con
+  *That username is already taken*, y sin él el deploy entero se tumba. A
+  propósito **no** resetea la contraseña de un usuario existente.
 - `SECURE_HSTS_SECONDS` está en `0`. Actívalo cuando confirmes que el dominio
   final responde bien por HTTPS durante unos días, y solo si usas dominio
   propio: activar HSTS en `*.onrender.com` no es posible desde tu app.
