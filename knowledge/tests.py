@@ -74,6 +74,23 @@ class ChatbotWorkflowTests(TestCase):
         self.assertEqual(invalid['state'], 'waiting_question')
         self.assertTrue(self.workflow.submit_question('Necesito ayuda').get('valid'))
 
+    def test_question_without_confident_answer_keeps_chat_active(self):
+        self.workflow.responder = lambda question: {
+            'answer': 'No encontré información suficiente.',
+            'confidence': 0.0,
+            'needs_human_attention': True,
+            'sources': [],
+        }
+
+        response = self.workflow.submit_question('Pregunta sin respuesta')
+
+        self.assertEqual(response['state'], 'help_options')
+        self.assertIn('un asesor te dará respuesta', response['message'].lower())
+        self.assertIn('horario de atención', response['message'])
+        self.assertIn('otras preguntas', response['message'])
+        self.assertEqual(self.conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertEqual(self.conversation.flow_state, 'help_options')
+
     def test_user_can_request_more_help(self):
         self.workflow.submit_question('¿Dónde consulto mi horario?')
         self.assertEqual(self.workflow.confirm_more_help(True)['state'], 'help_options')

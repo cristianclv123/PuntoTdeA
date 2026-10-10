@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import re
+from datetime import datetime
 from typing import Any
 
 from django.conf import settings
@@ -15,6 +16,7 @@ from communications.models import Contact
 from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
 from ..models import ChatConversation
+from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
 from .workflow import ChatbotWorkflow
 
 
@@ -135,39 +137,67 @@ def _ticket_confirmation(conversation: ChatConversation, ticket: CaseConversatio
 
 
 def _submit_question(
-    conversation: ChatConversation,
     workflow: ChatbotWorkflow,
-    sender: str,
     question: str,
 ) -> list[str]:
     result = workflow.submit_question(question)
-    if result.get('valid') and result.get('needs_human_attention'):
-        reason = 'El chatbot no encontró una respuesta con suficiente confianza.'
-        ticket = _create_case_ticket(conversation, sender, question, reason)
-        return [result['message'], _ticket_confirmation(conversation, ticket)]
     return [result['message']]
+
+
+def _case_ticket_is_closed(conversation: ChatConversation) -> bool:
+    return (
+        conversation.case_conversation_id is not None
+        and conversation.case_conversation.status == CaseConversation.Status.CERRADO
+    )
 
 
 def handle_message(sender: str, text: str) -> list[str]:
     contact = _find_contact(sender)
-    conversation, created = _manager(ChatConversation).get_or_create(
+    conversation = _manager(ChatConversation).filter(
         channel='whatsapp',
         external_user_id=sender,
-        defaults={'status': ChatConversation.STATUS_ACTIVE, 'contact': contact},
-    )
+    ).select_related('case_conversation').first()
+    start_new_conversation = conversation is None
+    inactivity_result = None
+
+    if conversation and _case_ticket_is_closed(conversation):
+        conversation.status = ChatConversation.STATUS_ENDED
+        conversation.flow_state = 'ended'
+        conversation.save(update_fields=['status', 'flow_state', 'updated_at'])
+        start_new_conversation = True
+
+    if conversation and conversation.status == ChatConversation.STATUS_ACTIVE:
+        inactivity_result = close_if_inactive(conversation)
+        if inactivity_result is not None:
+            start_new_conversation = True
+
+    if conversation and conversation.status == ChatConversation.STATUS_ENDED:
+        start_new_conversation = True
+
+    if start_new_conversation:
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id=sender,
+            status=ChatConversation.STATUS_ACTIVE,
+            contact=contact,
+        )
+
     if contact and not conversation.contact_id:
         conversation.contact = contact
         conversation.save(update_fields=['contact', 'updated_at'])
 
     workflow = ChatbotWorkflow(conversation)
-    if created or not conversation.messages:
-        return [workflow.start()['message']]
+    if start_new_conversation or not conversation.messages:
+        greeting = workflow.start()['message']
+        if inactivity_result is not None:
+            return [inactivity_result['message'], greeting]
+        return [greeting]
 
     state = conversation.flow_state
     if state == 'waiting_question':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana.')['message']]
-        return _submit_question(conversation, workflow, sender, text)
+        return _submit_question(workflow, text)
     if state == 'waiting_confirmation':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
@@ -179,7 +209,7 @@ def handle_message(sender: str, text: str) -> list[str]:
     if state == 'help_options':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
-        return _submit_question(conversation, workflow, sender, text)
+        return _submit_question(workflow, text)
     if state == 'waiting_advisor_question':
         result = workflow.submit_advisor_question(text)
         if result.get('valid'):
@@ -190,7 +220,7 @@ def handle_message(sender: str, text: str) -> list[str]:
     if state in {'ended', 'pending'}:
         return ['Esta conversación ya está cerrada. Envía un nuevo mensaje para iniciar otra conversación.']
     workflow.start()
-    return _submit_question(conversation, workflow, sender, text)
+    return _submit_question(workflow, text)
 
 
 def send_text(recipient: str, text: str) -> bool:
@@ -211,6 +241,24 @@ def process_webhook(payload: dict[str, Any]) -> int:
             send_text(sender, reply)
         processed += 1
     return processed
+
+
+def close_inactive_whatsapp_conversations(current_time: datetime | None = None) -> int:
+    current_time = current_time or timezone.now()
+    cutoff = current_time - INACTIVITY_TIMEOUT
+    conversations = _manager(ChatConversation).filter(
+        channel='whatsapp',
+        status=ChatConversation.STATUS_ACTIVE,
+        updated_at__lte=cutoff,
+    )
+    closed_count = 0
+    for conversation in conversations.iterator():
+        result = close_if_inactive(conversation, current_time)
+        if result is None:
+            continue
+        send_text(conversation.external_user_id, result['message'])
+        closed_count += 1
+    return closed_count
 
 
 def parse_json(raw_body: bytes) -> dict[str, Any]:

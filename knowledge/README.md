@@ -75,6 +75,17 @@ guarda en `ChatConversation.external_user_id`, por lo que el asesor conserva el
 historial completo. Si el número coincide de forma única con un contacto existente
 en `communications`, la conversación también queda asociada a ese contacto; el
 chatbot no crea contactos nuevos. Si el bot no encuentra una respuesta con
-suficiente confianza o el usuario completa una solicitud de atención humana, se
-registra el mensaje en el módulo de casos y se informa al usuario el número del
-ticket creado.
+suficiente confianza, mantiene activa la conversación y permite reformular la
+pregunta o solicitar un asesor. También informa que un asesor dará respuesta
+dentro del horario de atención; mientras tanto, el chatbot puede seguir atendiendo
+otras dudas. El ticket del módulo de casos se crea cuando el usuario completa
+explícitamente la solicitud de atención humana.
+
+Las conversaciones de WhatsApp activas se cierran con un mensaje después de
+cinco minutos sin actividad solo si el último mensaje fue del bot y no hay una duda
+pendiente de respuesta de un asesor. Para que el aviso se envíe a la hora prevista,
+ejecuta periódicamente (por ejemplo, cada minuto) el comando:
+
+```powershell
+python manage.py close_inactive_chats
+```
