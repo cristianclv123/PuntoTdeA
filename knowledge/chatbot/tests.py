@@ -4,13 +4,16 @@ import hmac
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from cases.models import Conversation as CaseConversation, Message as CaseMessage
 from communications.models import Contact
 from ..models import ChatConversation
+from .case_status import get_case_status
 from .whatsapp import close_inactive_whatsapp_conversations, handle_message, process_webhook
 
 
@@ -19,6 +22,70 @@ def _manager(model):
 
 
 class WhatsAppFlowTests(TestCase):
+    @patch('knowledge.chatbot.case_status.requests.get')
+    def test_case_status_uses_session_cookie_and_remote_ticket_id(self, get):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {'id': 42, 'status': 'cerrado'}
+        get.return_value = response
+
+        with patch.dict(
+            'os.environ',
+            {
+                'CASES_API_BASE_URL': 'https://puntotdea-qmcv.onrender.com/',
+                'CASES_API_SESSION_ID': 'test-session-id',
+            },
+        ):
+            status = get_case_status(42)
+
+        self.assertEqual(status, 'cerrado')
+        get.assert_called_once_with(
+            'https://puntotdea-qmcv.onrender.com/api/cases/tickets/42/',
+            headers={'Cookie': 'sessionid=test-session-id'},
+            timeout=10,
+        )
+
+    def test_knowledge_ticket_status_endpoint_proxies_associated_case(self):
+        handle_message('573001112249', 'Hola')
+        handle_message('573001112249', 'Quiero un asesor')
+        handle_message('573001112249', 'Necesito ayuda con matrícula')
+        conversation = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112249',
+        )
+        user = get_user_model().objects.create_user(
+            username='knowledge-ticket-status-test',
+            password='test-password',
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        with patch(
+            'knowledge.api.viewsets.get_case_status',
+            return_value=CaseConversation.Status.PENDIENTE,
+        ) as get_status:
+            response = client.get(
+                f'/api/knowledge/conversations/{conversation.pk}/ticket-status/'
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['conversation_id'], conversation.pk)
+        self.assertEqual(response.data['ticket_id'], conversation.case_conversation_id)
+        self.assertEqual(response.data['status'], CaseConversation.Status.PENDIENTE)
+        get_status.assert_called_once_with(conversation.case_conversation_id)
+
+    def test_knowledge_ticket_status_endpoint_requires_authentication(self):
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112250',
+        )
+
+        response = APIClient().get(
+            f'/api/knowledge/conversations/{conversation.pk}/ticket-status/'
+        )
+
+        self.assertEqual(response.status_code, 403)
+
     def test_whatsapp_conversation_links_matching_communications_contact(self):
         contact = _manager(Contact).create(
             full_name='Estudiante de prueba',
@@ -200,11 +267,14 @@ class WhatsAppFlowTests(TestCase):
         ):
             response = handle_message('573001112240', 'Hola de nuevo')
 
-        conversations = _manager(ChatConversation).filter(
+        user_conversations = _manager(ChatConversation).filter(
             channel='whatsapp',
             external_user_id='573001112240',
+        )
+        conversations = user_conversations.filter(
+            status=ChatConversation.STATUS_ACTIVE,
         ).order_by('-updated_at', '-created_at')
-        self.assertEqual(conversations.count(), 2)
+        self.assertEqual(user_conversations.count(), 2)
         new_conversation = conversations.first()
         self.assertNotEqual(new_conversation.pk, previous.pk)
         self.assertEqual(new_conversation.status, ChatConversation.STATUS_ACTIVE)
@@ -321,8 +391,6 @@ class WhatsAppFlowTests(TestCase):
             external_user_id='573001112241',
         )
         previous_case = previous.case_conversation
-        previous_case.status = CaseConversation.Status.CERRADO
-        previous_case.save(update_fields=['status'])
 
         with patch(
             'knowledge.chatbot.workflow.generate_response',
@@ -332,6 +400,9 @@ class WhatsAppFlowTests(TestCase):
                 'needs_human_attention': False,
                 'sources': [],
             },
+        ), patch(
+            'knowledge.chatbot.whatsapp.get_case_status',
+            return_value=CaseConversation.Status.CERRADO,
         ):
             response = handle_message('573001112241', 'Tengo otra pregunta')
 
@@ -361,6 +432,40 @@ class WhatsAppFlowTests(TestCase):
             _manager(CaseConversation).filter(channel__code='whatsapp').count(),
             2,
         )
+
+    def test_remote_open_case_keeps_whatsapp_conversation_available(self):
+        handle_message('573001112248', 'Hola')
+        handle_message('573001112248', 'Quiero un asesor')
+        handle_message('573001112248', 'Necesito revisar mi solicitud')
+        conversation = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112248',
+        )
+        conversation.case_conversation.status = CaseConversation.Status.CERRADO
+        conversation.case_conversation.save(update_fields=['status'])
+
+        with (
+            patch(
+                'knowledge.chatbot.whatsapp.get_case_status',
+                return_value=CaseConversation.Status.PENDIENTE,
+            ),
+            patch(
+                'knowledge.chatbot.workflow.generate_response',
+                return_value={
+                    'answer': 'El bot sigue disponible.',
+                    'confidence': 0.9,
+                    'needs_human_attention': False,
+                    'sources': [],
+                },
+            ),
+        ):
+            response = handle_message('573001112248', '¿Dónde consulto el calendario?')
+
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
+        self.assertEqual(conversation.last_question, '¿Dónde consulto el calendario?')
+        self.assertIn('El bot sigue disponible.', response[0])
 
     def test_open_advisor_case_keeps_existing_chat_available(self):
         handle_message('573001112242', 'Hola')
@@ -496,11 +601,14 @@ class WhatsAppInactivityTests(TestCase):
         )
 
         response = handle_message('573001112236', 'Quiero hacer otra consulta')
-        conversations = _manager(ChatConversation).filter(
+        user_conversations = _manager(ChatConversation).filter(
             channel='whatsapp',
             external_user_id='573001112236',
-        ).order_by('-created_at')
-        self.assertEqual(conversations.count(), 2)
+        )
+        conversations = user_conversations.filter(
+            status=ChatConversation.STATUS_ACTIVE,
+        ).order_by('-updated_at', '-created_at')
+        self.assertEqual(user_conversations.count(), 2)
         self.assertNotEqual(conversations.first().pk, conversation.pk)
         self.assertEqual(conversations.first().status, ChatConversation.STATUS_ACTIVE)
         self.assertIn('ayudarte', response[0])

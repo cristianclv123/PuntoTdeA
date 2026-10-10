@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Any
 
 from django.conf import settings
-from django.db.models import Q
 from django.utils import timezone
 
 from communications.adapters.meta_adapter import send_text_message
@@ -17,6 +16,7 @@ from communications.models import Contact
 from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
 from ..models import ChatConversation
+from .case_status import CaseStatusAPIError, get_case_status
 from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
 from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
 
@@ -156,18 +156,22 @@ def _submit_question(
     return [result['message']]
 
 
-def _case_ticket_is_closed(conversation: ChatConversation) -> bool:
-    return (
-        conversation.case_conversation_id is not None
-        and conversation.case_conversation.status == CaseConversation.Status.CERRADO
-    )
-
-
-def _case_ticket_is_open(conversation: ChatConversation) -> bool:
-    return (
-        conversation.case_conversation_id is not None
-        and conversation.case_conversation.status != CaseConversation.Status.CERRADO
-    )
+def _case_ticket_status(conversation: ChatConversation) -> str | None:
+    if conversation.case_conversation_id is None:
+        return None
+    try:
+        status = get_case_status(conversation.case_conversation_id)
+    except CaseStatusAPIError as exc:
+        logger.warning(
+            'No se pudo consultar el estado remoto del ticket %s; se usará el estado local: %s',
+            conversation.case_conversation_id,
+            exc,
+        )
+        return conversation.case_conversation.status
+    if status != conversation.case_conversation.status:
+        conversation.case_conversation.status = status
+        conversation.case_conversation.save(update_fields=['status'])
+    return status
 
 
 def handle_message(sender: str, text: str) -> list[str]:
@@ -178,9 +182,6 @@ def handle_message(sender: str, text: str) -> list[str]:
     ).select_related('case_conversation')
     conversation = conversations.filter(
         status=ChatConversation.STATUS_ACTIVE,
-    ).filter(
-        Q(case_conversation__isnull=True)
-        | ~Q(case_conversation__status=CaseConversation.Status.CERRADO)
     ).order_by('-updated_at', '-created_at').first()
     if conversation is None:
         conversation = conversations.order_by('-updated_at', '-created_at').first()
@@ -188,14 +189,20 @@ def handle_message(sender: str, text: str) -> list[str]:
     start_new_conversation = conversation is None
     had_previous_conversation = conversation is not None
     inactivity_result = None
+    ticket_status = _case_ticket_status(conversation) if conversation else None
 
-    if conversation and _case_ticket_is_closed(conversation):
+    if conversation and ticket_status == CaseConversation.Status.CERRADO:
         conversation.status = ChatConversation.STATUS_ENDED
         conversation.flow_state = 'ended'
         conversation.save(update_fields=['status', 'flow_state', 'updated_at'])
         start_new_conversation = True
 
-    if conversation and _case_ticket_is_open(conversation):
+    if (
+        conversation
+        and conversation.case_conversation_id is not None
+        and ticket_status is not None
+        and ticket_status != CaseConversation.Status.CERRADO
+    ):
         if (
             conversation.status == ChatConversation.STATUS_PENDING
             or conversation.flow_state == 'pending'

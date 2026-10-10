@@ -1,10 +1,13 @@
 """ViewSets CRUD para el contenido de la base de conocimiento."""
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import mixins, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
+from cases.models import Conversation as CaseConversation
+from knowledge.chatbot.case_status import CaseStatusAPIError, get_case_status
 from knowledge.models import Category, ChatConversation, FAQ, Intent, KnowledgeArticle
 from knowledge.services.import_service import import_articles_from_excel, import_faqs_from_excel
 
@@ -128,3 +131,44 @@ class ChatConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
         if channel := params.get("channel"):
             qs = qs.filter(channel=channel)
         return qs
+
+    @extend_schema(
+        responses=inline_serializer(
+            name="ChatConversationTicketStatus",
+            fields={
+                "conversation_id": serializers.UUIDField(),
+                "ticket_id": serializers.IntegerField(),
+                "status": serializers.CharField(),
+            },
+        ),
+    )
+    @action(detail=True, methods=["get"], url_path="ticket-status")
+    def ticket_status(self, request, pk=None):
+        """Consulta en cases el estado del ticket asociado a esta conversación."""
+        queryset = self.filter_queryset(self.get_queryset())
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        conversation = get_object_or_404(queryset, **{lookup_url_kwarg: pk})
+        self.check_object_permissions(request, conversation)
+        ticket_id = conversation.case_conversation_id
+        if ticket_id is None:
+            return Response(
+                {"detail": "Esta conversación no tiene un ticket de asesor asociado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            remote_status = get_case_status(ticket_id)
+        except CaseStatusAPIError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if remote_status != conversation.case_conversation.status:
+            CaseConversation.objects.filter(pk=ticket_id).update(status=remote_status)
+
+        return Response({
+            "conversation_id": conversation.pk,
+            "ticket_id": ticket_id,
+            "status": remote_status,
+        })

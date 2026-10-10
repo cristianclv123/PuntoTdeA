@@ -62,7 +62,17 @@ META_APP_SECRET=app-secret-de-meta
 META_ACCESS_TOKEN=token-de-acceso-de-whatsapp
 WHATSAPP_PHONE_NUMBER_ID=id-del-numero-de-whatsapp
 WHATSAPP_API_VERSION=v21.0
+CASES_API_BASE_URL=https://puntotdea-qmcv.onrender.com
+CASES_API_SESSION_ID=sessionid-de-una-cuenta-de-servicio
 ```
+
+El chatbot consulta `GET /api/cases/tickets/{id}/` con una cookie de sesión de una
+cuenta de servicio. Configura `CASES_API_SESSION_ID` como secreto en el entorno del
+servidor; nunca lo guardes en el repositorio. Para consultar el ticket asociado a
+una conversación desde la API de conocimiento, usa
+`GET /api/knowledge/conversations/{uuid}/ticket-status/`; requiere autenticación
+de Django. Si la API remota no está disponible, el webhook registra una advertencia
+y usa el estado local del ticket; el endpoint de proxy devuelve HTTP 503.
 
 En Meta Developers, dentro de WhatsApp > Configuration, registra la URL anterior,
 usa el mismo `META_VERIFY_TOKEN` y suscribe el campo `messages`. El servidor debe
