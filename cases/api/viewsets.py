@@ -11,14 +11,20 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from cases.models import CaseComment, Channel, Contact, Conversation, Department, Message, ReplyTemplate
-from cases.services.assignment import ClaimError, advisor_can_reply, claim_conversation
-from cases.services.case_events import mark_claimed, mark_closed
+from cases.services.assignment import (
+    ClaimError,
+    CloseError,
+    advisor_can_reply,
+    claim_conversation,
+    close_conversation,
+    user_can_act_on_conversation,
+)
+from cases.services.case_events import mark_claimed
 from cases.services.ingestion import create_outbound_message
-from cases.services.realtime import broadcast_conversation_update
 
 from .serializers import (
     CaseCommentSerializer,
@@ -243,6 +249,13 @@ class ConversationViewSet(viewsets.ModelViewSet):
         conversation = self.get_object()
         if conversation.status == Conversation.Status.CERRADO:
             raise ValidationError("Este caso está cerrado y no puede modificarse.")
+        if not (
+            user_can_act_on_conversation(conversation, request.user)
+            or conversation.assigned_to_id is None
+        ):
+            raise PermissionDenied(
+                "Solo el asesor asignado o un administrador puede gestionar este caso."
+            )
 
         serializer = ConversationUpdateSerializer(
             instance=conversation, data=request.data, partial=partial
@@ -294,37 +307,30 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @extend_schema(request=ConversationCloseSerializer, responses=ConversationDetailSerializer)
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
-        conversation = self.get_object()
-        if conversation.status == Conversation.Status.CERRADO:
-            return Response({"detail": "El caso ya estaba cerrado."}, status=status.HTTP_200_OK)
-
         serializer = ConversationCloseSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-
-        assigned_to_id = data.get("assigned_to_id") or conversation.assigned_to_id
-        department_id = data.get("department_id") or conversation.department_id
-        if not assigned_to_id:
-            if request.user.is_staff or conversation.assigned_to_id is None:
-                assigned_to_id = request.user.id
-        if not assigned_to_id:
-            raise ValidationError("Debes asignar un asesor (assigned_to_id) antes de cerrar el caso.")
-        if not department_id:
-            raise ValidationError("Debes indicar la dependencia (department_id) antes de cerrar el caso.")
-
-        conversation.assigned_to_id = assigned_to_id
-        conversation.department_id = department_id
-        if data.get("priority"):
-            conversation.priority = data["priority"]
-        conversation.escalated_to = None
-        if not conversation.claimed_at:
-            mark_claimed(conversation, conversation.assigned_to, assign=False)
-        conversation.status = Conversation.Status.CERRADO
-        conversation.save()
-        mark_closed(conversation, request.user)
-        broadcast_conversation_update(conversation)
-
-        conversation.refresh_from_db()
+        try:
+            conversation = close_conversation(
+                pk,
+                request.user,
+                assigned_to_id=data.get("assigned_to_id"),
+                department_id=data.get("department_id"),
+                priority=data.get("priority"),
+            )
+        except CloseError as exc:
+            if exc.code == "already_closed":
+                conversation = self.get_object()
+                return Response(
+                    ConversationDetailSerializer(conversation).data,
+                    status=status.HTTP_200_OK,
+                )
+            error_status = {
+                "not_found": status.HTTP_404_NOT_FOUND,
+                "forbidden": status.HTTP_403_FORBIDDEN,
+                "unauthenticated": status.HTTP_401_UNAUTHORIZED,
+            }.get(exc.code, status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": exc.message, "code": exc.code}, status=error_status)
         return Response(ConversationDetailSerializer(conversation).data)
 
     @extend_schema(
@@ -334,21 +340,29 @@ class ConversationViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=["post"],
-        parser_classes=[MultiPartParser, FormParser],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
     )
     def reply(self, request, pk=None):
+        from communications.models import MessageTemplate
+
         conversation = self.get_object()
         if not advisor_can_reply(conversation, request.user):
             raise PermissionDenied("Debes tomar el caso antes de responder.")
 
         serializer = ReplyCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        template = None
+        template_id = serializer.validated_data.get("template_id")
+        if template_id:
+            template = get_object_or_404(MessageTemplate, pk=template_id)
         try:
             message = create_outbound_message(
                 conversation,
                 serializer.validated_data.get("body", ""),
                 user=request.user,
                 uploaded_files=serializer.validated_data.get("attachments"),
+                template=template,
+                template_params=serializer.validated_data.get("template_params"),
             )
         except DjangoValidationError as exc:
             raise ValidationError(exc.messages if hasattr(exc, "messages") else str(exc))

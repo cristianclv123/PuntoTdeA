@@ -49,8 +49,6 @@ def chatbot(request):
         conversation = _manager(ChatConversation).create()
         request.session['chatbot_conversation_id'] = str(conversation.pk)
         greeting = chatbot_workflow.ChatbotWorkflow(conversation).start()
-        if request.headers.get('Accept') == 'application/json':
-            return JsonResponse(greeting)
         return render(request, 'knowledge/chatbot.html', {'greeting': greeting})
 
     try:

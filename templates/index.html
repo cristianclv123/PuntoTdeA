@@ -31,7 +31,6 @@
           <a href="#beneficios">Beneficios</a>
           <a href="#flujo">Cómo funciona</a>
           <a href="#faq">FAQ</a>
-          <a href="{% url 'asistente' %}">Asistente virtual</a>
           {% if user.is_authenticated %}
             <a class="lp-nav-cta" href="{% url 'dashboard:index' %}">Ir al panel</a>
           {% else %}
@@ -115,12 +114,6 @@
             <h3>Conocimiento</h3>
             <p>Base de respuestas, FAQs y documentación para asesores.</p>
             <span class="lp-module-link">Entrar →</span>
-          </a>
-          <a class="lp-module" href="{% url 'asistente' %}">
-            <div class="lp-module-icon">{% icon 'message-circle' size=22 %}</div>
-            <h3>Asistente virtual</h3>
-            <p>Resuelve tus dudas al instante, sin necesidad de iniciar sesión.</p>
-            <span class="lp-module-link">Preguntar →</span>
           </a>
           <a class="lp-module" href="{% url 'login' %}">
             <div class="lp-module-icon">{% icon 'shield-check' size=22 %}</div>
@@ -273,38 +266,6 @@
     </footer>
   </div>
 
-  <button type="button" class="lp-chat-fab" id="lp-chat-fab" aria-expanded="false" aria-controls="lp-chat-widget" aria-label="Abrir asistente virtual">
-    {% icon 'message-circle' size=24 %}
-  </button>
-
-  <section class="lp-chat-widget" id="lp-chat-widget" hidden aria-label="Asistente virtual Punto TdeA">
-    <header class="lp-chat-widget-head">
-      <div>
-        <strong>Asistente Punto TdeA</strong>
-        <span class="lp-chat-widget-status">En línea</span>
-      </div>
-      <button type="button" id="lp-chat-widget-close" aria-label="Cerrar asistente">
-        {% icon 'x' size=18 %}
-      </button>
-    </header>
-    <div class="lp-chat-widget-messages" id="lp-chat-widget-messages" aria-live="polite"></div>
-    <div class="lp-chat-widget-controls">
-      <div class="lp-chat-widget-actions" id="lp-chat-widget-confirm" hidden>
-        <button type="button" data-help="yes">Sí, necesito más ayuda</button>
-        <button type="button" data-help="no">No, gracias</button>
-      </div>
-      <div class="lp-chat-widget-actions" id="lp-chat-widget-help" hidden>
-        <button type="button" id="lp-chat-widget-new-question">Nueva pregunta</button>
-        <button type="button" class="advisor" id="lp-chat-widget-advisor">Hablar con un asesor</button>
-      </div>
-      <form class="lp-chat-widget-form" id="lp-chat-widget-form">
-        <input id="lp-chat-widget-input" autocomplete="off" placeholder="Escribe tu pregunta..." aria-label="Pregunta">
-        <button type="submit" aria-label="Enviar">{% icon 'arrow-right' size=18 %}</button>
-      </form>
-    </div>
-  </section>
-
   <script src="{% static 'js/landing.js' %}"></script>
-  <script src="{% static 'js/landing-chat.js' %}"></script>
 </body>
 </html>

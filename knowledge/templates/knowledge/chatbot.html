@@ -52,7 +52,6 @@
     const input = document.getElementById('question');
     const confirmationActions = document.getElementById('confirmation-actions');
     const helpActions = document.getElementById('help-actions');
-    let currentState = '{{ greeting.state }}';
     const addMessage = (text, author) => { const bubble = document.createElement('div'); bubble.className = `bubble ${author}`; bubble.textContent = text; messages.appendChild(bubble); messages.scrollTop = messages.scrollHeight; };
     const showActionsFor = (state) => {
       const showConfirmation = state === 'waiting_confirmation';
@@ -68,7 +67,6 @@
       const data = await response.json();
       if (!response.ok) { addMessage(data.error || 'No fue posible procesar tu mensaje.', 'bot'); return; }
       if (data.message) addMessage(data.message, 'bot');
-      currentState = data.state;
       showActionsFor(data.state);
       if (data.state === 'ended') {
         form.hidden = true;
@@ -78,14 +76,7 @@
       }
       if (data.state === 'pending') { form.hidden = true; confirmationActions.hidden = true; helpActions.hidden = true; }
     };
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const value = input.value.trim();
-      if (!value) return;
-      input.value = '';
-      const action = currentState === 'waiting_advisor_question' ? 'advisor_question' : 'question';
-      send({ action, question: value }, value);
-    });
+    form.addEventListener('submit', (event) => { event.preventDefault(); const value = input.value.trim(); if (!value) return; input.value = ''; send({ action: 'question', question: value }, value); });
     document.querySelectorAll('[data-help]').forEach((button) => button.addEventListener('click', () => {
       showActionsFor('');
       send({ action: 'confirm', needs_more_help: button.dataset.help === 'yes' }, button.textContent);

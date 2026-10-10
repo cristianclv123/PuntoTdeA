@@ -99,19 +99,7 @@
     <div class="wa-claim-bar locked">
       <p class="wa-claim-text">Caso cerrado. Solo consulta; no se pueden enviar mensajes ni editar la gestión.</p>
     </div>
-  {% elif needs_claim %}
-    <div class="wa-claim-bar">
-      <p class="wa-claim-text">Esta conversación no está siendo atendida</p>
-      <form method="post" action="{% url 'cases:claim' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}">
-        {% csrf_token %}
-        <button class="wa-claim-btn" type="submit">Tomar conversación</button>
-      </form>
-    </div>
-  {% elif assigned_to_other %}
-    <div class="wa-claim-bar locked">
-      <p class="wa-claim-text">Asignado a {{ conversation.advisor }}. Solo ese asesor puede responder.</p>
-    </div>
-  {% else %}
+  {% elif can_reply %}
   <form
     class="composer"
     method="post"
@@ -170,6 +158,18 @@
     </div>
     <p class="composer-hint">Imágenes, video u ofimática (PDF, Word, Excel, PowerPoint…). Máx. 25 MB por archivo.</p>
   </form>
+  {% elif needs_claim %}
+    <div class="wa-claim-bar">
+      <p class="wa-claim-text">Esta conversación no está siendo atendida</p>
+      <form method="post" action="{% url 'cases:claim' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}">
+        {% csrf_token %}
+        <button class="wa-claim-btn" type="submit">Tomar conversación</button>
+      </form>
+    </div>
+  {% elif assigned_to_other %}
+    <div class="wa-claim-bar locked">
+      <p class="wa-claim-text">Asignado a {{ conversation.advisor }}. Solo ese asesor puede responder.</p>
+    </div>
   {% endif %}
 </div>
 

@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 
 from cases.models import (
@@ -17,6 +17,7 @@ from cases.models import (
 from cases.services.assignment import ClaimError, claim_conversation
 from cases.services.attachments import detect_kind, validate_uploaded_file
 from cases.services.ingestion import InboundPayload, create_outbound_message, ingest_inbound_message
+from cases.views import _bandeja_list_context
 
 User = get_user_model()
 
@@ -333,16 +334,17 @@ class CaseActionsTests(TestCase):
             assigned_to=self.user,
             department=self.dept,
         )
-        res = self.client.get(reverse("cases:bandeja"))
-        self.assertEqual(res.status_code, 200)
-        ids = {c["id"] for c in res.context["conversations"]}
+        request = RequestFactory().get(reverse("cases:bandeja"))
+        request.user = self.user
+        ids = {c["id"] for c in _bandeja_list_context(request)["conversations"]}
         self.assertIn(open_conv.id, ids)
         self.assertNotIn(closed_conv.id, ids)
 
-        closed_res = self.client.get(reverse("cases:bandeja"), {"closed": "1"})
-        self.assertEqual(closed_res.status_code, 200)
-        self.assertEqual(closed_res.context["active_tab"], "closed")
-        closed_ids = {c["id"] for c in closed_res.context["conversations"]}
+        closed_request = RequestFactory().get(reverse("cases:bandeja"), {"closed": "1"})
+        closed_request.user = self.user
+        closed_ctx = _bandeja_list_context(closed_request)
+        self.assertEqual(closed_ctx["active_tab"], "closed")
+        closed_ids = {c["id"] for c in closed_ctx["conversations"]}
         self.assertIn(closed_conv.id, closed_ids)
         self.assertNotIn(open_conv.id, closed_ids)
 

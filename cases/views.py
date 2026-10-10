@@ -10,28 +10,32 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from cases.constants import channel_ui, status_tag_class
 from cases.models import CaseComment, Conversation, Department, Message, ReplyTemplate
-from cases.services.assignment import ClaimError, advisor_can_reply, claim_conversation
+from cases.services.assignment import (
+    ClaimError,
+    CloseError,
+    advisor_can_reply,
+    claim_conversation,
+    close_conversation,
+    user_can_act_on_conversation,
+)
 from cases.services.attachments import ACCEPT_ATTR
-from cases.services.case_events import advisor_label, mark_claimed, mark_closed
+from cases.services.case_events import advisor_label, mark_claimed
 from cases.services.ingestion import create_outbound_message
-from cases.services.realtime import broadcast_conversation_update
 
 User = get_user_model()
 
 
-def _bandeja_channel_qs():
-    """Todos los canales (whatsapp, web, ...): la bandeja no es exclusiva
-    de WhatsApp, también recibe casos escalados por el bot desde la web."""
-    return Conversation.objects.all()
+def _whatsapp_channel_qs():
+    return Conversation.objects.filter(channel__code="whatsapp")
 
 
-def _bandeja_base_qs():
-    """Cola activa: excluye casos cerrados."""
-    return _bandeja_channel_qs().exclude(status=Conversation.Status.CERRADO)
+def _whatsapp_base_qs():
+    """Cola activa de WhatsApp: excluye casos cerrados."""
+    return _whatsapp_channel_qs().exclude(status=Conversation.Status.CERRADO)
 
 
-def _bandeja_closed_qs():
-    return _bandeja_channel_qs().filter(status=Conversation.Status.CERRADO)
+def _whatsapp_closed_qs():
+    return _whatsapp_channel_qs().filter(status=Conversation.Status.CERRADO)
 
 
 def _unanswered_q():
@@ -144,21 +148,21 @@ def _bandeja_list_context(request, selected_id=None):
 
     active_tab = "all"
     if closed == "1" or status_filter == Conversation.Status.CERRADO:
-        qs = _bandeja_closed_qs()
+        qs = _whatsapp_closed_qs()
         active_tab = "closed"
     elif assigned == "me":
-        qs = _bandeja_base_qs().filter(assigned_to=request.user)
+        qs = _whatsapp_base_qs().filter(assigned_to=request.user)
         active_tab = "mine"
     elif unanswered == "1":
-        qs = _bandeja_base_qs().annotate(**_unanswered_q()).filter(
+        qs = _whatsapp_base_qs().annotate(**_unanswered_q()).filter(
             _last_direction=Message.Direction.INBOUND
         )
         active_tab = "unanswered"
     elif unassigned == "1" or assigned == "none":
-        qs = _bandeja_base_qs().filter(assigned_to__isnull=True)
+        qs = _whatsapp_base_qs().filter(assigned_to__isnull=True)
         active_tab = "unassigned"
     else:
-        qs = _bandeja_base_qs()
+        qs = _whatsapp_base_qs()
 
     qs = (
         qs.select_related(
@@ -195,7 +199,7 @@ def _bandeja_list_context(request, selected_id=None):
         and not any(c["id"] == selected_id for c in conversations)
     ):
         selected = (
-            _bandeja_closed_qs()
+            _whatsapp_closed_qs()
             .filter(pk=selected_id)
             .select_related(
                 "channel",
@@ -211,7 +215,7 @@ def _bandeja_list_context(request, selected_id=None):
         if selected:
             conversations.insert(0, _serialize_conversation(selected))
 
-    base = _bandeja_base_qs()
+    base = _whatsapp_base_qs()
     mine_count = base.filter(assigned_to=request.user).count()
     unassigned_count = base.filter(assigned_to__isnull=True).count()
     unanswered_count = (
@@ -219,7 +223,7 @@ def _bandeja_list_context(request, selected_id=None):
         .filter(_last_direction=Message.Direction.INBOUND)
         .count()
     )
-    closed_count = _bandeja_closed_qs().count()
+    closed_count = _whatsapp_closed_qs().count()
     filter_query = _filter_query_for_tab(active_tab)
 
     return {
@@ -297,7 +301,7 @@ def _handle_update_case(request, conversation: Conversation):
     )
     if status != Conversation.Status.ESCALADO:
         conversation.escalated_to = None
-    if conversation.assigned_to_id in (None, request.user.id) or request.user.is_staff:
+    if user_can_act_on_conversation(conversation, request.user) or conversation.assigned_to_id is None:
         conversation.assigned_to_id = (
             int(assigned_to_id) if assigned_to_id.isdigit() else conversation.assigned_to_id
         )
@@ -343,28 +347,17 @@ def _handle_close_case(request, conversation: Conversation):
     priority = (request.POST.get("priority") or "").strip()
     department_id = request.POST.get("department") or ""
     assigned_to_id = request.POST.get("assigned_to") or ""
-    valid_priorities = {c.value for c in Conversation.Priority}
-    if priority and priority not in valid_priorities:
-        messages.error(request, "Prioridad inválida.")
+    try:
+        close_conversation(
+            conversation.id,
+            request.user,
+            assigned_to_id=int(assigned_to_id) if assigned_to_id.isdigit() else None,
+            department_id=int(department_id) if department_id.isdigit() else None,
+            priority=priority or None,
+        )
+    except CloseError as exc:
+        messages.error(request, exc.message)
         return False
-
-    if conversation.assigned_to_id in (None, request.user.id) or request.user.is_staff:
-        if assigned_to_id.isdigit():
-            conversation.assigned_to_id = int(assigned_to_id)
-    if not conversation.assigned_to_id:
-        conversation.assigned_to = request.user
-
-    if not conversation.claimed_at:
-        mark_claimed(conversation, conversation.assigned_to or request.user, assign=False)
-
-    conversation.department_id = int(department_id) if department_id.isdigit() else conversation.department_id
-    if priority:
-        conversation.priority = priority
-    conversation.status = Conversation.Status.CERRADO
-    conversation.escalated_to = None
-    conversation.save()
-    mark_closed(conversation, request.user)
-    broadcast_conversation_update(conversation)
     messages.success(request, "Caso cerrado correctamente.")
     return True
 
@@ -449,7 +442,13 @@ def caso_detail(request, case_id):
             except ClaimError as exc:
                 messages.error(request, exc.message)
         elif action == "update_case":
-            _handle_update_case(request, conversation)
+            if not (
+                user_can_act_on_conversation(conversation, request.user)
+                or conversation.assigned_to_id is None
+            ):
+                messages.error(request, "Solo el asesor asignado o un administrador puede gestionar este caso.")
+            else:
+                _handle_update_case(request, conversation)
         elif action == "close_case":
             if is_closed:
                 messages.info(request, "El caso ya estaba cerrado.")
@@ -468,7 +467,7 @@ def caso_detail(request, case_id):
     comments = conversation.comments.select_related("author").all()
     serialized = _serialize_conversation(conversation)
     can_reply = advisor_can_reply(conversation, request.user)
-    is_owner = conversation.assigned_to_id == request.user.id
+    is_owner = conversation.assigned_to_id == request.user.id or request.user.is_staff
     context = _bandeja_list_context(request, selected_id=conversation.id)
     context.update(
         {
@@ -514,6 +513,7 @@ def caso_detail(request, case_id):
             "assigned_to_other": bool(
                 conversation.assigned_to_id
                 and conversation.assigned_to_id != request.user.id
+                and not request.user.is_staff
                 and conversation.status != Conversation.Status.CERRADO
             ),
         }

@@ -317,3 +317,5 @@ class ReplyCreateSerializer(serializers.Serializer):
     attachments = serializers.ListField(
         child=serializers.FileField(), required=False
     )
+    template_id = serializers.IntegerField(required=False)
+    template_params = serializers.DictField(required=False)

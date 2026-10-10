@@ -6,16 +6,9 @@ from typing import Any
 from django.utils import timezone
 
 from ..models import ChatConversation
-from ..services.bot_service import trigger_handoff
 from .responder import Responder, generate_response
 from .schedule import BusinessSchedule, get_business_schedule
 from .validation import validate_question
-
-
-def _map_channel_code(channel: str) -> str:
-    """cases.Channel.Code solo conoce whatsapp/facebook/instagram/web; el
-    widget web deja el ChatConversation.channel en su default 'webchat'."""
-    return 'web' if channel in ('webchat', 'web') else channel
 
 
 class ChatbotWorkflow:
@@ -87,34 +80,16 @@ class ChatbotWorkflow:
         self.conversation.status = ChatConversation.STATUS_PENDING
         self.conversation.flow_state = 'pending'
         self.conversation.escalated_at = current_time or timezone.now()
-        self._add_message('user', question)
-
-        user_data = {'phone': self.conversation.external_user_id} if self.conversation.external_user_id else {}
-        history = [
-            {'sender': entry.get('author'), 'text': entry.get('content')}
-            for entry in self.conversation.messages
-        ]
-        handoff = trigger_handoff(
-            user_data,
-            self.conversation.escalation_reason or question[:120],
-            history,
-            channel_code=_map_channel_code(self.conversation.channel),
-        )
-        self.conversation.linked_ticket_number = handoff.get('ticket_number', '')
-
         message = (
             'Hemos recibido tu solicitud. Un asesor estará disponible para atenderte pronto.'
             if is_open else
             'Hemos recibido tu solicitud. Actualmente estamos fuera del horario de atención. '
             'Tu mensaje queda pendiente y será atendido dentro del horario establecido.'
         )
-        message = f'{message} Tu número de ticket es {self.conversation.linked_ticket_number}.'
+        self._add_message('user', question)
         self._add_message('bot', message)
         self._save()
-        return self._result(
-            'pending', message, valid=True, within_business_hours=is_open,
-            ticket_number=self.conversation.linked_ticket_number,
-        )
+        return self._result('pending', message, valid=True, within_business_hours=is_open)
 
     def _add_message(self, author: str, content: str) -> None:
         self.conversation.messages.append({
@@ -126,8 +101,7 @@ class ChatbotWorkflow:
     def _save(self) -> None:
         self.conversation.save(update_fields=[
             'status', 'messages', 'escalation_reason', 'advisor_question', 'escalated_at',
-            'case_conversation', 'flow_state', 'last_question', 'linked_ticket_number',
-            'updated_at',
+            'case_conversation', 'flow_state', 'last_question', 'updated_at',
         ])
 
     def _result(self, state: str, message: str, **extra: Any) -> dict[str, Any]:

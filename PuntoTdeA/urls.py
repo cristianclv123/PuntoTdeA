@@ -24,7 +24,6 @@ from communications.meta_console_views import send_test_template as meta_console
 from communications.meta_console_views import validate_credentials as meta_console_validate
 from communications.meta_console_views import window_status as meta_console_window
 from communications.webhooks.meta_webhook import whatsapp_webhook
-from knowledge import views as knowledge_views
 from . import views
 
 urlpatterns = [
@@ -63,10 +62,6 @@ urlpatterns = [
         meta_console_config,
         name='meta-whatsapp-config',
     ),
-
-    # Asistente público (sin login): misma vista que knowledge:chatbot,
-    # expuesta con una URL de cara al visitante.
-    path('asistente/', knowledge_views.chatbot, name='asistente'),
 
     path('api/cases/', include('cases.api.urls')),
     path('api/knowledge/', include('knowledge.api.urls')),
