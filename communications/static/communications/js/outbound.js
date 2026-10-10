@@ -1374,8 +1374,8 @@ const OutboundUI = (() => {
             const isDraft = kind === 'draft';
             const id = isDraft ? template.id : template.meta_id;
             const source = isDraft
-                ? '<span class="template-source template-source--draft">Borrador local</span>'
-                : '<span class="template-source template-source--meta">Meta</span>';
+                ? '<span class="template-source template-source--draft" title="Borrador local" aria-label="Borrador local"><i class="bi bi-file-earmark-text" aria-hidden="true"></i></span>'
+                : '<span class="template-source template-source--meta" title="Plantilla de Meta" aria-label="Plantilla de Meta"><i class="bi bi-whatsapp" aria-hidden="true"></i></span>';
             const category = CATEGORY_LABELS[template.category] || template.category || 'Sin categoría';
             const statusRow = isDraft
                 ? `<div class="d-flex align-items-center gap-2 flex-wrap">

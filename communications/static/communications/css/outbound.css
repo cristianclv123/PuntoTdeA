@@ -642,12 +642,13 @@
 .template-source {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 2px 9px;
-    border-radius: 999px;
-    white-space: nowrap;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    line-height: 1;
+    flex: 0 0 auto;
 }
 
 .template-source--draft { background: rgba(96, 165, 250, 0.18); color: #93c5fd; }
