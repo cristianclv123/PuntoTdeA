@@ -53,6 +53,8 @@ class WhatsAppFlowTests(TestCase):
             channel='whatsapp',
             external_user_id='573001112249',
         )
+        conversation.case_conversation.status = CaseConversation.Status.CERRADO
+        conversation.case_conversation.save(update_fields=['status'])
         user = get_user_model().objects.create_user(
             username='knowledge-ticket-status-test',
             password='test-password',
@@ -73,6 +75,11 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(response.data['ticket_id'], conversation.case_conversation_id)
         self.assertEqual(response.data['status'], CaseConversation.Status.PENDIENTE)
         get_status.assert_called_once_with(conversation.case_conversation_id)
+        conversation.case_conversation.refresh_from_db()
+        self.assertEqual(
+            conversation.case_conversation.status,
+            CaseConversation.Status.CERRADO,
+        )
 
     def test_knowledge_ticket_status_endpoint_requires_authentication(self):
         conversation = _manager(ChatConversation).create(
@@ -391,6 +398,8 @@ class WhatsAppFlowTests(TestCase):
             external_user_id='573001112241',
         )
         previous_case = previous.case_conversation
+        previous_case.status = CaseConversation.Status.CERRADO
+        previous_case.save(update_fields=['status'])
 
         with patch(
             'knowledge.chatbot.workflow.generate_response',

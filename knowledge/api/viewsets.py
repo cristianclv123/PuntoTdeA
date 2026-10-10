@@ -1,4 +1,7 @@
 """ViewSets CRUD para el contenido de la base de conocimiento."""
+from typing import TypeVar, cast
+
+from django.db import models
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import mixins, permissions, serializers, status, viewsets
@@ -6,7 +9,6 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
-from cases.models import Conversation as CaseConversation
 from knowledge.chatbot.case_status import CaseStatusAPIError, get_case_status
 from knowledge.models import Category, ChatConversation, FAQ, Intent, KnowledgeArticle
 from knowledge.services.import_service import import_articles_from_excel, import_faqs_from_excel
@@ -20,6 +22,14 @@ from .serializers import (
     IntentSerializer,
     KnowledgeArticleSerializer,
 )
+
+
+_ModelT = TypeVar("_ModelT", bound=models.Model)
+
+
+def _model_manager(model: type[_ModelT]) -> models.Manager[_ModelT]:
+    """Devuelve el manager de Django con su tipo concreto para Pylance."""
+    return cast(models.Manager[_ModelT], getattr(model, "objects"))
 
 
 _import_result_serializer = inline_serializer(
@@ -46,19 +56,19 @@ def _import_result_response(result):
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
+    queryset = _model_manager(Category).all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]
 
 
 class IntentViewSet(viewsets.ModelViewSet):
-    queryset = Intent.objects.all()
+    queryset = _model_manager(Intent).all()
     serializer_class = IntentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
 
 class KnowledgeArticleViewSet(viewsets.ModelViewSet):
-    queryset = KnowledgeArticle.objects.select_related("category", "intent").all()
+    queryset = _model_manager(KnowledgeArticle).select_related("category", "intent").all()
     serializer_class = KnowledgeArticleSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -88,7 +98,7 @@ class KnowledgeArticleViewSet(viewsets.ModelViewSet):
 
 
 class FAQViewSet(viewsets.ModelViewSet):
-    queryset = FAQ.objects.select_related("category", "intent").all()
+    queryset = _model_manager(FAQ).select_related("category", "intent").all()
     serializer_class = FAQSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -119,7 +129,7 @@ class ChatConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
     """Solo lectura: el estado lo muta ChatbotWorkflow (workflow.py) y el
     webhook de WhatsApp, no un CRUD genérico."""
 
-    queryset = ChatConversation.objects.all()
+    queryset = _model_manager(ChatConversation).all()
     serializer_class = ChatConversationSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -163,9 +173,6 @@ class ChatConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
                 {"detail": str(exc)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-
-        if remote_status != conversation.case_conversation.status:
-            CaseConversation.objects.filter(pk=ticket_id).update(status=remote_status)
 
         return Response({
             "conversation_id": conversation.pk,

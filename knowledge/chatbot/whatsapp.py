@@ -168,9 +168,6 @@ def _case_ticket_status(conversation: ChatConversation) -> str | None:
             exc,
         )
         return conversation.case_conversation.status
-    if status != conversation.case_conversation.status:
-        conversation.case_conversation.status = status
-        conversation.case_conversation.save(update_fields=['status'])
     return status
 
 
