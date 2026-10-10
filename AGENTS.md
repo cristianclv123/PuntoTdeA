@@ -104,18 +104,18 @@ Meta WhatsApp Cloud API. Front-end con templates Django + `static/css/styles.css
   `collectstatic` del build, `{% static %}` falla con
   "Missing staticfiles manifest entry".
 - En plan gratuito **no existe `preDeployCommand`**: las migraciones corren en el
-  `CMD` del Dockerfile.
-- **No pongas `dockerCommand` en `render.yaml`.** Render lo pasa como una sola
-  cadena, asi que anidar `/bin/bash -c "..."` ahi rompe el escapado de comillas y
-  el contenedor sale con 127 (`command not found`). El `CMD` del Dockerfile es la
-  unica fuente del arranque.
-- **El superusuario se crea en el `CMD`**, con `createsuperuser --noinput` y las
-  variables `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD`. Es la unica
-  opcion: el plan free no tiene Shell y la Postgres free no expone URL externa,
-  asi que el arranque es el unico momento en que corre codigo. El
-  `( ... || echo ... )` es obligatorio porque en cada redeploy el comando falla con
-  "already taken" y sin el tumbaba el deploy. A proposito no resetea la
-  contrasena de un usuario existente.
+  **comando de arranque** (`entrypoint.sh`).
+- **No pongas `dockerCommand`** ni en `render.yaml` ni en el panel de Render:
+  Render lo pasa como una sola cadena, asi que anidar `/bin/bash -c "..."` ahi
+  rompe el escapado de comillas y el contenedor sale con 127
+  (`command not found`). Deja **Docker Command vacio** en el panel para que Render
+  use el `CMD` del Dockerfile (`sh /app/entrypoint.sh`).
+- **El superusuario se crea en `entrypoint.sh`**, con `createsuperuser --noinput`
+  y las variables `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD`. Es la
+  unica opcion: el plan free no tiene Shell y la Postgres free no expone URL
+  externa, asi que el arranque es el unico momento en que corre codigo. El
+  `|| echo` convierte en no-op el "already taken" de cada redeploy y a proposito
+  no resetea la contrasena de un usuario existente.
 - **Quitar una clave de `render.yaml` no la borra de Render.** El valor guardado
   en el panel sigue mandando; hay que limpiarlo a mano en *Settings*. Solo la
   rama y los `envVars` se administran bien desde el blueprint.

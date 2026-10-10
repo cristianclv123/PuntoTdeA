@@ -10,6 +10,11 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . /app/
 
+# El entrypoint debe viajar con saltos de linea LF: en Windows git puede dejarlo
+# en CRLF y dentro del contenedor el shell falla con "not found" por el \r.
+# Normalizamos y le damos permiso de ejecucion.
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
 # Render no sirve los estaticos: los deja en disco y whitenoise los entrega.
 # Necesita un SECRET_KEY para arrancar, aunque aqui solo se firmen manifests.
 RUN DJANGO_SECRET_KEY=collectstatic-build-only \
@@ -19,20 +24,17 @@ RUN DJANGO_SECRET_KEY=collectstatic-build-only \
 EXPOSE 8000
 
 # Daphne (no runserver) porque el proyecto usa Channels/WebSocket.
-# Las migraciones se ejecutan aqui: `preDeployCommand` no existe en plan free.
+# El arranque completo (migraciones + superusuario + Daphne) vive en
+# entrypoint.sh, porque en el plan free de Render no existe `preDeployCommand`
+# (es solo para planes pagos). Ver docs/despliegue-render.md.
 #
-# Este CMD es la unica fuente de verdad del arranque. NO lo sobreescribas con
-# `dockerCommand` en render.yaml: Render pasa ese valor como una sola cadena y
-# anidar `/bin/bash -c "..."` ahi rompe el escapado de comillas (sale con 127).
-# `${PORT:-8000}` lo resuelve el propio shell, asi que ya respeta el PORT de
-# Render sin necessidade de configuracion extra.
-# El superusuario tambien se crea aqui. El plan free no da Shell y la Postgres
-# free no expone URL externa, asi que el arranque del contenedor es el UNICO
-# momento en que corre codigo en Render: si no va en este CMD, no hay forma de
-# crear el usuario. `createsuperuser --noinput` lee el usuario del entorno
-# (DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD) y nunca muestra la contrasena.
+# NO lo sobreescribas con `dockerCommand`: ni en `render.yaml` ni en el panel de
+# Render (Settings -> Docker Command). Render pasa ese valor como una sola cadena
+# y anidar `/bin/bash -c "..."` ahi rompe el escapado de comillas (sale con 127).
+# Deja "Docker Command" VACIO en el panel para que Render use este CMD.
 #
-# El `( ... || echo ... )` es obligatorio: en cada redeploy el comando falla con
-# "That username is already taken", y sin ese parentesis tumbaba el deploy
-# entero. A proposito NO resetea la contrasena de un usuario ya existente.
-CMD ["sh", "-c", "python manage.py migrate --noinput && (python manage.py createsuperuser --noinput || echo 'superusuario ya existe, se conserva') && daphne -b 0.0.0.0 -p ${PORT:-8000} PuntoTdeA.asgi:application"]
+# El superusuario se crea en el arranque: el plan free no da Shell y la Postgres
+# free no expone URL externa, asi que el arranque es el UNICO momento en que
+# corre codigo en Render. `createsuperuser --noinput` lee DJANGO_SUPERUSER_* y
+# nunca muestra la contrasena. A proposito NO resetea la de un usuario existente.
+CMD ["sh", "/app/entrypoint.sh"]

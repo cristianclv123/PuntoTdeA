@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from cases.models import Channel, Contact, Conversation, Message
 from cases.services.realtime import broadcast_new_message
+from communications.adapters.meta_adapter import MetaAdapter, send_text_message
 
 
 @dataclass
@@ -130,6 +132,47 @@ def ingest_inbound_message(payload: InboundPayload) -> tuple[Conversation, Messa
     return conversation, message, True
 
 
+def _channel_code(conversation: Conversation) -> str:
+    channel = getattr(conversation, "channel", None)
+    if channel is None and conversation.channel_id:
+        channel = Channel.objects.filter(pk=conversation.channel_id).first()
+    return getattr(channel, "code", "") or ""
+
+
+def _contact_phone(conversation: Conversation) -> str:
+    contact = getattr(conversation, "contact", None)
+    if contact is None and conversation.contact_id:
+        contact = Contact.objects.filter(pk=conversation.contact_id).first()
+    return (getattr(contact, "phone", "") or "").strip()
+
+
+def _render_template_body(template, params: dict | None) -> str:
+    text = template.body_text or ""
+    for key, value in (params or {}).items():
+        text = text.replace(f"{{{{{key}}}}}", str(value))
+    return text.strip()
+
+
+def _dispatch_whatsapp(*, conversation: Conversation, body: str, template=None, template_params=None) -> str:
+    phone = _contact_phone(conversation)
+    if template is not None:
+        result = MetaAdapter().send_template_message(phone, template, template_params or {})
+        if not result.success:
+            raise ValidationError(result.error or "No se pudo enviar la plantilla por WhatsApp.")
+        return result.provider_message_id or ""
+
+    if _channel_code(conversation) != "whatsapp":
+        return ""
+    if not (body or "").strip():
+        return ""
+
+    result = send_text_message(phone, body)
+    if not result.success:
+        raise ValidationError(result.error or "No se pudo enviar el mensaje por WhatsApp.")
+    return result.provider_message_id or ""
+
+
+@transaction.atomic
 def create_outbound_message(
     conversation: Conversation,
     body: str,
@@ -137,27 +180,38 @@ def create_outbound_message(
     external_id: str = "",
     user=None,
     uploaded_files=None,
+    template=None,
+    template_params=None,
 ) -> Message:
-    from django.core.exceptions import ValidationError
-
     from cases.models import MessageAttachment
     from cases.services.attachments import validate_uploaded_file
 
     sent_at = timezone.now()
     files = list(uploaded_files or [])
-    if not (body or "").strip() and not files:
+    text = (body or "").strip()
+    if template is not None and not text:
+        text = _render_template_body(template, template_params)
+    if not text and not files:
         raise ValidationError("Debes escribir un mensaje o adjuntar un archivo.")
+
+    kinds = [validate_uploaded_file(uploaded) for uploaded in files]
+
+    provider_id = external_id or _dispatch_whatsapp(
+        conversation=conversation,
+        body=text,
+        template=template,
+        template_params=template_params,
+    )
 
     message = Message.objects.create(
         conversation=conversation,
         direction=Message.Direction.OUTBOUND,
-        body=(body or "").strip() or ("📎 Archivo adjunto" if files else ""),
-        external_id=external_id,
+        body=text or ("📎 Archivo adjunto" if files else ""),
+        external_id=provider_id,
         sent_at=sent_at,
     )
 
-    for uploaded in files:
-        kind = validate_uploaded_file(uploaded)
+    for uploaded, kind in zip(files, kinds):
         MessageAttachment.objects.create(
             message=message,
             file=uploaded,
@@ -167,8 +221,7 @@ def create_outbound_message(
             size_bytes=uploaded.size,
         )
 
-    updates = ["last_message_at", "updated_at"]
     conversation.last_message_at = sent_at
-    conversation.save(update_fields=updates)
+    conversation.save(update_fields=["last_message_at", "updated_at"])
     broadcast_new_message(message)
     return message
