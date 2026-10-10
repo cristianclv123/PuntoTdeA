@@ -11,6 +11,12 @@ from .schedule import BusinessSchedule, get_business_schedule
 from .validation import validate_question
 
 
+FOLLOW_UP_MESSAGE = (
+    '¿Tienes otra duda, necesitas hablar con un asesor o ya quedó '
+    'resuelta tu duda? Responde sí para continuar o no si ya no necesitas ayuda.'
+)
+
+
 class ChatbotWorkflow:
     def __init__(
         self,
@@ -47,18 +53,24 @@ class ChatbotWorkflow:
                 f'{answer}\n\nUn asesor te dará respuesta en cuanto esté disponible, '
                 'dentro del horario de atención.'
             )
-        answer = (
-            f'{answer}\n\n¿Tienes otra duda, necesitas hablar con un asesor o ya quedó '
-            'resuelta tu duda? Responde sí para continuar o no si ya no necesitas ayuda.'
-        )
+        answer_message = answer
+        answer = f'{answer}\n\n{FOLLOW_UP_MESSAGE}'
         state = 'waiting_confirmation'
         self.conversation.flow_state = state
         self._add_message('bot', answer, awaiting_advisor=needs_human_attention)
         self._save()
-        result = self._result(state, answer, valid=True)
+        result = self._result(
+            state,
+            answer,
+            valid=True,
+            answer_message=answer_message,
+            follow_up_message=FOLLOW_UP_MESSAGE,
+        )
         result.update(response)
         result['message'] = answer
         result['state'] = state
+        result['answer_message'] = answer_message
+        result['follow_up_message'] = FOLLOW_UP_MESSAGE
         return result
 
     def confirm_more_help(self, needs_more_help: bool) -> dict[str, Any]:

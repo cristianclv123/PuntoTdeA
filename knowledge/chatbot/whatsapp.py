@@ -18,7 +18,7 @@ from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
 from ..models import ChatConversation
 from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
-from .workflow import ChatbotWorkflow
+from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
 
 
 logger = logging.getLogger(__name__)
@@ -151,6 +151,8 @@ def _submit_question(
     question: str,
 ) -> list[str]:
     result = workflow.submit_question(question)
+    if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
+        return [result['answer_message'], result['follow_up_message']]
     return [result['message']]
 
 
@@ -197,10 +199,23 @@ def handle_message(sender: str, text: str) -> list[str]:
         if (
             conversation.status == ChatConversation.STATUS_PENDING
             or conversation.flow_state == 'pending'
+            or conversation.status == ChatConversation.STATUS_ENDED
+            or conversation.flow_state == 'ended'
         ):
             conversation.status = ChatConversation.STATUS_ACTIVE
             conversation.flow_state = 'help_options'
             conversation.save(update_fields=['status', 'flow_state', 'updated_at'])
+    elif conversation and (
+        conversation.status in {
+            ChatConversation.STATUS_ENDED,
+            ChatConversation.STATUS_PENDING,
+        }
+        or conversation.flow_state in {'ended', 'pending'}
+    ):
+        conversation.status = ChatConversation.STATUS_ENDED
+        conversation.flow_state = 'ended'
+        conversation.save(update_fields=['status', 'flow_state', 'updated_at'])
+        start_new_conversation = True
 
     if conversation and conversation.status == ChatConversation.STATUS_ACTIVE:
         inactivity_result = close_if_inactive(conversation)
@@ -261,7 +276,21 @@ def handle_message(sender: str, text: str) -> list[str]:
             return [result['message'], _ticket_confirmation(conversation, ticket)]
         return [result['message']]
     if state in {'ended', 'pending'}:
-        return ['Esta conversación ya está cerrada. Envía un nuevo mensaje para iniciar otra conversación.']
+        conversation.status = ChatConversation.STATUS_ENDED
+        conversation.flow_state = 'ended'
+        conversation.save(update_fields=['status', 'flow_state', 'updated_at'])
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id=sender,
+            status=ChatConversation.STATUS_ACTIVE,
+            contact=contact,
+        )
+        workflow = ChatbotWorkflow(conversation)
+        greeting = workflow.start()['message']
+        if _requests_advisor(text):
+            reply = workflow.escalate('El usuario solicitó atención humana.')['message']
+            return [greeting, reply]
+        return [greeting, *_submit_question(workflow, text)]
     workflow.start()
     return _submit_question(workflow, text)
 

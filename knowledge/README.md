@@ -84,7 +84,9 @@ el chat continúa activo y el bot puede responder nuevas preguntas; cuando el as
 cierra el ticket, un mensaje posterior inicia una conversación nueva.
 Después de cada respuesta, el bot pregunta si el usuario tiene otra duda, necesita
 un asesor o ya resolvió su consulta. Si responde que sí, le pide elegir entre hacer
-otra pregunta o hablar con un asesor; si responde que no, finaliza el chat.
+otra pregunta o hablar con un asesor; la pregunta de seguimiento se envía como un
+mensaje separado. Si responde que no, finaliza el chat; cualquier mensaje posterior
+inicia una conversación nueva.
 
 Las conversaciones de WhatsApp activas se cierran con un mensaje después de
 cinco minutos sin actividad solo si el último mensaje fue del bot y no hay una duda
