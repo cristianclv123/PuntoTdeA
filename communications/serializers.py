@@ -30,9 +30,13 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "meta_template_name", "language", "category",
             "body_text", "variable_types", "header_type", "header_media_url", "buttons",
-            "status", "param_count", "created_at", "updated_at",
+            "status", "meta_template_id", "meta_status", "meta_rejection_reason",
+            "meta_synced_at", "param_count", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = [
+            "id", "meta_template_id", "meta_status", "meta_rejection_reason",
+            "meta_synced_at", "created_at", "updated_at",
+        ]
 
 
 class AudienceSegmentSerializer(serializers.ModelSerializer):

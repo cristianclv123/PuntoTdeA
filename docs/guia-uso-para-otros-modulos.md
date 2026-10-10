@@ -72,6 +72,7 @@ conserva las variables viejas y parece que el cambio nunca se aplicó).
 | --- | --- | --- |
 | `META_ACCESS_TOKEN` | Enviar mensajes | Es el token permanente de la app en Meta. |
 | `WHATSAPP_PHONE_NUMBER_ID` | Enviar y recibir del número correcto | Los mensajes de otro número se descartan. |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | Crear y consultar plantillas en Meta | ID de la WABA. Sin esto, "Enviar a Meta" responde "Falta configurar". |
 | `META_APP_SECRET` | Recibir eventos | Firma `X-Hub-Signature-256`. Sin ella todo `POST` al webhook responde `403`. |
 | `META_VERIFY_TOKEN` | Verificación del webhook | Debe coincidir con el que se registra en Meta. |
 | `META_APP_ID` | Nada (opcional) | No la usa el código; no bloquea la integración. |

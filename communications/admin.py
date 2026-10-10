@@ -41,8 +41,8 @@ class AudienceSegmentAdmin(admin.ModelAdmin):
 
 @admin.register(MessageTemplate)
 class MessageTemplateAdmin(admin.ModelAdmin):
-    list_display = ("name", "meta_template_name", "category", "status", "param_count")
-    list_filter = ("category", "status")
+    list_display = ("name", "meta_template_name", "category", "status", "meta_status", "param_count")
+    list_filter = ("category", "status", "meta_status")
 
 
 class BroadcastRecipientInline(admin.TabularInline):

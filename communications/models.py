@@ -147,6 +147,28 @@ class MessageTemplate(models.Model):
     )
 
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.DRAFT)
+
+    # --- Espejo del estado en Meta (WhatsApp Business Account) ---
+    # Meta es la fuente de verdad de la aprobación: al pulsar "Enviar a Meta"
+    # se crea la plantilla por API y aquí se guarda lo que responde. `status`
+    # es la traducción local de `meta_status`; el valor crudo se conserva para
+    # mostrarlo tal cual (PENDING, APPROVED, REJECTED, PAUSED...).
+    meta_template_id = models.CharField(
+        "ID en Meta",
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text="ID que devuelve Meta al crear la plantilla.",
+    )
+    meta_status = models.CharField(
+        "Estado en Meta",
+        max_length=32,
+        blank=True,
+        help_text="Valor crudo de Meta: PENDING, APPROVED, REJECTED, PAUSED...",
+    )
+    meta_rejection_reason = models.TextField("Motivo de rechazo de Meta", blank=True)
+    meta_synced_at = models.DateTimeField("Última consulta a Meta", null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

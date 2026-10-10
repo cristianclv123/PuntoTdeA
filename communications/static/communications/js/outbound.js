@@ -1262,6 +1262,7 @@ const OutboundUI = (() => {
     function initTemplatesPage() {
         const newTemplateBtn = document.getElementById('newTemplateBtn');
         const templateList = document.getElementById('templateList');
+        const refreshStatesBtn = document.getElementById('refreshTemplatesBtn');
         if (!newTemplateBtn || !templateList) return;
 
         const modalId = 'createTemplateModal';
@@ -1290,7 +1291,7 @@ const OutboundUI = (() => {
                                             <label for="templateLanguage" class="form-label">Idioma</label>
                                             <input id="templateLanguage" name="language" class="form-control" maxlength="10" value="es_CO" required>
                                         </div>
-                                        <div class="col-md-4">
+                                        <div class="col-md-8">
                                             <label for="templateCategory" class="form-label">Categoría</label>
                                             <select id="templateCategory" name="category" class="form-select" required>
                                                 <option value="utility" selected>Utilidad</option>
@@ -1298,14 +1299,11 @@ const OutboundUI = (() => {
                                                 <option value="authentication">Autenticación</option>
                                             </select>
                                         </div>
-                                        <div class="col-md-4">
-                                            <label for="templateStatus" class="form-label">Estado</label>
-                                            <select id="templateStatus" name="status" class="form-select" required>
-                                                <option value="draft" selected>Borrador</option>
-                                                <option value="pending">Pendiente de aprobación</option>
-                                                <option value="approved">Aprobada</option>
-                                                <option value="rejected">Rechazada</option>
-                                            </select>
+                                        <div class="col-12">
+                                            <p class="small text-muted mb-0">
+                                                El estado (pendiente, aprobada o rechazada) lo controla Meta.
+                                                Guarda la plantilla y usa <strong>Enviar a Meta</strong> para enviarla a aprobación.
+                                            </p>
                                         </div>
                                         <div class="col-12">
                                             <label for="templateBody" class="form-label">Contenido del mensaje</label>
@@ -1390,6 +1388,103 @@ const OutboundUI = (() => {
             renderVariableTypes();
         });
 
+        let templatesCache = [];
+        let pollTimer = null;
+
+        const TEMPLATE_STATUS_LABELS = {
+            draft: 'Borrador',
+            pending: 'Pendiente de aprobación',
+            approved: 'Aprobada',
+            rejected: 'Rechazada',
+        };
+
+        const TEMPLATE_STATUS_CLASSES = {
+            draft: 'text-bg-secondary',
+            pending: 'text-bg-warning',
+            approved: 'text-bg-success',
+            rejected: 'text-bg-danger',
+        };
+
+        function templateStatusBadge(status) {
+            const key = String(status || 'draft');
+            const label = TEMPLATE_STATUS_LABELS[key] || key;
+            const cssClass = TEMPLATE_STATUS_CLASSES[key] || 'text-bg-secondary';
+            return `<span class="badge ${cssClass}">${escapeHtml(label)}</span>`;
+        }
+
+        function formatSyncedAt(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleString();
+        }
+
+        // Mientras haya plantillas pendientes, se consulta a Meta cada 20 s
+        // para reflejar la aprobación sin recargar la página a mano.
+        function managePolling(templates) {
+            const hasPending = templates.some((template) =>
+                String(template.meta_status || '').toUpperCase() === 'PENDING'
+                || template.status === 'pending'
+            );
+            if (hasPending && pollTimer === null) {
+                pollTimer = window.setInterval(() => refreshStates(true), 20000);
+            } else if (!hasPending && pollTimer !== null) {
+                window.clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        }
+
+        function renderTemplateCard(template) {
+            const metaId = template.meta_template_id || '';
+            const metaStatus = template.meta_status || '';
+            const metaInfo = metaId
+                ? `<div class="small text-muted mb-2">
+                       Meta ID: ${escapeHtml(metaId)}${metaStatus ? ` · Estado Meta: ${escapeHtml(metaStatus)}` : ''}${template.meta_synced_at ? ` · ${escapeHtml(formatSyncedAt(template.meta_synced_at))}` : ''}
+                   </div>`
+                : '<div class="small text-muted mb-2">Aún no enviada a Meta.</div>';
+            const rejection = template.meta_rejection_reason
+                ? `<div class="alert alert-danger py-1 px-2 small mb-2">${escapeHtml(template.meta_rejection_reason)}</div>`
+                : '';
+            const metaButton = metaId
+                ? `<button type="button" class="btn btn-outline-primary btn-sm" data-sync-template="${escapeHtml(template.id)}">
+                       <i class="bi bi-arrow-repeat me-1"></i>Actualizar estado
+                   </button>`
+                : `<button type="button" class="btn btn-outline-success btn-sm" data-send-template="${escapeHtml(template.id)}">
+                       <i class="bi bi-send me-1"></i>Enviar a Meta
+                   </button>`;
+
+            return `
+                <div class="col-md-6 col-xl-4">
+                    <div class="card outbound-card h-100 shadow-sm">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h3 class="h6 fw-bold mb-0">${escapeHtml(template.name)}</h3>
+                                <span class="badge text-bg-light">${escapeHtml(template.category)}</span>
+                            </div>
+                            <p class="small text-muted mb-2">${escapeHtml(template.meta_template_name)}</p>
+                            <div class="bg-light rounded p-3 mb-3 flex-grow-1">
+                                <p class="small mb-0">${escapeHtml(template.body_text)}</p>
+                            </div>
+                            <div class="small text-muted mb-2">
+                                Variables: ${escapeHtml(template.param_count)} · ${templateStatusBadge(template.status)}
+                            </div>
+                            ${metaInfo}
+                            ${rejection}
+                            <div class="d-flex gap-2 mt-auto">
+                                ${metaButton}
+                                <button type="button" class="btn btn-outline-success btn-sm" data-template-id="${escapeHtml(template.id)}" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" data-delete-template="${escapeHtml(template.id)}" title="Eliminar">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         async function loadTemplates(successMessage = '') {
             templateList.innerHTML = `
                 <div class="col-12 text-center py-5">
@@ -1410,6 +1505,7 @@ const OutboundUI = (() => {
                 if (!Array.isArray(templates)) {
                     throw new Error('La respuesta de plantillas no tiene un formato válido.');
                 }
+                templatesCache = templates;
 
                 const messageMarkup = successMessage
                     ? `<div class="col-12"><div class="alert alert-success" role="status">${escapeHtml(successMessage)}</div></div>`
@@ -1420,43 +1516,47 @@ const OutboundUI = (() => {
                             <div class="alert alert-info">No hay plantillas registradas.</div>
                         </div>
                     `;
+                    managePolling(templates);
                     return;
                 }
 
-                templateList.innerHTML = messageMarkup + templates.map((template) => `
-                    <div class="col-md-6 col-xl-4">
-                        <div class="card outbound-card h-100 shadow-sm">
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h3 class="h6 fw-bold mb-0">${escapeHtml(template.name)}</h3>
-                                    <span class="badge text-bg-light">${escapeHtml(template.category)}</span>
-                                </div>
-                                <p class="small text-muted mb-2">${escapeHtml(template.meta_template_name)}</p>
-                                <div class="bg-light rounded p-3 mb-3 flex-grow-1">
-                                    <p class="small mb-0">${escapeHtml(template.body_text)}</p>
-                                </div>
-                                <div class="small text-muted mb-3">
-                                    Variables: ${escapeHtml(template.param_count)}
-                                    · Estado: ${escapeHtml(template.status)}
-                                </div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-outline-success btn-sm flex-grow-1" data-template-id="${escapeHtml(template.id)}">
-                                        <i class="bi bi-pencil me-1"></i>Editar
-                                    </button>
-                                    <button type="button" class="btn btn-outline-danger btn-sm" data-delete-template="${escapeHtml(template.id)}" title="Eliminar">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
+                templateList.innerHTML = messageMarkup + templates.map(renderTemplateCard).join('');
+                managePolling(templates);
             } catch (error) {
                 console.error('Error al cargar plantillas:', error);
                 templateList.innerHTML = `
                     ${successMessage ? `<div class="col-12"><div class="alert alert-success" role="status">${escapeHtml(successMessage)}</div></div>` : ''}
                     <div class="col-12"><div class="alert alert-danger">No fue posible cargar las plantillas.</div></div>
                 `;
+            }
+        }
+
+        async function refreshStates(silent = false) {
+            if (refreshStatesBtn) refreshStatesBtn.disabled = true;
+            try {
+                const response = await fetch('/campanas/api/templates/consultar-estados/', {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok) {
+                    throw new Error(`Error HTTP ${response.status}`);
+                }
+                await loadTemplates(silent ? '' : 'Estados actualizados desde Meta.');
+            } catch (error) {
+                console.error('Error al actualizar estados:', error);
+                if (!silent) {
+                    templateList.insertAdjacentHTML('afterbegin', `
+                        <div class="col-12">
+                            <div class="alert alert-danger" role="alert">No fue posible actualizar los estados desde Meta.</div>
+                        </div>
+                    `);
+                }
+            } finally {
+                if (refreshStatesBtn) refreshStatesBtn.disabled = false;
             }
         }
 
@@ -1469,6 +1569,10 @@ const OutboundUI = (() => {
             saveButton.textContent = 'Guardar plantilla';
             modal.show();
         });
+
+        if (refreshStatesBtn) {
+            refreshStatesBtn.addEventListener('click', () => refreshStates(false));
+        }
 
         templateList.addEventListener('click', async (event) => {
             const editButton = event.target.closest('[data-template-id]');
@@ -1511,13 +1615,82 @@ const OutboundUI = (() => {
                 form.querySelector('[name="category"]').value = template.category || '';
                 form.querySelector('[name="body_text"]').value = template.body_text || '';
                 renderVariableTypes(template.variable_types || {});
-                form.querySelector('[name="status"]').value = template.status || '';
             } catch (error) {
                 console.error('Error al cargar plantilla:', error);
                 formError.textContent = 'No fue posible cargar la plantilla. Intenta nuevamente.';
                 formError.classList.remove('d-none');
             } finally {
                 saveButton.disabled = false;
+            }
+        });
+
+        templateList.addEventListener('click', async (event) => {
+            const sendButton = event.target.closest('[data-send-template]');
+            if (!sendButton || !templateList.contains(sendButton) || sendButton.disabled) return;
+
+            const templateId = sendButton.dataset.sendTemplate;
+            const original = sendButton.innerHTML;
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+
+            try {
+                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(templateId)}/enviar-a-meta/`, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || `Error HTTP ${response.status}`);
+                }
+                await loadTemplates(data.message || 'Plantilla enviada a Meta.');
+            } catch (error) {
+                console.error('Error al enviar la plantilla a Meta:', error);
+                sendButton.disabled = false;
+                sendButton.innerHTML = original;
+                templateList.insertAdjacentHTML('afterbegin', `
+                    <div class="col-12">
+                        <div class="alert alert-danger" role="alert">${escapeHtml(error.message || 'No fue posible enviar la plantilla a Meta.')}</div>
+                    </div>
+                `);
+            }
+        });
+
+        templateList.addEventListener('click', async (event) => {
+            const syncButton = event.target.closest('[data-sync-template]');
+            if (!syncButton || !templateList.contains(syncButton) || syncButton.disabled) return;
+
+            const templateId = syncButton.dataset.syncTemplate;
+            const original = syncButton.innerHTML;
+            syncButton.disabled = true;
+            syncButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Consultando...';
+
+            try {
+                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(templateId)}/consultar-estado/`, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || `Error HTTP ${response.status}`);
+                }
+                await loadTemplates(data.message || 'Estado actualizado.');
+            } catch (error) {
+                console.error('Error al consultar el estado:', error);
+                syncButton.disabled = false;
+                syncButton.innerHTML = original;
+                templateList.insertAdjacentHTML('afterbegin', `
+                    <div class="col-12">
+                        <div class="alert alert-danger" role="alert">${escapeHtml(error.message || 'No fue posible consultar el estado en Meta.')}</div>
+                    </div>
+                `);
             }
         });
 
@@ -1606,7 +1779,6 @@ const OutboundUI = (() => {
                 category: formData.get('category'),
                 body_text: formData.get('body_text'),
                 variable_types: variableTypes,
-                status: formData.get('status'),
             };
 
             try {

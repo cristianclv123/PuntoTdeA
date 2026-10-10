@@ -20,7 +20,7 @@ from .serializers import (
     MessageTemplateSerializer,
     SegmentImportSerializer,
 )
-from .services import campaign_service, segmentation_service
+from .services import campaign_service, meta_templates, segmentation_service
 from .services.test_send_registry import record_test_send
 
 
@@ -130,6 +130,13 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
     serializer_class = MessageTemplateSerializer
     permission_classes = [IsInternalService]
 
+    #: Traducción del tipo de fallo del servicio al código HTTP de respuesta.
+    _STATUS_BY_KIND = {
+        meta_templates.KIND_CONFIG: status.HTTP_503_SERVICE_UNAVAILABLE,
+        meta_templates.KIND_BUILD: status.HTTP_400_BAD_REQUEST,
+        meta_templates.KIND_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    }
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         try:
@@ -142,6 +149,56 @@ class MessageTemplateViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _sync_response(self, template, result):
+        """Respuesta común para las acciones que hablan con Meta."""
+        template.refresh_from_db()
+        payload = {
+            "success": result.ok,
+            "message": result.message,
+            "meta_id": result.meta_id,
+            "meta_status": result.meta_status,
+            "template": self.get_serializer(template).data,
+        }
+        if result.ok:
+            return Response(payload, status=status.HTTP_200_OK)
+        http_status = self._STATUS_BY_KIND.get(
+            result.kind, status.HTTP_502_BAD_GATEWAY
+        )
+        return Response(payload, status=http_status)
+
+    @extend_schema(request=None, responses=MessageTemplateSerializer)
+    @action(detail=True, methods=["post"], url_path="enviar-a-meta")
+    def enviar_a_meta(self, request, pk=None):
+        """POST /api/templates/{id}/enviar-a-meta/: crea la plantilla en Meta."""
+        template = self.get_object()
+        return self._sync_response(template, meta_templates.create_template(template))
+
+    @extend_schema(request=None, responses=MessageTemplateSerializer)
+    @action(detail=True, methods=["post"], url_path="consultar-estado")
+    def consultar_estado(self, request, pk=None):
+        """POST /api/templates/{id}/consultar-estado/: lee el estado desde Meta."""
+        template = self.get_object()
+        return self._sync_response(
+            template, meta_templates.fetch_template_status(template)
+        )
+
+    @extend_schema(request=None)
+    @action(detail=False, methods=["post"], url_path="consultar-estados")
+    def consultar_estados(self, request):
+        """POST /api/templates/consultar-estados/: refresca las ya enlazadas."""
+        updated = []
+        for template, result in meta_templates.refresh_linked():
+            updated.append(
+                {
+                    "id": template.pk,
+                    "ok": result.ok,
+                    "status": template.status,
+                    "meta_status": template.meta_status,
+                    "message": result.message,
+                }
+            )
+        return Response({"success": True, "count": len(updated), "updated": updated})
 
 
 class AudienceSegmentViewSet(viewsets.ModelViewSet):
