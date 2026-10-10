@@ -96,6 +96,10 @@ services:
         sync: false
       - key: WHATSAPP_PHONE_NUMBER_ID
         sync: false
+      # WABA: crear y consultar plantillas por API. Sin esto, el botón
+      # "Enviar a Meta" responde "Falta configurar".
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        sync: false
       - key: WHATSAPP_API_VERSION
         value: v21.0
       - key: META_GRAPH_API_URL

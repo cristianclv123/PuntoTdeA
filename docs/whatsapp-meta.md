@@ -41,6 +41,7 @@ no lo necesita.
    META_APP_SECRET=APP_SECRET_DE_META
    META_ACCESS_TOKEN=TOKEN_PERMANENTE_O_DE_SISTEMA
    WHATSAPP_PHONE_NUMBER_ID=ID_DEL_NUMERO_EMISOR
+   WHATSAPP_BUSINESS_ACCOUNT_ID=ID_DE_LA_WABA
    WHATSAPP_API_VERSION=v21.0
    ```
 
@@ -101,6 +102,34 @@ El endpoint responde al desafío `GET` de Meta y en `POST` exige la firma
 La programación de campañas no es parte de esta integración: el programador o
 worker del equipo de campañas debe invocar el envío en la fecha prevista y
 respetar los límites de Meta.
+
+## Plantillas: alta y aprobación
+
+La página **Plantillas** (`/campanas/plantillas/`) crea la plantilla en
+PuntoTdeA y la envía a Meta para su aprobación:
+
+1. **Nueva plantilla** guarda el borrador local (nombre interno, nombre en Meta,
+   idioma, categoría, cuerpo con variables y botones de URL).
+2. **Enviar a Meta** (`POST /campanas/api/templates/{id}/enviar-a-meta/`) crea la
+   plantilla por API con `POST /{WABA}/message_templates` y guarda el `id` que
+   devuelve Meta y su estado (`PENDING`/`APPROVED`/`REJECTED`).
+3. **Actualizar estado** (`POST /campanas/api/templates/{id}/consultar-estado/`)
+   vuelve a preguntar a Meta. El botón **Actualizar estados**
+   (`POST /campanas/api/templates/consultar-estados/`) refresca de una sola vez
+   las que ya están en Meta. Mientras haya pendientes, la página consulta sola
+   cada 20 s.
+
+El estado de la tarjeta es el que reporta Meta: se traduce su valor crudo
+(`meta_status`) al estado local y, si hay rechazo, se muestra el
+`meta_rejection_reason`.
+
+> Requiere `WHATSAPP_BUSINESS_ACCOUNT_ID` (el ID de la WABA) además del
+> `META_ACCESS_TOKEN`. Sin eso, el botón responde "Falta configurar".
+
+> Meta todavía no permite crear por API los encabezados de imagen, video o
+> documento sin subir antes el archivo: esas plantillas se crean en WhatsApp
+> Manager. El cuerpo con variables y los botones de URL sí se crean desde aquí
+> (se envían ejemplos automáticos de las variables, que Meta exige para revisar).
 
 ## Chatbot
 
