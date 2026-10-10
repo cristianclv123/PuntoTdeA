@@ -84,12 +84,12 @@ class ChatbotWorkflowTests(TestCase):
 
         response = self.workflow.submit_question('Pregunta sin respuesta')
 
-        self.assertEqual(response['state'], 'help_options')
+        self.assertEqual(response['state'], 'waiting_confirmation')
         self.assertIn('un asesor te dará respuesta', response['message'].lower())
         self.assertIn('horario de atención', response['message'])
-        self.assertIn('otras preguntas', response['message'])
+        self.assertIn('otra duda', response['message'])
         self.assertEqual(self.conversation.status, ChatConversation.STATUS_ACTIVE)
-        self.assertEqual(self.conversation.flow_state, 'help_options')
+        self.assertEqual(self.conversation.flow_state, 'waiting_confirmation')
 
     def test_user_can_request_more_help(self):
         self.workflow.submit_question('¿Dónde consulto mi horario?')

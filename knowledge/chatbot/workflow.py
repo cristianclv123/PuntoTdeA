@@ -45,12 +45,13 @@ class ChatbotWorkflow:
         if needs_human_attention:
             answer = (
                 f'{answer}\n\nUn asesor te dará respuesta en cuanto esté disponible, '
-                'dentro del horario de atención. Mientras tanto, puedes hacerme otras '
-                'preguntas o escribir "asesor" para solicitar atención humana.'
+                'dentro del horario de atención.'
             )
-            state = 'help_options'
-        else:
-            state = 'waiting_confirmation'
+        answer = (
+            f'{answer}\n\n¿Tienes otra duda, necesitas hablar con un asesor o ya quedó '
+            'resuelta tu duda? Responde sí para continuar o no si ya no necesitas ayuda.'
+        )
+        state = 'waiting_confirmation'
         self.conversation.flow_state = state
         self._add_message('bot', answer, awaiting_advisor=needs_human_attention)
         self._save()
@@ -62,7 +63,7 @@ class ChatbotWorkflow:
 
     def confirm_more_help(self, needs_more_help: bool) -> dict[str, Any]:
         if needs_more_help:
-            message = 'Claro. ¿Qué deseas hacer? Puedes ingresar una nueva pregunta o solicitar hablar con un asesor.'
+            message = '¿Quieres hacer otra pregunta o hablar con un asesor? Escribe tu duda o solicita un asesor.'
             state = 'help_options'
         else:
             message = 'Gracias por comunicarte con nosotros. Hemos finalizado el chat.'

@@ -79,7 +79,12 @@ suficiente confianza, mantiene activa la conversación y permite reformular la
 pregunta o solicitar un asesor. También informa que un asesor dará respuesta
 dentro del horario de atención; mientras tanto, el chatbot puede seguir atendiendo
 otras dudas. El ticket del módulo de casos se crea cuando el usuario completa
-explícitamente la solicitud de atención humana.
+explícitamente la solicitud de atención humana. Mientras el ticket siga abierto,
+el chat continúa activo y el bot puede responder nuevas preguntas; cuando el asesor
+cierra el ticket, un mensaje posterior inicia una conversación nueva.
+Después de cada respuesta, el bot pregunta si el usuario tiene otra duda, necesita
+un asesor o ya resolvió su consulta. Si responde que sí, le pide elegir entre hacer
+otra pregunta o hablar con un asesor; si responde que no, finaliza el chat.
 
 Las conversaciones de WhatsApp activas se cierran con un mensaje después de
 cinco minutos sin actividad solo si el último mensaje fue del bot y no hay una duda
