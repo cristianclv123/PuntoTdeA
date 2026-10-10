@@ -1,11 +1,17 @@
-# Solo BFF/servicios internos autorizados
-"""Permisos: esta API la consume únicamente el BFF (ver arquitectura),
-nunca el navegador del usuario final ni el widget público directamente.
+# API interna de comunicaciones (/campanas/api/).
+"""Permisos de la API interna.
 
-En desarrollo (DEBUG=True) se permite todo para facilitar pruebas locales.
-En producción exige un header `X-Internal-Token` que coincida con
-`settings.INTERNAL_API_TOKEN` — reemplazar por autenticación real
-(mTLS, JWT de servicio, etc.) cuando se defina con el equipo de BFF.
+Aunque nacio como API "solo BFF", la UI de `/campanas/` la consume desde el
+navegador con la sesion iniciada (mismo origen). Por eso se acepta cualquiera de
+las dos vias:
+
+- sesion autenticada (como el resto de APIs del proyecto), o
+- header `X-Internal-Token` que coincida con `settings.INTERNAL_API_TOKEN`
+  (consumidores de servicio / BFF con DEBUG=False).
+
+En desarrollo (`DEBUG=True`) se permite todo para facilitar pruebas locales.
+Reemplazar el token por autenticacion real (mTLS, JWT de servicio, etc.) cuando
+se defina con el equipo de BFF.
 """
 
 from django.conf import settings
@@ -18,6 +24,12 @@ class IsInternalService(BasePermission):
     def has_permission(self, request, view):
         if settings.DEBUG:
             return True
+
+        # La pagina /campanas/ llama a esta API desde el navegador con su sesion.
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated:
+            return True
+
         expected_token = getattr(settings, "INTERNAL_API_TOKEN", None)
         provided_token = request.headers.get("X-Internal-Token")
         return bool(expected_token) and provided_token == expected_token

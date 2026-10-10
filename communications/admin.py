@@ -8,6 +8,7 @@ from .models import (
     ContactEvent,
     MessageTemplate,
     SegmentMembership,
+    WhatsAppWebhookEvent,
 )
 from .services import campaign_service
 
@@ -80,3 +81,11 @@ class BroadcastRecipientAdmin(admin.ModelAdmin):
     list_display = ("campaign", "contact", "phone_snapshot", "status", "provider", "sent_at")
     list_filter = ("status", "provider")
     search_fields = ("phone_snapshot",)
+
+
+@admin.register(WhatsAppWebhookEvent)
+class WhatsAppWebhookEventAdmin(admin.ModelAdmin):
+    list_display = ("provider_message_id", "event_type", "status", "processed_at", "created_at")
+    list_filter = ("event_type", "status")
+    search_fields = ("provider_message_id", "event_key")
+    readonly_fields = ("event_key", "provider_message_id", "event_type", "status", "processed_at", "created_at")

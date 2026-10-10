@@ -7,7 +7,18 @@
 {% block page_subtitle %}Publica anuncios visibles para toda la comunidad{% endblock %} 
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'announcements/avisos.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'announcements/avisos.css' %}?v=8">
+
+{% if messages %}
+<div class="aviso-alerts" id="aviso-alerts">
+  {% for message in messages %}
+  <div class="aviso-alert aviso-alert-{{ message.tags|default:'info' }}" role="status">
+    <span class="aviso-alert-text">{{ message }}</span>
+    <button type="button" class="aviso-alert-close" aria-label="Cerrar mensaje">&times;</button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <!-- Checkbox invisible que controla la aparición/desaparición del segundo cuadro -->
 <input type="checkbox" id="toggle-nuevo-cuadro" />
@@ -20,97 +31,7 @@
 </div>
 
 <div class="two-col-layout">
-  <!-- Formulario 1 (El cuadro principal fijo) -->
-  <form class="card form-col" method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    <div class="card-title font-brand" style="margin-bottom: 18px">
-      Nuevo aviso
-    </div>
-
-    <div class="field-group" style="margin-bottom: 8px">
-      <label class="field-label" for="title1">Título del aviso</label>
-      <input
-        id="title1"
-        name="title"
-        class="field-input"
-        type="text"
-        value="Suspensión de clases — 28 de agosto"
-        required
-      />
-    </div>
-
-    <div class="field-group" style="margin-bottom: 8px">
-      <div class="field-label">Tipo de aviso</div>
-      <div class="segmented-row">
-        <label class="segmented-radio">
-          <input type="radio" name="type" value="urgente" checked />
-          <span class="segmented-label">Urgente</span>
-        </label>
-        <label class="segmented-radio">
-          <input type="radio" name="type" value="informativo" />
-          <span class="segmented-label">Informativo</span>
-        </label>
-      </div>
-    </div>
-
-    <div class="field-group" style="margin-bottom: 8px">
-      <label class="field-label" for="body1">Contenido</label>
-      <textarea id="body1" name="body" class="field-textarea" rows="4" required>Por mantenimiento de infraestructura, las clases presenciales del 28 de agosto quedan suspendidas. Las actividades académicas continúan de forma virtual.</textarea>
-    </div>
-
-    <div class="field-group" style="margin-bottom: 8px">
-      <label class="field-label" for="image1">Imagen (opcional)</label>
-      <input
-        id="image1"
-        name="image"
-        class="field-input"
-        type="file"
-        accept="image/*"
-      />
-    </div>
-
-    <div class="field-group" style="margin-bottom: 8px">
-      <div class="field-label">Audiencia</div>
-      <div class="segmented-row">
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="Estudiantes" checked />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            Estudiantes
-          </span>
-        </label>
-
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="Aspirantes" checked />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            Aspirantes
-          </span>
-        </label>
-
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="Egresados" />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            Egresados
-          </span>
-        </label>
-      </div>
-    </div>
-
-    <button
-      type="submit"
-      class="btn btn-primary btn-block"
-      style="margin-top: 8px"
-    >
-      {% icon 'megaphone' size=16 %} Publicar aviso
-    </button>
-  </form>
-
-  <!-- Formulario 2 (El cuadro oculto que aparece y se puede cerrar con la "✕") -->
+  <!-- Tarjeta de creacion: oculta hasta presionar "Crear aviso" arriba -->
   <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div
@@ -183,50 +104,49 @@
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <div class="field-label">Audiencia</div>
+      <div class="field-label">Audiencia (segmentos)</div>
+      {% if segments %}
       <div class="segmented-row">
+        {% for segment in segments %}
         <label class="segmented-check">
-          <input type="checkbox" name="audience" value="Estudiantes" checked />
+          <input type="checkbox" name="audience" value="{{ segment.id }}"{% if forloop.first %} checked{% endif %} />
           <span class="segmented-label">
             <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
             <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            Estudiantes
+            {{ segment.name }}
           </span>
         </label>
-
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="Aspirantes" />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            Aspirantes
-          </span>
-        </label>
-
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="Egresados" />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            Egresados
-          </span>
-        </label>
+        {% endfor %}
       </div>
+      {% else %}
+      <div style="color: #888; font-size: 0.85rem">
+        No hay segmentos. Crea uno en Campañas para usarlo como audiencia.
+      </div>
+      {% endif %}
     </div>
 
-    <button
-      type="submit"
-      class="btn btn-primary btn-block"
-      style="margin-top: 8px"
-    >
-      {% icon 'megaphone' size=16 %} Publicar aviso
-    </button>
+    <div class="form-actions">
+      <button type="submit" name="action" value="create" class="btn btn-outline">
+        {% icon 'save' size=16 %} Guardar
+      </button>
+      <button
+        type="submit"
+        name="action"
+        value="publish_status_create"
+        class="btn btn-primary"
+        data-confirm="¿Guardar y publicar este aviso en el estado de WhatsApp? Quedará PAUSADO para prueba."
+        data-confirm-title="Publicar aviso"
+        data-confirm-ok="Publicar"
+      >
+        {% icon 'megaphone' size=16 %} Publicar aviso
+      </button>
+    </div>
   </form>
 
-  <!-- Lista de avisos publicados -->
+  <!-- Lista de avisos guardados y publicados -->
   <div class="list-col">
     <div class="list-head">
-      <div class="list-title font-brand">Avisos publicados</div>
+      <div class="list-title font-brand">Avisos guardados/publicados</div>
       <div class="list-count">{{ announcements|length }} avisos activos</div>
     </div>
     {% for a in announcements %}
@@ -247,6 +167,28 @@
       </div>
       {% endif %}
 
+      {% with status_ad=a.status_ads.first %}
+      <div class="status-row">
+        <span class="status-label">WhatsApp Status:</span>
+        {% if not status_ad %}
+        <span class="status-pill status-none">Sin publicar</span>
+        {% elif status_ad.state == "error" %}
+        <span class="status-pill status-error">Error</span>
+        {% elif status_ad.state == "active" %}
+        <span class="status-pill status-active">Activo</span>
+        {% elif status_ad.state == "paused" %}
+        <span class="status-pill status-paused">Pausado</span>
+        {% else %}
+        <span class="status-pill status-none">{{ status_ad.get_state_display }}</span>
+        {% endif %}
+        {% if status_ad %}
+        <span class="status-date">{{ status_ad.created_at|date:"d M Y H:i" }}</span>
+        {% endif %}
+      </div>
+      {% if status_ad and status_ad.error %}
+      <div class="status-error-detail">{{ status_ad.error|truncatechars:180 }}</div>
+      {% endif %}
+
       <div
         class="card-meta-row"
         style="
@@ -262,19 +204,52 @@
           <span>{{ a.created_at|date:"d M Y" }}</span>
         </div>
 
-        <form method="post" style="margin: 0; display: inline">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="delete" />
-          <input
-            type="hidden"
-            name="notice_id"
-            value="{{ a.id }}"
-          />
-          <button type="submit" class="btn-delete-published">
-            {% icon 'trash-2' size=13 %} Eliminar
-          </button>
-        </form>
+        <div style="display: flex; align-items: center; gap: 2px">
+          {% if a.is_published_in_status %}
+          <span
+            class="status-locked"
+            title="Publicado en WhatsApp: no se puede reintentar ni eliminar"
+          >
+            {% icon 'lock' size=13 %} Publicado
+          </span>
+          {% else %}
+          {% if not status_ad or status_ad.state == "error" %}
+          <form
+            method="post"
+            style="margin: 0; display: inline"
+            data-confirm="Se publicará este aviso en el estado de WhatsApp. Quedará PAUSADO para prueba."
+            data-confirm-title="Publicar en estado WhatsApp"
+            data-confirm-ok="Publicar"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="action" value="publish_status" />
+            <input type="hidden" name="notice_id" value="{{ a.id }}" />
+            <button type="submit" class="btn-status-published" title="Publicar el aviso en el estado de WhatsApp (queda PAUSADO)">
+              {% icon 'megaphone' size=13 %}
+              {% if not status_ad %}Publicar en estado WhatsApp{% else %}Reintentar en estado WhatsApp{% endif %}
+            </button>
+          </form>
+          {% endif %}
+
+          <form
+            method="post"
+            style="margin: 0; display: inline"
+            data-confirm="¿Eliminar este aviso? Esta acción no se puede deshacer."
+            data-confirm-title="Eliminar aviso"
+            data-confirm-ok="Eliminar"
+            data-confirm-variant="danger"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete" />
+            <input type="hidden" name="notice_id" value="{{ a.id }}" />
+            <button type="submit" class="btn-delete-published">
+              {% icon 'trash-2' size=13 %} Eliminar
+            </button>
+          </form>
+          {% endif %}
+        </div>
       </div>
+      {% endwith %}
     </div>
     {% empty %}
     <div style="padding: 24px; color: #888; font-size: 0.9rem">
@@ -283,4 +258,113 @@
     {% endfor %}
   </div>
 </div>
+
+<dialog class="template-dialog" id="aviso-confirm">
+  <div class="template-dialog-form">
+    <div class="template-dialog-head">
+      <h3 id="aviso-confirm-title">Confirmar accion</h3>
+      <button
+        type="button"
+        class="template-dialog-close"
+        data-confirm-cancel
+        aria-label="Cerrar"
+      >
+        {% icon 'x' size=16 %}
+      </button>
+    </div>
+    <p class="aviso-confirm-text" id="aviso-confirm-text"></p>
+    <div class="template-dialog-actions">
+      <button type="button" class="btn btn-ghost" data-confirm-cancel>
+        Cancelar
+      </button>
+      <button type="button" class="btn btn-primary" data-confirm-accept>
+        Confirmar
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  (function () {
+    var contenedor = document.getElementById("aviso-alerts");
+    if (contenedor) {
+      contenedor.addEventListener("click", function (event) {
+        var boton = event.target.closest(".aviso-alert-close");
+        if (!boton) return;
+        var alerta = boton.closest(".aviso-alert");
+        if (alerta) alerta.remove();
+      });
+    }
+
+    var dialog = document.getElementById("aviso-confirm");
+    if (!dialog) return;
+    var titleEl = dialog.querySelector("#aviso-confirm-title");
+    var textEl = dialog.querySelector("#aviso-confirm-text");
+    var acceptBtn = dialog.querySelector("[data-confirm-accept]");
+    var pendingForm = null;
+    var pendingSubmitter = null;
+
+    function openConfirm(source, form, submitter) {
+      titleEl.textContent = source.dataset.confirmTitle || "Confirmar accion";
+      textEl.textContent = source.dataset.confirm || "";
+      acceptBtn.textContent = source.dataset.confirmOk || "Confirmar";
+      var isDanger = source.dataset.confirmVariant === "danger";
+      acceptBtn.classList.toggle("btn-primary", !isDanger);
+      acceptBtn.classList.toggle("btn-danger", isDanger);
+      pendingForm = form;
+      pendingSubmitter = submitter;
+      dialog.showModal();
+    }
+
+    dialog.querySelectorAll("[data-confirm-cancel]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        dialog.close();
+      });
+    });
+
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) dialog.close();
+    });
+
+    dialog.addEventListener("close", function () {
+      pendingForm = null;
+      pendingSubmitter = null;
+    });
+
+    acceptBtn.addEventListener("click", function () {
+      if (!pendingForm) {
+        dialog.close();
+        return;
+      }
+      var form = pendingForm;
+      var submitter = pendingSubmitter;
+      form.dataset.confirmed = "1";
+      dialog.close();
+      if (typeof form.requestSubmit === "function") {
+        form.requestSubmit(submitter || undefined);
+      } else {
+        form.submit();
+      }
+    });
+
+    document.addEventListener("submit", function (event) {
+      var form = event.target;
+      if (!form || form.tagName !== "FORM") return;
+      var submitter = event.submitter || null;
+      var source = null;
+      if (submitter && submitter.dataset && submitter.dataset.confirm) {
+        source = submitter;
+      } else if (form.dataset.confirm) {
+        source = form;
+      }
+      if (!source) return;
+      if (form.dataset.confirmed === "1") {
+        form.dataset.confirmed = "";
+        return;
+      }
+      event.preventDefault();
+      openConfirm(source, form, submitter);
+    });
+  })();
+</script>
 {% endblock %}

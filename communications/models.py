@@ -132,6 +132,13 @@ class MessageTemplate(models.Model):
     body_text = models.TextField(
         help_text="Usa {{1}}, {{2}}, etc. para parámetros dinámicos."
     )
+
+    variable_types = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Tipos de variables, ej. {"1": "text", "2": "date"}',
+    )
+
     header_type = models.CharField(max_length=10, choices=HeaderType.choices, default=HeaderType.NONE)
     header_media_url = models.URLField(blank=True)
     buttons = models.JSONField(
@@ -304,7 +311,13 @@ class BroadcastRecipient(models.Model):
 
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.PENDING)
     provider = models.CharField(max_length=20, blank=True, help_text="twilio | meta | mock")
-    provider_message_id = models.CharField(max_length=100, blank=True)
+
+    # Índice para localizar rápidamente el mensaje asociado a notificaciones del proveedor.
+    provider_message_id = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+    )
     error_message = models.TextField(blank=True)
 
     queued_at = models.DateTimeField(null=True, blank=True)
@@ -323,3 +336,36 @@ class BroadcastRecipient(models.Model):
 
     def __str__(self):
         return f"{self.campaign_id} → {self.phone_snapshot} ({self.status})"
+
+
+class WhatsAppWebhookEvent(models.Model):
+    """Evento recibido desde WhatsApp Cloud API, conservado para trazabilidad.
+
+    La clave única evita procesar dos veces el mismo evento que Meta puede
+    reenviar ante un timeout. Los eventos se guardan antes de aplicarse para
+    permitir inspeccionar y recuperar notificaciones fallidas.
+    """
+    class Type(models.TextChoices):
+        INBOUND = "inbound", "Mensaje entrante"
+        STATUS = "status", "Estado de mensaje"
+
+    id = models.BigAutoField(primary_key=True)
+    event_key = models.CharField(max_length=300, unique=True)
+    provider_message_id = models.CharField(max_length=150, db_index=True)
+    event_type = models.CharField(max_length=20, choices=Type.choices)
+    status = models.CharField(max_length=30, blank=True)
+    # Payload original necesario para auditar y reprocesar eventos del webhook.
+    payload = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Fragmento crudo del evento de Meta, para conservar el motivo de un failed.",
+    )
+    processed_at = models.DateTimeField(null=True, blank=True)
+    # El índice permite consultar eventos recientes de forma eficiente.
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.event_type}: {self.provider_message_id}"

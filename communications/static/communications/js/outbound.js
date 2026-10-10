@@ -263,27 +263,29 @@ const OutboundUI = (() => {
                     id: String(data.id),
                     name: data.name,
                     channel: data.channel,
-
-                    templateId: data.template,
-                    templateName: data.template_name,
+                    template: data.template,
+                    templateName: data.template_name || 'Sin plantilla',
+                    defaultParams: data.default_params || {},
 
                     segments: data.segment
                         ? [data.segment_name || data.segment]
                         : [],
 
-                    executedAt: data.scheduled_at || '-',
+                    totalRecipients: data.total_recipients ?? 0,
+                    sent: data.sent_count ?? 0,
+                    delivered: data.delivered_count ?? 0,
+                    read: data.read_count ?? 0,
+                    failed: data.failed_count ?? 0,
 
+                    executedAt: data.scheduled_at || '-',
                     type: data.type || 'Campaña',
 
                     status: data.status,
 
-                    sent: data.sent ?? 0,
-                    delivered: data.delivered ?? 0,
-                    read: data.read ?? 0,
-                    clicks: data.clicks ?? 0,
-                    replies: data.replies ?? 0
+                    // Todavía no existen estos indicadores en CampaignSerializer.
+                    clicks: 0,
+                    replies: 0
                 };
-
                 console.log('Campaña cargada desde Django:', campaign);
             }
         } catch (error) {
@@ -310,10 +312,33 @@ const OutboundUI = (() => {
          * 4. Desde aquí mantenemos prácticamente intacta
          *    la lógica visual que ya tenías.
          */
-        const templates = TEMPLATES[campaign.channel] || [];
-        const tpl =
-            templates.find((t) => t.id === campaign.templateId) ||
-            templates[0];
+        let tpl = null;
+        try {
+            const templatesResponse = await fetch('/campanas/api/templates/', {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!templatesResponse.ok) {
+                throw new Error(`No se pudieron cargar las plantillas (${templatesResponse.status}).`);
+            }
+            const templatesData = await templatesResponse.json();
+            const templates = Array.isArray(templatesData) ? templatesData : templatesData.results;
+            if (!Array.isArray(templates)) {
+                throw new Error('La respuesta de plantillas no tiene un formato válido.');
+            }
+            const selectedTemplate = templates.find(
+                (template) => String(template.id) === String(campaign.template)
+            );
+            if (selectedTemplate) {
+                tpl = {
+                    ...selectedTemplate,
+                    body: selectedTemplate.body_text || '',
+                    buttons: Array.isArray(selectedTemplate.buttons) ? selectedTemplate.buttons : [],
+                };
+            }
+        } catch (error) {
+            console.warn('No fue posible cargar la plantilla de la campaña:', error);
+        }
 
         root.innerHTML = `
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
@@ -348,7 +373,11 @@ const OutboundUI = (() => {
                 <div class="card outbound-card">
                     <div class="card-body">
                         <h3 class="h6">Audiencias</h3>
-                        <p>${campaign.segments.join(', ')}</p>
+                        <p class="mb-1">${campaign.segments.join(', ') || 'Sin audiencia'}</p>
+                        <p class="small text-muted mb-3">
+                            ${campaign.totalRecipients.toLocaleString('es-CO')} destinatarios
+                        </p>
+                                                
 
                         <h3 class="h6">Ejecución</h3>
                         <p class="mb-0">
@@ -362,12 +391,15 @@ const OutboundUI = (() => {
                 <div class="card outbound-card">
                     <div class="card-body">
                         <h3 class="h6 text-uppercase text-muted">
-                            Plantilla
+                              Plantilla
                         </h3>
+                        <p class="fw-semibold mb-3">
+                            ${campaign.templateName}
+                        </p>
 
-                        <div class="phone-frame">
+                    <div class="phone-frame">
                             <div class="phone-screen">
-                                ${previewHtml(campaign.channel, tpl)}
+                                ${previewHtml(campaign.channel, tpl, campaign.defaultParams)}
                             </div>
                         </div>
                     </div>
@@ -394,7 +426,14 @@ const OutboundUI = (() => {
         return [...body.matchAll(/\{\{([^}]+)\}\}/g)].map((m) => m[1]);
     }
 
-    function initWizard() {
+    function initWizard(audiencesOnly = false) {
+        if (audiencesOnly) {
+            renderAudiencesPage();
+            return;
+        }
+
+        let templates = [];
+        let segments = [];
         const state = {
             step: 1,
             channel: 'whatsapp',
@@ -403,6 +442,176 @@ const OutboundUI = (() => {
             templateId: '',
             vars: {},
         };
+
+        const loadRecipientsFileBtn = document.getElementById('loadRecipientsFileBtn');
+        const recipientsFileInput = document.getElementById('recipientsFileInput');
+        const selectedRecipientsFileName = document.getElementById('selectedRecipientsFileName');
+        const previewRecipientsFileBtn = document.getElementById('previewRecipientsFileBtn');
+        let selectedRecipientsFile = null;
+        let importingRecipients = false;
+        if (loadRecipientsFileBtn && recipientsFileInput && selectedRecipientsFileName) {
+            loadRecipientsFileBtn.addEventListener('click', () => recipientsFileInput.click());
+            recipientsFileInput.addEventListener('change', () => {
+                const file = recipientsFileInput.files && recipientsFileInput.files[0];
+                if (!file) return;
+
+                if (!file.name.toLowerCase().endsWith('.xlsx')) {
+                    toast('Selecciona un archivo con formato .xlsx.');
+                    return;
+                }
+
+                selectedRecipientsFile = file;
+                selectedRecipientsFileName.textContent = `Archivo seleccionado: ${file.name}`;
+                selectedRecipientsFileName.classList.remove('d-none');
+            });
+        }
+
+        if (previewRecipientsFileBtn) {
+            const previewModalId = 'recipientsSpreadsheetPreviewModal';
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal fade" id="${previewModalId}" tabindex="-1" aria-labelledby="recipientsSpreadsheetPreviewTitle" aria-hidden="true">
+                    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h2 class="modal-title fs-5" id="recipientsSpreadsheetPreviewTitle">Vista previa del archivo</h2>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p id="spreadsheetPreviewFileName" class="small text-muted"></p>
+                                <label for="spreadsheetPreviewSheet" class="form-label">Hoja</label>
+                                <select id="spreadsheetPreviewSheet" class="form-select mb-3"></select>
+                                <div id="spreadsheetPreviewContent" aria-live="polite"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `);
+            const previewModal = bootstrap.Modal.getOrCreateInstance(
+                document.getElementById(previewModalId)
+            );
+            const previewSheetSelect = document.getElementById('spreadsheetPreviewSheet');
+            const previewContent = document.getElementById('spreadsheetPreviewContent');
+            let previewWorkbook = null;
+
+            function renderSpreadsheetPreview(sheetName) {
+                const worksheet = previewWorkbook && previewWorkbook.Sheets[sheetName];
+                if (!worksheet) {
+                    previewContent.innerHTML = '<div class="alert alert-warning">No fue posible leer esta hoja.</div>';
+                    return;
+                }
+
+                const rows = XLSX.utils.sheet_to_json(worksheet, {
+                    header: 1,
+                    defval: '',
+                    blankrows: false,
+                });
+                if (!rows.length) {
+                    previewContent.innerHTML = '<div class="alert alert-info">La hoja seleccionada no contiene datos.</div>';
+                    return;
+                }
+
+                const columns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+                const visibleRows = rows.slice(0, 501);
+                const previewNote = rows.length >= 501
+                    ? '<p class="small text-muted">La vista previa muestra las primeras 500 filas, además del encabezado.</p>'
+                    : '';
+                const headerCells = Array.from({ length: columns }, (_, index) => `
+                    <th scope="col">${escapeHtml(rows[0][index] || `Columna ${index + 1}`)}</th>
+                `).join('');
+                const bodyRows = visibleRows.slice(1).map((row) => `
+                    <tr>${Array.from({ length: columns }, (_, index) => `
+                        <td>${escapeHtml(row[index] === undefined || row[index] === null ? '' : row[index])}</td>
+                    `).join('')}</tr>
+                `).join('');
+
+                previewContent.innerHTML = `${previewNote}
+                    <div class="spreadsheet-preview-scroll">
+                        <table class="table table-sm table-bordered table-striped spreadsheet-preview-table mb-0">
+                            <thead><tr>${headerCells}</tr></thead>
+                            <tbody>${bodyRows}</tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            previewRecipientsFileBtn.addEventListener('click', async () => {
+                if (!selectedRecipientsFile) {
+                    toast('Selecciona un archivo .xlsx para visualizarlo.');
+                    return;
+                }
+                if (!selectedRecipientsFile.name.toLowerCase().endsWith('.xlsx')) {
+                    toast('El archivo seleccionado no es compatible. Usa un archivo .xlsx.');
+                    return;
+                }
+                if (typeof XLSX === 'undefined') {
+                    toast('No fue posible cargar el lector de archivos Excel.');
+                    return;
+                }
+                if (selectedRecipientsFile.size > 20 * 1024 * 1024) {
+                    toast('El archivo es demasiado grande para generar una vista previa (máximo 20 MB).');
+                    return;
+                }
+
+                document.getElementById('spreadsheetPreviewFileName').textContent =
+                    selectedRecipientsFile.name;
+                previewSheetSelect.innerHTML = '';
+                previewContent.innerHTML = `
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <p class="small text-muted mt-2 mb-0">Leyendo archivo localmente...</p>
+                    </div>
+                `;
+                previewModal.show();
+
+                try {
+                    previewWorkbook = XLSX.read(await selectedRecipientsFile.arrayBuffer(), {
+                        type: 'array',
+                        cellDates: true,
+                        sheetRows: 501,
+                    });
+                    if (!previewWorkbook.SheetNames.length) {
+                        previewContent.innerHTML = '<div class="alert alert-info">El archivo no contiene hojas para mostrar.</div>';
+                        return;
+                    }
+
+                    previewSheetSelect.innerHTML = previewWorkbook.SheetNames.map((sheetName) => `
+                        <option value="${escapeHtml(sheetName)}">${escapeHtml(sheetName)}</option>
+                    `).join('');
+                    renderSpreadsheetPreview(previewWorkbook.SheetNames[0]);
+                } catch (error) {
+                    console.error('No fue posible leer el archivo Excel:', error);
+                    previewContent.innerHTML = '<div class="alert alert-danger">No fue posible leer este archivo. Verifica que sea un archivo .xlsx válido.</div>';
+                }
+            });
+
+            previewSheetSelect.addEventListener('change', () => {
+                renderSpreadsheetPreview(previewSheetSelect.value);
+            });
+        }
+
+        async function loadSegments() {
+            try {
+                const response = await fetch('/campanas/api/segments/');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                segments = Array.isArray(data)
+                    ? data
+                    : (data.results || []);
+
+                renderSegments();
+                return true;
+            } catch (error) {
+                console.error('Error cargando audiencias:', error);
+                toast('No se pudieron cargar las audiencias.');
+                return false;
+            }
+        }
+
         const picker = document.getElementById('channelPicker');
         picker.innerHTML = Object.entries(CHANNELS).map(([key, meta]) => `
             <button type="button" class="channel-option ${key === state.channel ? 'is-selected' : ''}" data-channel="${key}">
@@ -413,17 +622,225 @@ const OutboundUI = (() => {
 
         const includeBox = document.getElementById('includeSegments');
         const excludeBox = document.getElementById('excludeSegments');
-        includeBox.innerHTML = SEGMENTS.filter((s) => s.id !== 'opt-out').map((s) => chip(s, 'include')).join('');
-        excludeBox.innerHTML = SEGMENTS.map((s) => chip(s, 'exclude')).join('');
 
         function chip(s, kind) {
-            return `<button type="button" class="segment-chip" data-kind="${kind}" data-id="${s.id}">${s.name} · ${s.size.toLocaleString('es-CO')}</button>`;
+            return `<button type="button" class="segment-chip" data-kind="${kind}" data-id="${s.id}">
+        ${s.name} · ${(s.contact_count || 0).toLocaleString('es-CO')}
+    </button>`;
+        }
+
+        async function renderAudiencesPage() {
+            const grid = document.getElementById('segmentsGrid');
+            const status = document.getElementById('audiencesStatus');
+            const panel = document.getElementById('audienceContactsPanel');
+            if (!grid || !status || !panel) return;
+
+            const contactsStatus = document.getElementById('audienceContactsStatus');
+            const contactsHead = document.getElementById('audienceContactsHead');
+            const contactsBody = document.getElementById('audienceContactsBody');
+            const contactsTable = document.getElementById('audienceContactsTableWrap');
+            const loadMoreButton = document.getElementById('loadMoreAudienceContacts');
+            const sourceLabels = {
+                excel_import: 'Importación Excel (Campus)',
+                manual: 'Selección manual',
+                dynamic: 'Regla dinámica',
+            };
+            const contactColumns = [
+                ['full_name', 'Nombre'],
+                ['document_number', 'Documento'],
+                ['phone', 'Teléfono'],
+                ['email', 'Correo'],
+                ['academic_program', 'Programa académico'],
+                ['semester', 'Semestre'],
+                ['role', 'Perfil'],
+                ['whatsapp_opt_in', 'Consentimiento WhatsApp'],
+                ['source', 'Origen del contacto'],
+            ];
+            let audiences = [];
+            let nextContactsUrl = null;
+            let activeRequest = 0;
+
+            function formatDate(value) {
+                if (!value) return '—';
+                const date = new Date(value);
+                return Number.isNaN(date.getTime()) ? escapeHtml(value) : date.toLocaleString('es-CO');
+            }
+
+            async function loadContacts(url, append = false) {
+                const requestId = ++activeRequest;
+                loadMoreButton.disabled = true;
+                contactsStatus.innerHTML = `
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                        <span>Cargando contactos...</span>
+                    </div>
+                `;
+                if (!append) {
+                    contactsTable.classList.add('d-none');
+                    contactsBody.innerHTML = '';
+                }
+
+                try {
+                    const response = await fetch(url, {
+                        headers: { Accept: 'application/json' },
+                        credentials: 'same-origin',
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Error HTTP ${response.status}: ${await response.text()}`);
+                    }
+                    const data = await response.json();
+                    if (requestId !== activeRequest) return;
+
+                    const contacts = Array.isArray(data) ? data : (data.results || []);
+                    nextContactsUrl = Array.isArray(data) ? null : data.next;
+                    if (!append) {
+                        contactsHead.innerHTML = `<tr>${contactColumns.map(([, label]) =>
+                            `<th scope="col">${escapeHtml(label)}</th>`
+                        ).join('')}</tr>`;
+                    }
+                    if (!contacts.length && !append) {
+                        contactsStatus.innerHTML = '<div class="alert alert-info mb-0">Esta audiencia todavía no tiene contactos.</div>';
+                        loadMoreButton.classList.add('d-none');
+                        return;
+                    }
+
+                    contactsBody.insertAdjacentHTML('beforeend', contacts.map((contact) => `
+                        <tr>${contactColumns.map(([field]) =>
+                            `<td>${escapeHtml(contact[field] ?? '—')}</td>`
+                        ).join('')}</tr>
+                    `).join(''));
+                    contactsStatus.innerHTML = '';
+                    contactsTable.classList.remove('d-none');
+                    loadMoreButton.classList.toggle('d-none', !nextContactsUrl);
+                } catch (error) {
+                    if (requestId !== activeRequest) return;
+                    console.error('Error al cargar contactos de la audiencia:', error);
+                    contactsStatus.innerHTML = '<div class="alert alert-danger mb-0">No fue posible cargar los contactos. Intenta nuevamente.</div>';
+                    loadMoreButton.classList.toggle('d-none', !nextContactsUrl);
+                } finally {
+                    if (requestId === activeRequest) loadMoreButton.disabled = false;
+                }
+            }
+
+            function renderAudienceCards() {
+                if (!audiences.length) {
+                    grid.innerHTML = '<div class="col-12"><div class="alert alert-info">No hay audiencias cargadas.</div></div>';
+                    return;
+                }
+                grid.innerHTML = audiences.map((audience) => `
+                    <div class="col-md-6 col-xl-4">
+                        <article class="card outbound-card audience-card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <h2 class="h6 fw-bold mb-0">${escapeHtml(audience.name)}</h2>
+                                    <span class="badge text-bg-light">${escapeHtml(sourceLabels[audience.source_type] || audience.source_type || 'Sin origen')}</span>
+                                </div>
+                                <p class="small text-muted flex-grow-1 mb-3">${escapeHtml(audience.description || 'Sin descripción')}</p>
+                                <div class="small text-muted mb-3">
+                                    <div><strong>Contactos:</strong> ${Number(audience.contact_count || 0).toLocaleString('es-CO')}</div>
+                                    <div><strong>Creada:</strong> ${formatDate(audience.created_at)}</div>
+                                </div>
+                                <button type="button" class="btn btn-outline-success btn-sm" data-view-audience="${escapeHtml(audience.id)}">
+                                    <i class="bi bi-eye me-1"></i> Ver contactos
+                                </button>
+                            </div>
+                        </article>
+                    </div>
+                `).join('');
+            }
+
+            grid.addEventListener('click', async (event) => {
+                const button = event.target.closest('[data-view-audience]');
+                if (!button || !grid.contains(button)) return;
+                const audienceId = button.dataset.viewAudience;
+                const audience = audiences.find((item) => String(item.id) === audienceId);
+                if (!audience) return;
+
+                document.querySelectorAll('.audience-card').forEach((card) => {
+                    card.classList.toggle('is-selected', card === button.closest('.audience-card'));
+                });
+                document.getElementById('audienceContactsTitle').textContent = `Contactos: ${audience.name}`;
+                document.getElementById('audienceContactsDescription').textContent =
+                    `${sourceLabels[audience.source_type] || audience.source_type || 'Origen no especificado'} · ${formatDate(audience.created_at)}`;
+                document.getElementById('audienceContactsCount').textContent =
+                    `${Number(audience.contact_count || 0).toLocaleString('es-CO')} contactos`;
+                panel.classList.remove('d-none');
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                nextContactsUrl = `/campanas/api/segments/${encodeURIComponent(audienceId)}/contacts/`;
+                await loadContacts(nextContactsUrl);
+            });
+
+            loadMoreButton.addEventListener('click', () => {
+                if (nextContactsUrl) loadContacts(nextContactsUrl, true);
+            });
+
+            status.innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <div class="spinner-border text-success mb-2" role="status"></div>
+                    <p class="mb-0">Cargando audiencias...</p>
+                </div>
+            `;
+            try {
+                const response = await fetch('/campanas/api/segments/', {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok) {
+                    throw new Error(`Error HTTP ${response.status}: ${await response.text()}`);
+                }
+                const data = await response.json();
+                audiences = Array.isArray(data) ? data : (data.results || []);
+                if (!Array.isArray(audiences)) {
+                    throw new Error('La respuesta de audiencias no tiene un formato válido.');
+                }
+                status.innerHTML = '';
+                renderAudienceCards();
+            } catch (error) {
+                console.error('Error al cargar audiencias:', error);
+                grid.innerHTML = '';
+                status.innerHTML = '<div class="alert alert-danger">No fue posible cargar las audiencias. Intenta nuevamente.</div>';
+            }
+        }
+
+        function renderSegments() {
+            includeBox.innerHTML = segments
+                .map((s) => chip(s, 'include'))
+                .join('');
+
+            excludeBox.innerHTML = segments
+                .map((s) => chip(s, 'exclude'))
+                .join('');
+
+            document.querySelectorAll('.segment-chip').forEach((btn) => {
+                const id = Number(btn.dataset.id);
+                const selectedSegments = btn.dataset.kind === 'include' ? state.include : state.exclude;
+                btn.classList.toggle('is-selected', selectedSegments.includes(id));
+                btn.addEventListener('click', () => {
+                    const kind = btn.dataset.kind;
+                    const list = kind === 'include' ? state.include : state.exclude;
+                    const idx = list.indexOf(id);
+
+                    if (idx >= 0) {
+                        list.splice(idx, 1);
+                    } else if (kind === 'include' && list.length >= 5) {
+                        toast('Puedes incluir hasta 5 audiencias.');
+                        return;
+                    } else {
+                        list.push(id);
+                    }
+
+                    btn.classList.toggle('is-selected');
+                });
+            });
         }
 
         function fillAccounts() {
-            document.getElementById('senderAccount').innerHTML = `<option>${CHANNELS[state.channel].account}</option>`;
+            document.getElementById('senderAccount').innerHTML =
+                `<option>${CHANNELS[state.channel].account}</option>`;
         }
+
         fillAccounts();
+        loadSegments();
 
         picker.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-channel]');
@@ -436,26 +853,11 @@ const OutboundUI = (() => {
             updatePreview();
         });
 
-        document.querySelectorAll('.segment-chip').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const kind = btn.dataset.kind;
-                const id = btn.dataset.id;
-                const list = kind === 'include' ? state.include : state.exclude;
-                const idx = list.indexOf(id);
-                if (idx >= 0) list.splice(idx, 1);
-                else if (kind === 'include' && list.length >= 5) {
-                    toast('Puedes incluir hasta 5 audiencias.');
-                    return;
-                } else list.push(id);
-                btn.classList.toggle('is-selected');
-            });
-        });
-
         function renderTemplates() {
             const grid = document.getElementById('templateGrid');
-            const list = TEMPLATES[state.channel] || [];
+            const list = templates;
             grid.innerHTML = list.map((t) => `
-                <button type="button" class="template-card ${t.id === state.templateId ? 'is-selected' : ''}" data-tpl="${t.id}">
+                <button type="button" class="template-card ${String(t.id) === state.templateId ? 'is-selected' : ''}" data-tpl="${t.id}">
                     <div class="small text-muted mb-1">${t.type}</div>
                     <div class="fw-semibold">${t.name}</div>
                     <p class="small mb-0 mt-2 text-muted">${t.body}</p>
@@ -463,12 +865,43 @@ const OutboundUI = (() => {
             `).join('');
         }
 
+        async function loadTemplates() {
+            try {
+                const response = await fetch('/campanas/api/templates/', {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok) {
+                    throw new Error(`No se pudieron cargar las plantillas (${response.status}).`);
+                }
+                const data = await response.json();
+                const results = Array.isArray(data) ? data : data.results;
+                if (!Array.isArray(results)) {
+                    throw new Error('La respuesta de plantillas no tiene un formato válido.');
+                }
+                templates = results.map((template) => ({
+                    ...template,
+                    type: template.category,
+                    body: template.body_text || '',
+                }));
+                renderTemplates();
+            } catch (error) {
+                templates = [];
+                renderTemplates();
+                console.error('Error al cargar plantillas:', error);
+                toast('No fue posible cargar las plantillas.');
+            }
+        }
+
+        loadTemplates();
+
         document.getElementById('templateGrid').addEventListener('click', (e) => {
             const card = e.target.closest('[data-tpl]');
             if (!card) return;
-            state.templateId = card.dataset.tpl;
+            const tpl = templates.find((template) => String(template.id) === card.dataset.tpl);
+            if (!tpl) return;
+            state.templateId = String(tpl.id);
             document.querySelectorAll('.template-card').forEach((el) => el.classList.toggle('is-selected', el === card));
-            const tpl = (TEMPLATES[state.channel] || []).find((t) => t.id === state.templateId);
             const vars = extractVars(tpl.body);
             const editor = document.getElementById('variableEditor');
             const fields = document.getElementById('variableFields');
@@ -497,7 +930,7 @@ const OutboundUI = (() => {
         });
 
         function currentTpl() {
-            return (TEMPLATES[state.channel] || []).find((t) => t.id === state.templateId);
+            return templates.find((t) => String(t.id) === state.templateId);
         }
 
         function updatePreview() {
@@ -523,24 +956,195 @@ const OutboundUI = (() => {
         function fillReview() {
             const name = document.getElementById('campaignName').value || 'Sin nombre';
             const type = document.getElementById('campaignType').value;
-            const includeNames = SEGMENTS.filter((s) => state.include.includes(s.id)).map((s) => s.name);
-            const size = SEGMENTS.filter((s) => state.include.includes(s.id)).reduce((a, s) => a + s.size, 0);
             const tpl = currentTpl();
+
+            const includeNames = segments
+                .filter((s) => state.include.includes(Number(s.id)))
+                .map((s) => s.name);
+
+            const excludeNames = segments
+                .filter((s) => state.exclude.includes(Number(s.id)))
+                .map((s) => s.name);
+
+            const size = segments
+                .filter((s) => state.include.includes(Number(s.id)))
+                .reduce((total, s) => total + Number(s.contact_count || 0), 0);
+
             document.getElementById('reviewList').innerHTML = `
-                <dt class="col-sm-4">Nombre</dt><dd class="col-sm-8">${name}</dd>
-                <dt class="col-sm-4">Canal</dt><dd class="col-sm-8">${CHANNELS[state.channel].label}</dd>
-                <dt class="col-sm-4">Tipo</dt><dd class="col-sm-8">${type}</dd>
-                <dt class="col-sm-4">Audiencias</dt><dd class="col-sm-8">${includeNames.join(', ') || 'Ninguna'}</dd>
-                <dt class="col-sm-4">Plantilla</dt><dd class="col-sm-8">${tpl ? tpl.name : 'Sin seleccionar'}</dd>
-            `;
-            document.getElementById('costEstimate').textContent = `Audiencia estimada: ${size.toLocaleString('es-CO')} destinatarios (dato de demostración).`;
+                <dt class="col-sm-4">Nombre</dt>
+                <dd class="col-sm-8">${name}</dd>
+
+                <dt class="col-sm-4">Canal</dt>
+                <dd class="col-sm-8">${CHANNELS[state.channel].label}</dd>
+
+                <dt class="col-sm-4">Tipo</dt>
+                <dd class="col-sm-8">${type}</dd>
+
+                <dt class="col-sm-4">Audiencias</dt>
+                <dd class="col-sm-8">${includeNames.join(', ') || 'Ninguna'}</dd>
+
+                <dt class="col-sm-4">Excluir</dt>
+                <dd class="col-sm-8">${excludeNames.join(', ') || 'Ninguna'}</dd>
+
+                <dt class="col-sm-4">Plantilla</dt>
+                <dd class="col-sm-8">${tpl ? tpl.name : 'Sin seleccionar'}</dd>
+                `;
+
+            document.getElementById('costEstimate').textContent =
+                `Audiencia estimada: ${size.toLocaleString('es-CO')} destinatarios.`;
+        }
+
+        function getCookie(name) {
+            const cookies = document.cookie ? document.cookie.split(';') : [];
+
+            for (const cookie of cookies) {
+                const [key, ...valueParts] = cookie.trim().split('=');
+
+                if (key === name) {
+                    return decodeURIComponent(valueParts.join('='));
+                }
+            }
+
+            return '';
+        }
+
+        async function importRecipientsFile(nextButton) {
+            if (importingRecipients) return;
+
+            importingRecipients = true;
+            nextButton.disabled = true;
+            toast('Importando archivo...');
+
+            try {
+                const segmentNameInput = document.getElementById('segmentName');
+                const segmentName = segmentNameInput
+                    ? segmentNameInput.value.trim()
+                    : '';
+
+                if (!segmentName) {
+                    toast('Escribe el nombre de la audiencia.');
+                    return false;
+                }
+
+                const formData = new FormData();
+                formData.append('name', segmentName);
+                formData.append('description', 'Importada desde campaña');
+                formData.append('file', selectedRecipientsFile);
+
+                const response = await fetch('/campanas/api/segments/import_excel/', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                });
+
+                if (!response.ok) {
+                    let backendError;
+
+                    try {
+                        backendError = await response.json();
+                    } catch (error) {
+                        backendError = {
+                            detail: 'El servidor rechazó la importación.',
+                        };
+                    }
+
+                    console.error('Error al importar archivo:', backendError);
+
+                    const message = backendError.detail
+                        || Object.entries(backendError)
+                            .map(([field, messages]) =>
+                                `${field}: ${Array.isArray(messages)
+                                    ? messages.join(' ')
+                                    : messages}`
+                            )
+                            .join(' ');
+
+                    toast(message || 'No fue posible importar el archivo.');
+                    return false;
+                }
+
+                const data = await response.json();
+                const segment = data.segment;
+
+                if (!segment || segment.id === undefined || segment.id === null) {
+                    console.error('Respuesta de importación sin segmento:', data);
+                    toast(
+                        'La importación respondió correctamente, pero no se recibió la audiencia creada.'
+                    );
+                    return false;
+                }
+
+                const segmentsLoaded = await loadSegments();
+                const segmentId = Number(segment.id);
+
+                if (!segments.some((item) => Number(item.id) === segmentId)) {
+                    segments.push(segment);
+                }
+
+                let audienceLimitReached = false;
+
+                if (!state.include.includes(segmentId)) {
+                    if (state.include.length < 5) {
+                        state.include.push(segmentId);
+                    } else {
+                        audienceLimitReached = true;
+                    }
+                }
+
+                renderSegments();
+
+                const summary =
+                    `Importación completada: ${data.created || 0} creados, ` +
+                    `${data.updated || 0} actualizados y ` +
+                    `${data.skipped || 0} omitidos.`;
+
+                const reloadWarning = segmentsLoaded
+                    ? ''
+                    : ' No se pudo recargar la lista; la audiencia importada se conservó en ella.';
+
+                toast(
+                    `${summary}` +
+                    `${audienceLimitReached
+                        ? ' Se alcanzó el máximo de 5 audiencias; la nueva audiencia quedó en la lista, pero no se seleccionó.'
+                        : ''}` +
+                    `${reloadWarning}`
+                );
+
+                showStep(2);
+                return true;
+
+            } catch (error) {
+                console.error('Error al importar archivo:', error);
+                toast(
+                    'No se pudo importar el archivo. Verifica la conexión con el servidor.'
+                );
+                return false;
+
+            } finally {
+                importingRecipients = false;
+                nextButton.disabled = false;
+            }
         }
 
         document.getElementById('wizardBack').addEventListener('click', () => showStep(Math.max(1, state.step - 1)));
-        document.getElementById('wizardNext').addEventListener('click', () => {
+        document.getElementById('wizardNext').addEventListener('click', async (event) => {
+            if (importingRecipients) return;
             if (state.step === 1) {
-                if (!document.getElementById('campaignName').value.trim()) return toast('Escribe un nombre de campaña.');
-                if (!state.include.length) return toast('Selecciona al menos una audiencia.');
+                if (!document.getElementById('campaignName').value.trim()) {
+                    return toast('Escribe un nombre de campaña.');
+                }
+
+                if (!state.include.length && !selectedRecipientsFile) {
+                    return toast('Selecciona una audiencia o carga un archivo .xlsx.');
+                }
+
+                if (selectedRecipientsFile) {
+                    return importRecipientsFile(event.currentTarget);
+                }
+
                 return showStep(2);
             }
             if (state.step === 2) {
@@ -549,7 +1153,44 @@ const OutboundUI = (() => {
             }
             launch();
         });
-        document.getElementById('wizardTest').addEventListener('click', () => toast('Prueba enviada a la cuenta institucional de demostración.'));
+        const wizardTestButton = document.getElementById('wizardTest');
+        wizardTestButton.addEventListener('click', async () => {
+            if (!state.templateId || !Number.isInteger(Number(state.templateId))) {
+                toast('Selecciona una plantilla antes de enviar la prueba.');
+                return;
+            }
+
+            const originalText = wizardTestButton.textContent;
+            wizardTestButton.disabled = true;
+            wizardTestButton.textContent = 'Enviando...';
+            try {
+                const response = await fetch('/campanas/test-send/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        template: Number(state.templateId),
+                        params: state.vars,
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    toast(data.message || 'No se pudo enviar el mensaje de prueba.');
+                    return;
+                }
+                toast(data.message || 'Mensaje de prueba enviado correctamente.');
+            } catch (error) {
+                console.error('Error al enviar mensaje de prueba:', error);
+                toast('No se pudo enviar el mensaje de prueba. Verifica la conexión con el servidor.');
+            } finally {
+                wizardTestButton.disabled = false;
+                wizardTestButton.textContent = originalText;
+            }
+        });
         document.querySelectorAll('.wizard-step').forEach((btn) => {
             btn.addEventListener('click', () => showStep(Number(btn.dataset.step)));
         });
@@ -560,50 +1201,35 @@ const OutboundUI = (() => {
 
             const name = document.getElementById('campaignName').value.trim();
 
-            const segmentMap = {
-                'est-activos': 1,
-                'docentes': 2,
-                'egresados': 3,
-            };
-
-            const templateMap = {
-                'wa-matricula': 1,
-                'wa-cita': 1,
-                'wa-bienestar': 2,
-                'wa-aviso': 3,
-            };
-
-            const selectedSegment = state.include.find((id) => segmentMap[id]);
-            const templateId = templateMap[state.templateId];
-
-            if (!selectedSegment) {
-                toast('La audiencia seleccionada no tiene un segmento disponible en el backend.');
+            if (!state.include.length) {
+                toast('Selecciona al menos una audiencia.');
                 return;
             }
 
-            if (!templateId) {
+            if (!state.templateId || !Number.isInteger(Number(state.templateId))) {
                 toast('La plantilla seleccionada no está disponible en el backend.');
                 return;
             }
 
-            const payload = {
-                name: name,
-                template: templateId,
-                segment: segmentMap[selectedSegment],
-                default_params: state.vars,
-            };
-
-            if (sendMode === 'later' && scheduleAt) {
-                payload.scheduled_at = scheduleAt;
-            }
-
             try {
+                const payload = {
+                    name: name,
+                    template: Number(state.templateId),
+                    segment: state.include[0],
+                    default_params: state.vars,
+                };
+
+                if (sendMode === 'later' && scheduleAt) {
+                    payload.scheduled_at = scheduleAt;
+                }
+
                 const response = await fetch('/campanas/api/campaigns/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': getCookie('csrftoken'),
                     },
+                    credentials: 'same-origin',
                     body: JSON.stringify(payload),
                 });
 
@@ -616,40 +1242,9 @@ const OutboundUI = (() => {
 
                 const backendCampaign = await response.json();
 
-                const list = loadCampaigns();
-                const includeNames = SEGMENTS
-                    .filter((s) => state.include.includes(s.id))
-                    .map((s) => s.name);
-
-                const size = SEGMENTS
-                    .filter((s) => state.include.includes(s.id))
-                    .reduce((a, s) => a + s.size, 0);
-
-                const campaign = {
-                    id: `c${backendCampaign.id}`,
-                    backendId: backendCampaign.id,
-                    name: backendCampaign.name,
-                    channel: state.channel,
-                    type: document.getElementById('campaignType').value,
-                    segments: includeNames,
-                    executedAt: sendMode === 'later' && scheduleAt
-                        ? scheduleAt.replace('T', ' ')
-                        : new Date().toISOString().slice(0, 16).replace('T', ' '),
-                    status: sendMode === 'later' ? 'programada' : 'borrador',
-                    sent: 0,
-                    delivered: 0,
-                    read: 0,
-                    clicks: 0,
-                    replies: 0,
-                    templateId: state.templateId,
-                };
-
-                list.unshift(campaign);
-                saveCampaigns(list);
-
                 toast('Campaña creada correctamente en el backend.');
 
-                window.location.href = `/campanas/detalle/?id=${encodeURIComponent(campaign.id)}`;
+                window.location.href = `/campanas/detalle/?id=${encodeURIComponent(backendCampaign.id)}`;
 
             } catch (error) {
                 console.error('Error de conexión:', error);
@@ -657,12 +1252,418 @@ const OutboundUI = (() => {
             }
         }
 
-        const preset = new URLSearchParams(window.location.search).get('segment');
-        if (preset) {
-            const btn = document.querySelector(`[data-kind="include"][data-id="${preset}"]`);
-            if (btn) btn.click();
-        }
         showStep(1);
+    }
+
+    function initAudiencesPage() {
+        initWizard(true);
+    }
+
+    function initTemplatesPage() {
+        const newTemplateBtn = document.getElementById('newTemplateBtn');
+        const templateList = document.getElementById('templateList');
+        if (!newTemplateBtn || !templateList) return;
+
+        const modalId = 'createTemplateModal';
+        if (!document.getElementById(modalId)) {
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="createTemplateModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <form id="createTemplateForm">
+                                <div class="modal-header">
+                                    <h2 class="modal-title fs-5" id="createTemplateModalLabel">Nueva plantilla</h2>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div id="createTemplateError" class="alert alert-danger d-none" role="alert"></div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label for="templateName" class="form-label">Nombre interno</label>
+                                            <input id="templateName" name="name" class="form-control" maxlength="150" required>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="templateMetaName" class="form-label">Nombre en Meta</label>
+                                            <input id="templateMetaName" name="meta_template_name" class="form-control" maxlength="150" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="templateLanguage" class="form-label">Idioma</label>
+                                            <input id="templateLanguage" name="language" class="form-control" maxlength="10" value="es_CO" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="templateCategory" class="form-label">Categoría</label>
+                                            <select id="templateCategory" name="category" class="form-select" required>
+                                                <option value="utility" selected>Utilidad</option>
+                                                <option value="marketing">Marketing</option>
+                                                <option value="authentication">Autenticación</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="templateStatus" class="form-label">Estado</label>
+                                            <select id="templateStatus" name="status" class="form-select" required>
+                                                <option value="draft" selected>Borrador</option>
+                                                <option value="pending">Pendiente de aprobación</option>
+                                                <option value="approved">Aprobada</option>
+                                                <option value="rejected">Rechazada</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="templateBody" class="form-label">Contenido del mensaje</label>
+                                            <textarea id="templateBody" name="body_text" class="form-control" rows="5" required></textarea>
+
+                                            <div id="templateVariables" class="mt-3"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="submit" class="btn btn-success" id="saveTemplateBtn">Guardar plantilla</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `);
+        }
+
+        const modalElement = document.getElementById(modalId);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+        const form = document.getElementById('createTemplateForm');
+        const formError = document.getElementById('createTemplateError');
+        const saveButton = document.getElementById('saveTemplateBtn');
+        const modalTitle = document.getElementById('createTemplateModalLabel');
+        const templateVariables = document.getElementById('templateVariables');
+        let editingTemplateId = null;
+
+        function renderVariableTypes(variableTypes = {}) {
+            const bodyText = form.querySelector('[name="body_text"]').value || '';
+
+            const matches = [...bodyText.matchAll(/\{\{(\d+)\}\}/g)];
+            const variableNumbers = [...new Set(matches.map(match => match[1]))]
+                .sort((a, b) => Number(a) - Number(b));
+
+            if (variableNumbers.length === 0) {
+                templateVariables.innerHTML = '';
+                return;
+            }
+
+            templateVariables.innerHTML = `
+                <div class="border rounded p-3 bg-light">
+                    <h3 class="h6 fw-bold mb-3">Variables detectadas</h3>
+
+                    ${variableNumbers.map(number => `
+                        <div class="row align-items-center mb-2">
+                            <div class="col-sm-4">
+                                <label for="variableType${number}" class="form-label mb-0">
+                                    Variable {{${number}}}
+                                </label>
+                            </div>
+
+                            <div class="col-sm-8">
+                                <select
+                                    id="variableType${number}"
+                                    class="form-select template-variable-type"
+                                    data-variable-number="${number}"
+                                    required>
+                                    <option value="">Selecciona un tipo</option>
+                                    <option value="text" ${variableTypes[number] === 'text' ? 'selected' : ''}>
+                                        Texto
+                                    </option>
+                                    <option value="number" ${variableTypes[number] === 'number' ? 'selected' : ''}>
+                                        Número
+                                    </option>
+                                    <option value="date" ${variableTypes[number] === 'date' ? 'selected' : ''}>
+                                        Fecha
+                                    </option>
+                                    <option value="datetime" ${variableTypes[number] === 'datetime' ? 'selected' : ''}>
+                                        Fecha y hora
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        form.querySelector('[name="body_text"]').addEventListener('input', () => {
+            renderVariableTypes();
+        });
+
+        async function loadTemplates(successMessage = '') {
+            templateList.innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="text-muted mt-2 mb-0">Cargando plantillas...</p>
+                </div>
+            `;
+            try {
+                const response = await fetch('/campanas/api/templates/', {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok) {
+                    throw new Error(`Error HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                const templates = Array.isArray(data) ? data : data.results;
+                if (!Array.isArray(templates)) {
+                    throw new Error('La respuesta de plantillas no tiene un formato válido.');
+                }
+
+                const messageMarkup = successMessage
+                    ? `<div class="col-12"><div class="alert alert-success" role="status">${escapeHtml(successMessage)}</div></div>`
+                    : '';
+                if (templates.length === 0) {
+                    templateList.innerHTML = `${messageMarkup}
+                        <div class="col-12">
+                            <div class="alert alert-info">No hay plantillas registradas.</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                templateList.innerHTML = messageMarkup + templates.map((template) => `
+                    <div class="col-md-6 col-xl-4">
+                        <div class="card outbound-card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h3 class="h6 fw-bold mb-0">${escapeHtml(template.name)}</h3>
+                                    <span class="badge text-bg-light">${escapeHtml(template.category)}</span>
+                                </div>
+                                <p class="small text-muted mb-2">${escapeHtml(template.meta_template_name)}</p>
+                                <div class="bg-light rounded p-3 mb-3 flex-grow-1">
+                                    <p class="small mb-0">${escapeHtml(template.body_text)}</p>
+                                </div>
+                                <div class="small text-muted mb-3">
+                                    Variables: ${escapeHtml(template.param_count)}
+                                    · Estado: ${escapeHtml(template.status)}
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-outline-success btn-sm flex-grow-1" data-template-id="${escapeHtml(template.id)}">
+                                        <i class="bi bi-pencil me-1"></i>Editar
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm" data-delete-template="${escapeHtml(template.id)}" title="Eliminar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error al cargar plantillas:', error);
+                templateList.innerHTML = `
+                    ${successMessage ? `<div class="col-12"><div class="alert alert-success" role="status">${escapeHtml(successMessage)}</div></div>` : ''}
+                    <div class="col-12"><div class="alert alert-danger">No fue posible cargar las plantillas.</div></div>
+                `;
+            }
+        }
+
+        newTemplateBtn.addEventListener('click', () => {
+            editingTemplateId = null;
+            form.reset();
+            formError.textContent = '';
+            formError.classList.add('d-none');
+            modalTitle.textContent = 'Nueva plantilla';
+            saveButton.textContent = 'Guardar plantilla';
+            modal.show();
+        });
+
+        templateList.addEventListener('click', async (event) => {
+            const editButton = event.target.closest('[data-template-id]');
+            if (!editButton || !templateList.contains(editButton)) return;
+
+            editingTemplateId = editButton.dataset.templateId;
+            form.reset();
+            formError.textContent = '';
+            formError.classList.add('d-none');
+            modalTitle.textContent = 'Editar plantilla';
+            saveButton.textContent = 'Guardar cambios';
+            saveButton.disabled = true;
+            modal.show();
+
+            try {
+                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(editingTemplateId)}/`, {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok) {
+                    const responseText = await response.text();
+                    let backendError = responseText;
+                    try {
+                        backendError = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.warn('La respuesta de error no era JSON:', parseError);
+                    }
+                    console.error('Error al cargar plantilla:', backendError);
+                    formError.textContent = typeof backendError === 'string'
+                        ? backendError
+                        : (backendError.detail || JSON.stringify(backendError));
+                    formError.classList.remove('d-none');
+                    return;
+                }
+
+                const template = await response.json();
+                form.querySelector('[name="name"]').value = template.name || '';
+                form.querySelector('[name="meta_template_name"]').value = template.meta_template_name || '';
+                form.querySelector('[name="language"]').value = template.language || '';
+                form.querySelector('[name="category"]').value = template.category || '';
+                form.querySelector('[name="body_text"]').value = template.body_text || '';
+                renderVariableTypes(template.variable_types || {});
+                form.querySelector('[name="status"]').value = template.status || '';
+            } catch (error) {
+                console.error('Error al cargar plantilla:', error);
+                formError.textContent = 'No fue posible cargar la plantilla. Intenta nuevamente.';
+                formError.classList.remove('d-none');
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        templateList.addEventListener('click', async (event) => {
+            const deleteButton = event.target.closest('[data-delete-template]');
+            if (!deleteButton || !templateList.contains(deleteButton) || deleteButton.disabled) return;
+
+            const templateId = deleteButton.dataset.deleteTemplate;
+            if (!window.confirm('¿Estás seguro de que deseas eliminar esta plantilla? Esta acción no se puede deshacer.')) {
+                return;
+            }
+
+            deleteButton.disabled = true;
+            try {
+                const response = await fetch(`/campanas/api/templates/${encodeURIComponent(templateId)}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                });
+
+                if (!response.ok) {
+                    const responseText = await response.text();
+                    let backendError = responseText;
+                    try {
+                        backendError = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.warn('La respuesta de error no era JSON:', parseError);
+                    }
+                    console.error('Error al eliminar plantilla:', backendError);
+                    const message = typeof backendError === 'string'
+                        ? backendError
+                        : (backendError.detail || JSON.stringify(backendError));
+                    templateList.insertAdjacentHTML('afterbegin', `
+                        <div class="col-12">
+                            <div class="alert alert-danger" role="alert">${escapeHtml(message || 'No fue posible eliminar la plantilla.')}</div>
+                        </div>
+                    `);
+                    return;
+                }
+
+                await loadTemplates('Plantilla eliminada correctamente.');
+            } catch (error) {
+                console.error('Error al eliminar plantilla:', error);
+                templateList.insertAdjacentHTML('afterbegin', `
+                    <div class="col-12">
+                        <div class="alert alert-danger" role="alert">No fue posible conectar con el servidor. Intenta nuevamente.</div>
+                    </div>
+                `);
+            } finally {
+                deleteButton.disabled = false;
+            }
+        });
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            formError.textContent = '';
+            formError.classList.add('d-none');
+            saveButton.disabled = true;
+
+            const formData = new FormData(form);
+
+            const variableTypes = {};
+            const variableTypeSelects = form.querySelectorAll('.template-variable-type');
+
+            for (const select of variableTypeSelects) {
+                const variableNumber = select.dataset.variableNumber;
+                const type = select.value;
+
+                if (!type) {
+                    formError.textContent = `Debes seleccionar un tipo para la variable {{${variableNumber}}}.`;
+                    formError.classList.remove('d-none');
+                    saveButton.disabled = false;
+                    return;
+                }
+
+                variableTypes[variableNumber] = type;
+            }
+
+            const payload = {
+                name: formData.get('name'),
+                meta_template_name: formData.get('meta_template_name'),
+                language: formData.get('language'),
+                category: formData.get('category'),
+                body_text: formData.get('body_text'),
+                variable_types: variableTypes,
+                status: formData.get('status'),
+            };
+
+            try {
+                const isEditing = editingTemplateId !== null;
+                const response = await fetch(
+                    isEditing
+                        ? `/campanas/api/templates/${encodeURIComponent(editingTemplateId)}/`
+                        : '/campanas/api/templates/',
+                    {
+                        method: isEditing ? 'PATCH' : 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(payload),
+                    }
+                );
+
+                if (!response.ok) {
+                    const responseText = await response.text();
+                    let backendError = responseText;
+                    try {
+                        backendError = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.warn('La respuesta de error no era JSON:', parseError);
+                    }
+                    console.error(isEditing ? 'Error al editar plantilla:' : 'Error al crear plantilla:', backendError);
+                    const message = typeof backendError === 'string'
+                        ? backendError
+                        : (backendError.detail || JSON.stringify(backendError));
+                    formError.textContent = message || (isEditing
+                        ? 'No fue posible editar la plantilla.'
+                        : 'No fue posible crear la plantilla.');
+                    formError.classList.remove('d-none');
+                    return;
+                }
+
+                modal.hide();
+                form.reset();
+                editingTemplateId = null;
+                await loadTemplates(isEditing
+                    ? 'Plantilla actualizada correctamente.'
+                    : 'Plantilla creada correctamente.');
+            } catch (error) {
+                console.error(editingTemplateId !== null ? 'Error al editar plantilla:' : 'Error al crear plantilla:', error);
+                formError.textContent = editingTemplateId !== null
+                    ? 'No fue posible actualizar la plantilla. Intenta nuevamente.'
+                    : 'No fue posible conectar con el servidor. Intenta nuevamente.';
+                formError.classList.remove('d-none');
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        loadTemplates();
     }
 
     function renderSegments() {
@@ -706,5 +1707,5 @@ const OutboundUI = (() => {
         draw();
     }
 
-    return { renderDashboard, renderCampaignCards, renderCampaignsPage, renderCampaignDetail, initWizard, renderSegments, renderLogs };
+    return { renderDashboard, renderCampaignCards, renderCampaignsPage, renderCampaignDetail, initWizard, initAudiencesPage, initTemplatesPage, renderSegments, renderLogs };
 })();

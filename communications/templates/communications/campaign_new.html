@@ -3,7 +3,7 @@
 
 {% block title %}Nueva campaña{% endblock %}
 {% block page_heading %}Nueva campaña{% endblock %}
-{% block page_lead %}Canal WhatsApp. Elige audiencia, plantilla y momento de envío.{% endblock %}
+{% block page_lead %}Canal WhatsApp. Define los detalles, selecciona una plantilla y el momento de envío.{% endblock %}
 
 {% block hero_actions %}
 <a href="{% url 'communications:campaigns' %}" class="btn btn-outline-success rounded-pill">
@@ -27,70 +27,146 @@
                     <div class="channel-picker mb-4" id="channelPicker"></div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold" for="campaignName">Nombre de la campaña</label>
-                        <input id="campaignName" class="form-control" maxlength="80" placeholder="Ej. Recordatorio de matrícula 2026-1" required>
+                        <label class="form-label fw-semibold" for="campaignName">
+                            Nombre de la campaña
+                        </label>
+                        <input id="campaignName" class="form-control" maxlength="80"
+                            placeholder="Ej. Recordatorio de matrícula 2026-1" required>
                     </div>
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold" for="campaignType">Tipo</label>
+                            <label class="form-label fw-semibold" for="campaignType">
+                                Tipo
+                            </label>
                             <select id="campaignType" class="form-select">
                                 <option value="utilidad">Utilidad</option>
                                 <option value="marketing">Informativo / marketing</option>
                             </select>
                         </div>
+
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold" for="senderAccount">Cuenta de envío</label>
+                            <label class="form-label fw-semibold" for="senderAccount">
+                                Cuenta de envío
+                            </label>
                             <select id="senderAccount" class="form-select"></select>
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Audiencias a incluir (máx. 5)</label>
-                        <div id="includeSegments" class="segment-chips"></div>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold">Audiencias a excluir</label>
-                        <div id="excludeSegments" class="segment-chips"></div>
+                        <h2 class="h6 fw-bold mb-3">Base de datos de destinatarios</h2>
+
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <button type="button" class="btn btn-outline-success" id="loadRecipientsFileBtn">
+                                <i class="bi bi-folder-plus me-1"></i>
+                                Cargar archivo
+                            </button>
+                            <input type="file" id="recipientsFileInput" class="d-none"
+                                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                            <span id="selectedRecipientsFileName" class="selected-file-name d-none" aria-live="polite"></span>
+
+                            <button type="button" class="btn btn-outline-secondary" id="previewRecipientsFileBtn">
+                                <i class="bi bi-eye me-1"></i>
+                                Visualizar archivo
+                            </button>
+                        </div>
+
+                        <p class="small text-muted mt-2 mb-0">
+                            Formatos permitidos: .xlsx
+                        </p>
+
+                        <div class="mt-3">
+                            <label for="segmentName" class="form-label fw-semibold">
+                                Nombre de la audiencia
+                            </label>
+
+                            <input type="text" id="segmentName" class="form-control" maxlength="150"
+                                placeholder="Ej. Estudiantes de Ingeniería de Software">
+
+                            <div class="form-text">
+                                Este nombre identificará la audiencia creada a partir del archivo.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                Audiencias a incluir (máx. 5)
+                            </label>
+                            <div id="includeSegments" class="segment-chips"></div>
+                        </div>
+
+                        <div>
+                            <label class="form-label fw-semibold">
+                                Audiencias a excluir
+                            </label>
+                            <div id="excludeSegments" class="segment-chips"></div>
+                        </div>
                     </div>
                 </section>
 
                 <section class="wizard-pane d-none" data-pane="2">
-                    <h2 class="h5 mb-3 fw-bold">Selecciona y personaliza la plantilla</h2>
+
+                    <div class="mb-3">
+                        <h2 class="h5 mb-1 fw-bold">
+                            Selecciona y personaliza la plantilla
+                        </h2>
+
+                        <p class="small text-muted mb-0">
+                            Selecciona una plantilla para personalizar el mensaje.
+                        </p>
+                    </div>
+
                     <div id="templateGrid" class="template-grid mb-4"></div>
+
                     <div id="variableEditor" class="d-none">
                         <h3 class="h6 fw-bold">Variables</h3>
                         <div id="variableFields"></div>
                     </div>
+
                 </section>
 
                 <section class="wizard-pane d-none" data-pane="3">
                     <h2 class="h5 mb-3 fw-bold">Revisar y finalizar</h2>
+
                     <dl class="row review-list mb-4" id="reviewList"></dl>
+
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold" for="sendMode">Momento de envío</label>
+                            <label class="form-label fw-semibold" for="sendMode">
+                                Momento de envío
+                            </label>
+
                             <select id="sendMode" class="form-select">
                                 <option value="now">Enviar ahora</option>
                                 <option value="later">Programar</option>
                             </select>
                         </div>
+
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold" for="scheduleAt">Fecha y hora</label>
+                            <label class="form-label fw-semibold" for="scheduleAt">
+                                Fecha y hora
+                            </label>
+
                             <input id="scheduleAt" class="form-control" type="datetime-local" disabled>
                         </div>
                     </div>
-                    <div class="form-check mb-3">
+
+                    <!--div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="optOutCheck" checked>
-                        <label class="form-check-label" for="optOutCheck">Incluir mensaje de exclusión (opt-out) en envíos informativos</label>
-                    </div>
+
+                        <label class="form-check-label" for="optOutCheck">
+                            Incluir mensaje de exclusión (opt-out) en envíos informativos
+                        </label>
+                    </div-->
                     <p class="small text-muted mb-0" id="costEstimate"></p>
                 </section>
             </div>
-            <div class="card-footer d-flex justify-content-between py-3 px-4" style="background: var(--surface-2); border-top: 1px solid var(--border);">
+            <div class="card-footer d-flex justify-content-between py-3 px-4"
+                style="background: var(--surface-2); border-top: 1px solid var(--border);">
                 <button type="button" class="btn btn-outline-secondary" id="wizardBack" disabled>Atrás</button>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-success d-none" id="wizardTest">Enviar prueba</button>
+                    <button type="button" class="btn btn-outline-success d-none" id="wizardTest">Enviar
+                        prueba</button>
                     <button type="button" class="btn btn-success px-4" id="wizardNext">Continuar</button>
                 </div>
             </div>
@@ -110,9 +186,16 @@
         </div>
     </div>
 </div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="outboundToast" class="toast" role="status" aria-live="polite" aria-atomic="true">
+        <div class="toast-body" id="outboundToastBody"></div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initWizard === 'function') {

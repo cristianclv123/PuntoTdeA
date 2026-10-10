@@ -10,14 +10,13 @@ no cambia.
 import random
 from django.utils import timezone
 
-from ..adapters.mock_adapter import MockAdapter
+from ..adapters.meta_adapter import MetaAdapter
 from ..models import BroadcastRecipient, Campaign, Contact, ContactEvent
 from .logging_service import log_event
 
 # Único lugar donde se decide qué adaptador se usa hoy.
-# El día que se conecte Twilio o Meta, se cambia esta línea (o se hace
-# configurable por Campaign) y el resto del servicio sigue igual.
-DEFAULT_ADAPTER = MockAdapter()
+# La integración de este proyecto usa exclusivamente Meta WhatsApp Cloud API.
+DEFAULT_ADAPTER = MetaAdapter()
 
 
 def resolve_recipients(campaign: Campaign) -> list[BroadcastRecipient]:
@@ -90,8 +89,6 @@ def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
                 campaign=campaign,
                 broadcast_recipient=recipient,
             )
-            if adapter.provider_name == "mock":
-                _simulate_delivery(recipient, campaign)
         else:
             recipient.status = BroadcastRecipient.Status.FAILED
             recipient.error_message = result.error

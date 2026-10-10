@@ -27,8 +27,8 @@ def campaign_kpis():
         {"label": "Respuestas", "value": _format_count(replies), "sub": "interacciones entrantes"},
     ]
 
-
-def recent_campaigns(limit=4):
+#Cargar los segmentos obligaritiamente para evitar consultas adicionales al acceder a campaign.segment.name
+'''def recent_campaigns(limit=4):
     """Últimas campañas creadas, con sus métricas de entrega/lectura."""
     campaigns = Campaign.objects.select_related("segment").order_by("-created_at")[:limit]
     rows = []
@@ -56,8 +56,44 @@ def recent_campaigns(limit=4):
                 "read_pct": read_pct,
             }
         )
-    return rows
+    return rows'''
 
+#Por ahora no se cargan los segmentos, para evitar errores si no hay segmento asignado a la campaña
+def recent_campaigns(limit=4):
+    """Últimas campañas creadas, con sus métricas de entrega/lectura."""
+    campaigns = Campaign.objects.select_related("segment").order_by("-created_at")[:limit]
+
+    rows = []
+
+    for campaign in campaigns:
+        delivered = campaign.delivered_count
+        read = campaign.read_count
+        read_pct = f"{round(read / delivered * 100)}%" if delivered else "0%"
+        moment = campaign.scheduled_at or campaign.created_at
+
+        segment_name = campaign.segment.name if campaign.segment else "Sin audiencia"
+
+        rows.append(
+            {
+                "id": campaign.id,
+                "name": campaign.name,
+                "channel": campaign.channel,
+                "meta": f"{segment_name} · {timezone.localtime(moment).strftime('%d %b, %I:%M %p')}",
+                "segments": [segment_name],
+                "status": campaign.get_status_display().lower(),
+                "sent": campaign.sent_count,
+                "delivered": delivered,
+                "read": read,
+                "clicks": 0,
+                "replies": ContactEvent.objects.filter(
+                    campaign=campaign, event_type=ContactEvent.EventType.MESSAGE_REPLIED
+                ).count(),
+                "audience": segment_name,
+                "read_pct": read_pct,
+            }
+        )
+
+    return rows
 
 def recent_activity(limit=4):
     """Últimos eventos de contactos (respuestas, entregas, bajas, etc.)."""

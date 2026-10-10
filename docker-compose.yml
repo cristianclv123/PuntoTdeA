@@ -30,6 +30,22 @@ services:
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - WIDGET_ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
+      # Credenciales de Meta WhatsApp Cloud API: se definen en .env, nunca aquí.
+      - META_VERIFY_TOKEN=${META_VERIFY_TOKEN:-}
+      - META_APP_ID=${META_APP_ID:-}
+      - META_APP_SECRET=${META_APP_SECRET:-}
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}
+      - WHATSAPP_API_VERSION=${WHATSAPP_API_VERSION:-v21.0}
+      - WHATSAPP_TEST_RECIPIENT=${WHATSAPP_TEST_RECIPIENT}
+      - META_GRAPH_API_URL=${META_GRAPH_API_URL:-https://graph.facebook.com}
+      - META_REQUEST_TIMEOUT=${META_REQUEST_TIMEOUT:-10}
+      # Meta Marketing API (anuncios en WhatsApp Status): nunca en claro aquí.
+      - META_ADS_ACCESS_TOKEN=${META_ADS_ACCESS_TOKEN:-}
+      - META_AD_ACCOUNT_ID=${META_AD_ACCOUNT_ID:-}
+      - META_FB_PAGE_ID=${META_FB_PAGE_ID:-}
+      - META_WHATSAPP_PHONE=${META_WHATSAPP_PHONE:-}
+      - META_BUSINESS_ID=${META_BUSINESS_ID:-}
     depends_on:
       - db
       - redis

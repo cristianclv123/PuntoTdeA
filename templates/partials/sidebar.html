@@ -53,6 +53,23 @@
       {% icon 'megaphone' %}
       <span>Avisos</span>
     </a>
+    {% if user.is_staff %}
+      <details class="sidebar-group" {% if active_nav == 'whatsapp-test' or active_nav == 'whatsapp-config' %}open{% endif %}>
+        <summary class="sidebar-link {% if active_nav == 'whatsapp-test' or active_nav == 'whatsapp-config' %}active{% endif %}" title="WhatsApp (Meta)" aria-label="WhatsApp (Meta)">
+          {% icon 'message-circle' %}
+          <span>WhatsApp (Meta)</span>
+          {% icon 'chevron-down' size=14 %}
+        </summary>
+        <div class="sidebar-submenu">
+          <a href="{% url 'meta-whatsapp-config' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'whatsapp-config' %}active{% endif %}">
+            <span>Configuración</span>
+          </a>
+          <a href="{% url 'meta-whatsapp-test' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'whatsapp-test' %}active{% endif %}">
+            <span>Prueba de integración</span>
+          </a>
+        </div>
+      </details>
+    {% endif %}    
   </nav>
   <div class="sidebar-spacer"></div>
   <nav class="sidebar-nav">

@@ -126,7 +126,8 @@ class ChatbotWorkflow:
     def _save(self) -> None:
         self.conversation.save(update_fields=[
             'status', 'messages', 'escalation_reason', 'advisor_question', 'escalated_at',
-            'flow_state', 'last_question', 'linked_ticket_number', 'updated_at',
+            'case_conversation', 'flow_state', 'last_question', 'linked_ticket_number',
+            'updated_at',
         ])
 
     def _result(self, state: str, message: str, **extra: Any) -> dict[str, Any]:

@@ -1,0 +1,139 @@
+# Blueprint de Render para PuntoTdeA.
+#
+#   Dashboard -> New -> Blueprint -> apuntar a este repositorio
+#
+# Regla: NUNCA pongas un secreto aqui. Las variables marcadas con `sync: false`
+# se piden en el panel de Render y quedan solo alli.
+#
+# De planes gratuitos a pagados: cambia `plan` en los tres recursos
+# (web `free` -> `starter`, postgres `free` -> `basic-256mb`,
+# keyvalue `free` -> `256mb`). Ver docs/despliegue-render.md.
+
+services:
+  # Postgres: en plan free expira a los 30 dias. Migra la data antes.
+  - type: web
+    name: puntotdea
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: oregon
+    plan: free
+    # Render despliega esta rama: `dev`, que es la rama de integracion. Los
+    # administradores del repo pueden hacer push directo a `dev`; para el resto
+    # del equipo se recomienda PR.
+    #
+    # OJO: hay DOS ramas distintas en juego y cambiar solo una no hace nada.
+    #   1. Esta linea (`branch:`) -> de que rama despliega el SERVICIO.
+    #   2. Blueprints -> Settings -> Branch (en el panel) -> de que rama LEE
+    #      Render este render.yaml.
+    # Para pasar a produccion hay que tocar las dos: esta linea a `main` y la
+    # del panel a `main`.
+    branch: dev
+    # El deploy solo arranca si los checks de GitHub Actions estan en verde.
+    autoDeployTrigger: checksPass
+    # SIN `dockerCommand` a proposito. Render ejecuta ese valor como una sola
+    # cadena, y anidar `/bin/bash -c "..."` ahi dentro rompe el escapado de
+    # comillas: bash recibe toda la frase como un unico comando y sale con 127
+    # ("command not found"). El CMD del Dockerfile ya hace migrate + daphne
+    # usando $PORT, asi que Render lo usa tal cual.
+    healthCheckPath: /api/whatsapp/health/
+    envVars:
+      # --- Django ---
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+
+      # --- Superusuario inicial ---
+      # El plan free no tiene Shell y la Postgres free no expone URL externa:
+      # el unico momento en que corre codigo en Render es el arranque del
+      # contenedor. Por eso el CMD del Dockerfile invoca
+      # `createsuperuser --noinput`, que lee estas tres variables.
+      # Sin ellas el deploy igual levanta, pero nadie puede entrar.
+      # En cada redeploy el comando falla con "already taken" y el `|| echo`
+      # del CMD lo convierte en no-op, conservando la contrasena actual.
+      - key: DJANGO_SUPERUSER_USERNAME
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
+      # Render publica RENDER_EXTERNAL_HOSTNAME; settings lo usa solo para
+      # ALLOWED_HOSTS y CSRF_TRUSTED_ORIGINS, asi que no hay que hardcodear
+      # el dominio aqui.
+      - key: DJANGO_SECURE_HSTS_SECONDS
+        value: "0"
+      # El contenedor no tiene disco persistente (ver nota de media abajo).
+      - key: MEDIA_UPLOADS_ENABLED
+        value: "true"
+
+      # --- Base de datos y canal layers ---
+      - key: DATABASE_URL
+        fromDatabase:
+          name: puntotdea-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: puntotdea-kv
+          property: connectionString
+
+      # --- Token de la API interna /campanas/api/ ---
+      # Sin esto, con DEBUG=false la UI de campanas queda sin datos.
+      - key: INTERNAL_API_TOKEN
+        generateValue: true
+
+      # --- Meta WhatsApp Cloud API ---
+      # Copia los valores de tu .env local. Son `sync: false` para que Render
+      # te los pida y no queden en el repositorio.
+      - key: META_VERIFY_TOKEN
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_API_VERSION
+        value: v21.0
+      - key: META_GRAPH_API_URL
+        value: https://graph.facebook.com
+      - key: META_REQUEST_TIMEOUT
+        value: "20"
+
+      # --- Meta Marketing API (anuncios en WhatsApp Status) ---
+      - key: META_ADS_ACCESS_TOKEN
+        sync: false
+      - key: META_AD_ACCOUNT_ID
+        sync: false
+      - key: META_FB_PAGE_ID
+        sync: false
+      - key: META_WHATSAPP_PHONE
+        sync: false
+      - key: META_BUSINESS_ID
+        sync: false
+
+      # Orígenes permitidos para CORS. En produccion deja solo el dominio real.
+      - key: WIDGET_ALLOWED_ORIGINS
+        sync: false
+
+  # Key Value (Valkey) para channels-redis. Sin el, WebSocket y el InMemory
+  # layer pierden los mensajes al reiniciar el contenedor.
+  - type: keyvalue
+    name: puntotdea-kv
+    region: oregon
+    plan: free
+    # Solo red privada de Render: nadie de internet entra al Redis.
+    ipAllowList: []
+    # En free no hay persistencia; el layer de canales es reconstruible.
+    # Ojo: sin comillas, YAML lo lee como el booleano false y el Blueprint falla.
+    persistenceMode: "off"
+    maxmemoryPolicy: noeviction
+
+databases:
+  - name: puntotdea-db
+    region: oregon
+    plan: free
+    postgresMajorVersion: "16"
