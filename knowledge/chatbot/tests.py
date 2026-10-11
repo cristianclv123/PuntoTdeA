@@ -188,7 +188,7 @@ class WhatsAppFlowTests(TestCase):
         case_message = _manager(CaseMessage).get(conversation=case_conversation)
         self.assertEqual(case_message.body, 'Necesito ayuda con mi matrícula')
 
-    def test_chatbot_keeps_answering_while_advisor_ticket_is_open(self):
+    def test_pending_message_is_forwarded_to_open_advisor_case(self):
         handle_message('573001112243', 'Hola')
         handle_message('573001112243', 'Quiero un asesor')
         handle_message('573001112243', 'Necesito revisar mi solicitud')
@@ -201,20 +201,30 @@ class WhatsAppFlowTests(TestCase):
         conversation.flow_state = 'pending'
         conversation.save(update_fields=['status', 'flow_state'])
 
-        response = handle_message('573001112243', '¿Dónde consulto el calendario académico?')
+        response = handle_message(
+            '573001112243',
+            '¿Dónde consulto el calendario académico?',
+            'wamid.pending.1',
+        )
 
         conversation.refresh_from_db()
-        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
-        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
-        self.assertEqual(conversation.last_question, '¿Dónde consulto el calendario académico?')
-        self.assertEqual(len(response), 2)
-        self.assertIn('¿tienes otra duda', response[1].lower())
+        self.assertEqual(conversation.status, ChatConversation.STATUS_PENDING)
+        self.assertEqual(conversation.flow_state, 'pending')
+        self.assertEqual(response, [])
         self.assertEqual(
             _manager(CaseConversation).filter(
                 channel__code='whatsapp',
                 external_thread_id='573001112243',
             ).count(),
             1,
+        )
+        forwarded_message = _manager(CaseMessage).get(
+            conversation=conversation.case_conversation,
+            external_id='wamid.pending.1',
+        )
+        self.assertEqual(
+            forwarded_message.body,
+            '¿Dónde consulto el calendario académico?',
         )
 
     @patch(
@@ -226,33 +236,28 @@ class WhatsAppFlowTests(TestCase):
             'sources': [],
         }),
     )
-    def test_low_confidence_keeps_whatsapp_conversation_active(self):
+    def test_low_confidence_creates_case_and_keeps_whatsapp_conversation_active(self):
         handle_message('573001112235', 'Hola')
 
-        responses = handle_message('573001112235', 'Pregunta sin respuesta')
+        responses = handle_message(
+            '573001112235',
+            'Pregunta sin respuesta',
+            'wamid.low-confidence.1',
+        )
 
         conversation = _manager(ChatConversation).get(external_user_id='573001112235')
         self.assertEqual(len(responses), 2)
         self.assertIn('un asesor te dará respuesta', responses[0].lower())
-        self.assertIn('horario de atención', responses[0])
-        self.assertIn('¿tienes otra duda', responses[1].lower())
-        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
+        self.assertIn('He creado el ticket', responses[1])
+        self.assertEqual(conversation.flow_state, 'help_options')
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
-        self.assertIsNone(conversation.case_conversation)
+        self.assertIsNotNone(conversation.case_conversation)
         self.assertTrue(conversation.messages[-1]['awaiting_advisor'])
-        self.assertFalse(_manager(CaseConversation).filter(
-            channel__code='whatsapp',
-            external_thread_id='573001112235',
-        ).exists())
-        continuation = handle_message('573001112235', 'sí')
-        self.assertIn('otra pregunta', continuation[0])
-        next_responses = handle_message('573001112235', 'Otra pregunta que tampoco entiende')
-        conversation.refresh_from_db()
-        self.assertEqual(len(next_responses), 2)
-        self.assertEqual(conversation.last_question, 'Otra pregunta que tampoco entiende')
-        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
-        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
-        self.assertIn('¿tienes otra duda', next_responses[1].lower())
+        case_message = _manager(CaseMessage).get(
+            conversation=conversation.case_conversation,
+        )
+        self.assertEqual(case_message.body, 'Pregunta sin respuesta')
+        self.assertEqual(case_message.external_id, 'wamid.low-confidence.1')
 
     def test_new_message_after_ended_conversation_creates_new_chat(self):
         previous = _manager(ChatConversation).create(
@@ -481,7 +486,16 @@ class WhatsAppFlowTests(TestCase):
         handle_message('573001112242', 'Quiero un asesor')
         handle_message('573001112242', 'Necesito revisar mi solicitud')
 
-        response = handle_message('573001112242', '¿Ya revisaron mi solicitud?')
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            return_value={
+                'answer': 'Puedes consultar el estado de tu solicitud con un asesor.',
+                'confidence': 0.9,
+                'needs_human_attention': False,
+                'sources': [],
+            },
+        ):
+            response = handle_message('573001112242', '¿Ya revisaron mi solicitud?')
 
         conversation = _manager(ChatConversation).get(
             channel='whatsapp',
