@@ -41,6 +41,7 @@ no lo necesita.
    META_APP_SECRET=APP_SECRET_DE_META
    META_ACCESS_TOKEN=TOKEN_PERMANENTE_O_DE_SISTEMA
    WHATSAPP_PHONE_NUMBER_ID=ID_DEL_NUMERO_EMISOR
+   WHATSAPP_BUSINESS_ACCOUNT_ID=ID_DE_LA_WABA
    WHATSAPP_API_VERSION=v21.0
    ```
 
@@ -101,6 +102,43 @@ El endpoint responde al desafío `GET` de Meta y en `POST` exige la firma
 La programación de campañas no es parte de esta integración: el programador o
 worker del equipo de campañas debe invocar el envío en la fecha prevista y
 respetar los límites de Meta.
+
+## Plantillas: alta y aprobación
+
+La página **Gestionar plantillas** (`/plantillas/`, en la barra lateral) muestra
+en una sola vista las plantillas reales de Meta y los borradores locales:
+
+- **Borradores locales**: lo único que se guarda en la base de PuntoTdeA. Cada
+  tarjeta lo marca como `Borrador local`.
+- **Plantillas de Meta**: se leen en vivo de la cuenta (fuente de verdad). Cada
+  tarjeta muestra el estado real (`PENDING`, `APPROVED`, `REJECTED`, `PAUSED`…).
+
+Al crear o editar hay dos acciones:
+
+1. **Guardar como borrador** guarda el trabajo en la base local.
+2. **Guardar y enviar a Meta** guarda el borrador y, en el mismo paso, lo crea
+   por API con `POST /{WABA}/message_templates`
+   (`POST /campanas/api/templates/{id}/enviar-a-meta/`). Si Meta lo acepta, el
+   borrador **deja de existir** en la base local: la plantilla pasa a vivir solo
+   en Meta.
+
+Desde una plantilla de Meta se puede **Duplicar como borrador** para reutilizar
+su cuerpo como punto de partida. La edición de una plantilla de Meta
+(`POST /campanas/api/templates/meta/{meta_id}/`) envía el cuerpo nuevo y la deja
+otra vez en revisión.
+
+La lista de Meta se consulta con `GET /campanas/api/templates/meta/`. Las
+campañas y los avisos seleccionan de esa lista solo las plantillas
+`APPROVED` y guardan un *snapshot* en la campaña; no hay llave foránea local.
+
+> Requiere `WHATSAPP_BUSINESS_ACCOUNT_ID` (el ID de la WABA) además del
+> `META_ACCESS_TOKEN`. Sin eso, la página avisa "Falta configurar".
+
+> Meta todavía no permite crear por API los encabezados de imagen, video o
+> documento sin subir antes el archivo: esas plantillas se crean en WhatsApp
+> Manager. El cuerpo con variables y los botones de URL sí se crean desde aquí
+> (se envían ejemplos automáticos de las variables, que Meta exige para revisar).
+
 
 ## Chatbot
 

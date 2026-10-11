@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     "knowledge",
     "communications",
     "announcements",
+    "tests.apps.TestsConfig",
 ]
 
 MIDDLEWARE = [
@@ -191,13 +192,34 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Punto TdeA API",
-    "DESCRIPTION": "Documentación de las APIs del sistema Punto TdeA (casos, comunicaciones, base de conocimiento y avisos).",
-    "VERSION": "1.0.0",
+    "DESCRIPTION": (
+        "Documentación de las APIs del sistema Punto TdeA: casos (bandeja y widget web), "
+        "base de conocimiento (chatbot) y campañas de WhatsApp.\n\n"
+        "**Autenticación:** sesión de Django (cookie `sessionid`). La API de campañas "
+        "(`/campanas/api/`) también acepta el header `X-Internal-Token`.\n\n"
+        "El webhook de Meta (`/api/whatsapp/webhook/`) no se documenta aquí: lo llama "
+        "Meta directamente."
+    ),
+    "VERSION": "1.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/",
+    "TAGS": [
+        {"name": "cases", "description": "Bandeja de casos, contactos, mensajes y widget web."},
+        {"name": "knowledge", "description": "Base de conocimiento: artículos, FAQs, intenciones y chatbot."},
+        {"name": "campanas", "description": "Campañas de WhatsApp: plantillas, audiencias, envíos y pruebas."},
+    ],
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "internalToken": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Internal-Token",
+                "description": "Token de servicio (`INTERNAL_API_TOKEN`) para consumidores BFF.",
+            },
+        },
+    },
     "ENUM_NAME_OVERRIDES": {
         "ConversationStatusEnum": "cases.models.Conversation.Status",
-        "MessageTemplateStatusEnum": "communications.models.MessageTemplate.Status",
         "CampaignStatusEnum": "communications.models.Campaign.Status",
         "BroadcastRecipientStatusEnum": "communications.models.BroadcastRecipient.Status",
         "KnowledgeArticleStatusEnum": "knowledge.models.KnowledgeArticle.STATUS_CHOICES",
@@ -216,6 +238,9 @@ META_APP_ID = os.environ.get("META_APP_ID", "")
 META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
 META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+# WABA (WhatsApp Business Account): necesaria para dar de alta plantillas y
+# consultar su aprobación (POST/GET /{WABA}/message_templates).
+WHATSAPP_BUSINESS_ACCOUNT_ID = os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", "")
 WHATSAPP_TEST_RECIPIENT = os.environ.get("WHATSAPP_TEST_RECIPIENT", "")
 WHATSAPP_API_VERSION = os.environ.get("WHATSAPP_API_VERSION", "v21.0")
 META_GRAPH_API_URL = os.environ.get("META_GRAPH_API_URL", "https://graph.facebook.com")

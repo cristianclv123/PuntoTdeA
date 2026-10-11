@@ -16,17 +16,23 @@ class MetaConfigStatusTests(TestCase):
             META_ACCESS_TOKEN="",
             META_APP_ID="",
             WHATSAPP_PHONE_NUMBER_ID="",
+            WHATSAPP_BUSINESS_ACCOUNT_ID="",
         ):
             config = meta_config.capability_status()
 
         self.assertFalse(config["can_send"])
         self.assertFalse(config["can_receive"])
         self.assertFalse(config["can_verify"])
+        self.assertFalse(config["can_manage_templates"])
         self.assertIn("META_ACCESS_TOKEN", config["missing"])
         self.assertIn("META_APP_SECRET", config["missing"])
         # Las opcionales van aparte: no bloquean la integración.
-        self.assertEqual(config["optional_missing"], ["META_APP_ID"])
+        self.assertEqual(
+            config["optional_missing"],
+            ["META_APP_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID"],
+        )
         self.assertNotIn("META_APP_ID", config["missing"])
+        self.assertNotIn("WHATSAPP_BUSINESS_ACCOUNT_ID", config["missing"])
 
     def test_secrets_are_never_exposed(self):
         with override_settings(
@@ -47,10 +53,12 @@ class MetaConfigStatusTests(TestCase):
             META_APP_SECRET="secret",
             META_ACCESS_TOKEN="token",
             WHATSAPP_PHONE_NUMBER_ID="123456789",
+            WHATSAPP_BUSINESS_ACCOUNT_ID="waba-123",
         ):
             self.assertTrue(meta_config.is_fully_configured())
             self.assertTrue(meta_config.can_receive_webhooks())
             self.assertTrue(meta_config.can_verify_subscription())
+            self.assertTrue(meta_config.can_manage_templates())
 
 
 class MetaTestPageAccessTests(TestCase):

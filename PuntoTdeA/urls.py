@@ -16,6 +16,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from communications import views as communications_views
 from communications.meta_console_views import config as meta_console_config
 from communications.meta_console_views import health as meta_console_health
 from communications.meta_console_views import index as meta_console_index
@@ -76,6 +77,7 @@ urlpatterns = [
     path('bandeja/', include('cases.urls')),
     path('base-de-conocimiento/', include('knowledge.urls')),
     path('campanas/', include('communications.urls')),
+    path('plantillas/', communications_views.templates, name='plantillas'),
     path('avisos/', include('announcements.urls')),
 
     # Redirecciones para compatibilidad con alias

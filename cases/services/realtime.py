@@ -5,7 +5,11 @@ from django.utils import timezone
 from cases.constants import channel_ui, status_tag_class
 
 
-def _conversation_payload(conversation, last_message_body: str = "") -> dict:
+def _conversation_payload(
+    conversation,
+    last_message_body: str = "",
+    last_direction: str = "",
+) -> dict:
     contact = conversation.contact
     channel_code = conversation.channel.code
     ui = channel_ui(channel_code)
@@ -15,14 +19,18 @@ def _conversation_payload(conversation, last_message_body: str = "") -> dict:
         if conversation.assigned_to
         else "Sin asignar"
     )
-    body = last_message_body
-    if not body:
+    last = None
+    if not last_message_body or not last_direction:
         last = (
             conversation.messages.exclude(direction="system")
             .order_by("-sent_at", "-id")
             .first()
         )
-        body = last.body if last else ""
+    body = last_message_body or (last.body if last else "")
+    direction = last_direction or (last.direction if last else "")
+    unassigned = (
+        conversation.assigned_to_id is None and conversation.status != "cerrado"
+    )
     return {
         "id": conversation.id,
         "ticket_number": conversation.ticket_number or f"TDEA-{conversation.id:06d}",
@@ -30,6 +38,7 @@ def _conversation_payload(conversation, last_message_body: str = "") -> dict:
         "initials": contact.initials,
         "role": contact.academic_program,
         "last_message": body,
+        "last_direction": direction,
         "theme": conversation.theme or "General",
         "department_name": conversation.department.name if conversation.department_id else "Sin dependencia",
         "priority": conversation.priority,
@@ -37,23 +46,15 @@ def _conversation_payload(conversation, last_message_body: str = "") -> dict:
         "time": conversation.last_message_at.strftime("%H:%M"),
         "advisor": advisor,
         "assigned_to_id": conversation.assigned_to_id,
-        "unassigned": conversation.assigned_to_id is None,
+        "unassigned": unassigned,
         "status": conversation.status,
         "status_label": conversation.get_status_display(),
         "status_badge": (
-            "Esperando asesor"
-            if (
-                conversation.assigned_to_id is None
-                and conversation.status != "cerrado"
-            )
-            else conversation.get_status_display()
+            "Esperando asesor" if unassigned else conversation.get_status_display()
         ),
         "status_tag_class": status_tag_class(
             status=conversation.status,
-            unassigned=(
-                conversation.assigned_to_id is None
-                and conversation.status != "cerrado"
-            ),
+            unassigned=unassigned,
         ),
         "detail_url": f"/bandeja/{conversation.id}/",
         **ui,
@@ -110,7 +111,11 @@ def broadcast_new_message(message) -> None:
 
     conversation = message.conversation
     preview = "" if message.direction == "system" else message.body
-    conversation_payload = _conversation_payload(conversation, last_message_body=preview)
+    conversation_payload = _conversation_payload(
+        conversation,
+        last_message_body=preview,
+        last_direction="" if message.direction == "system" else message.direction,
+    )
     message_payload = _message_payload(message)
 
     async_to_sync(channel_layer.group_send)(

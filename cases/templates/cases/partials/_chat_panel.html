@@ -163,7 +163,7 @@
       <p class="wa-claim-text">Esta conversación no está siendo atendida</p>
       <form method="post" action="{% url 'cases:claim' conversation.id %}{% if filter_query %}?{{ filter_query }}{% endif %}">
         {% csrf_token %}
-        <button class="wa-claim-btn" type="submit">Tomar conversación</button>
+        <button class="wa-claim-btn" type="submit">Tomar asesor</button>
       </form>
     </div>
   {% elif assigned_to_other %}

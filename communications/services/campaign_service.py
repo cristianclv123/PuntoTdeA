@@ -10,6 +10,7 @@ no cambia.
 import random
 from django.utils import timezone
 
+from ..adapters.base import TemplateRef
 from ..adapters.meta_adapter import MetaAdapter
 from ..models import BroadcastRecipient, Campaign, Contact, ContactEvent
 from .logging_service import log_event
@@ -56,6 +57,22 @@ def _render_params(campaign: Campaign, contact: Contact) -> dict:
     return resolved
 
 
+def _template_ref(campaign: Campaign) -> TemplateRef:
+    """Arma el envío a partir del snapshot guardado en la campaña.
+
+    La plantilla ya no vive en la base local: solo se conserva una copia de sus
+    datos en ``campaign.template_snapshot``.
+    """
+    snapshot = campaign.template_snapshot or {}
+    return TemplateRef(
+        name=campaign.template_name,
+        language=campaign.template_language or "es_CO",
+        body_text=snapshot.get("body_text", ""),
+        header_type=snapshot.get("header_type", "none"),
+        header_media_url=snapshot.get("header_media_url", ""),
+    )
+
+
 def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
     """Envía (o simula el envío de) una campaña a todos sus destinatarios
     pendientes. Actualiza estados y deja rastro en ContactEvent."""
@@ -73,7 +90,7 @@ def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
 
         result = adapter.send_template_message(
             to=recipient.phone_snapshot,
-            template=campaign.template,
+            template=_template_ref(campaign),
             params=recipient.params,
         )
 

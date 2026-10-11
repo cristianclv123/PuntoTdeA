@@ -187,6 +187,33 @@ class WhatsAppFlowTests(TestCase):
         self.assertTrue(conversation.messages[-1]['awaiting_advisor'])
         case_message = _manager(CaseMessage).get(conversation=case_conversation)
         self.assertEqual(case_message.body, 'Necesito ayuda con mi matrícula')
+        self.assertIsNone(case_conversation.assigned_to_id)
+
+    def test_pending_whatsapp_message_appends_to_case_ticket(self):
+        handle_message('573001112236', 'Hola')
+        handle_message('573001112236', 'Quiero un asesor')
+        handle_message('573001112236', 'Necesito ayuda con mi matrícula')
+        chat = _manager(ChatConversation).get(external_user_id='573001112236')
+        chat.status = ChatConversation.STATUS_PENDING
+        chat.flow_state = 'pending'
+        chat.save(update_fields=['status', 'flow_state'])
+
+        replies = handle_message('573001112236', 'Sigo esperando, es urgente')
+        self.assertEqual(replies, [])
+        case_conversation = _manager(CaseConversation).get(
+            channel__code='whatsapp',
+            external_thread_id='573001112236',
+        )
+        bodies = list(
+            _manager(CaseMessage).filter(conversation=case_conversation).values_list(
+                'body', flat=True
+            )
+        )
+        self.assertIn('Necesito ayuda con mi matrícula', bodies)
+        self.assertIn('Sigo esperando, es urgente', bodies)
+        self.assertIsNone(case_conversation.assigned_to_id)
+        chat.refresh_from_db()
+        self.assertEqual(chat.flow_state, 'pending')
 
     def test_pending_message_is_forwarded_to_open_advisor_case(self):
         handle_message('573001112243', 'Hola')

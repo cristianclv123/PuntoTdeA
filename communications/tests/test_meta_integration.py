@@ -47,10 +47,8 @@ class MetaWhatsAppIntegrationTests(TestCase):
             whatsapp_opt_in=Contact.OptInStatus.SUSCRITO,
         )
         self.template = MessageTemplate.objects.create(
-            name="Matrícula",
-            meta_template_name="matricula_2026",
+            name="matricula_2026",
             body_text="Hola {{1}}, recuerda tu fecha {{2}}.",
-            status=MessageTemplate.Status.APPROVED,
         )
 
     @patch("communications.adapters.meta_adapter.requests.post")
@@ -127,7 +125,14 @@ class MetaWhatsAppIntegrationTests(TestCase):
         segment = AudienceSegment.objects.create(name="Aspirantes")
         campaign = Campaign.objects.create(
             name="Recordatorio",
-            template=self.template,
+            template_meta_id="999",
+            template_name="recordatorio_web",
+            template_language="es_CO",
+            template_snapshot={
+                "body_text": "Hola {{1}}, recuerda tu fecha {{2}}.",
+                "header_type": "none",
+                "header_media_url": "",
+            },
             segment=segment,
         )
         recipient = BroadcastRecipient.objects.create(
