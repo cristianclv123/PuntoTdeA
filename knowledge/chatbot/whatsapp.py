@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Any
 
 from django.conf import settings
-from django.db.models import Q
 from django.utils import timezone
 
 from communications.adapters.meta_adapter import send_text_message
@@ -17,6 +16,7 @@ from communications.models import Contact
 from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
 from ..models import ChatConversation
+from .case_status import CaseStatusAPIError, get_case_status
 from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
 from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
 
@@ -103,7 +103,35 @@ def _forward_inbound_to_case(
     conversation: ChatConversation,
     sender: str,
     text: str,
-    reason: str = '',
+    external_message_id: str = '',
+) -> CaseConversation:
+    case_conversation = conversation.case_conversation
+    if case_conversation is None:
+        raise ValueError('La conversación no tiene un ticket asociado.')
+
+    case_conversation, _, _ = ingest_inbound_message(
+        InboundPayload(
+            channel_code='whatsapp',
+            external_thread_id=case_conversation.external_thread_id,
+            body=text,
+            external_message_id=external_message_id,
+            theme=(conversation.escalation_reason or '')[:120],
+            **_case_contact_values(conversation.contact, sender),
+        )
+    )
+
+    if conversation.case_conversation_id != case_conversation.pk:
+        conversation.case_conversation = case_conversation
+        conversation.save(update_fields=['case_conversation', 'updated_at'])
+
+    return case_conversation
+
+
+def _create_case_ticket(
+    conversation: ChatConversation,
+    sender: str,
+    question: str,
+    reason: str,
     external_message_id: str = '',
 ) -> CaseConversation:
     theme = (reason or conversation.escalation_reason or '')[:120]
@@ -127,6 +155,7 @@ def _forward_inbound_to_case(
             channel_code='whatsapp',
             external_thread_id=case_thread_id,
             body=question,
+            external_message_id=external_message_id,
             theme=reason[:120],
             **_case_contact_values(conversation.contact, sender),
         )
@@ -156,8 +185,12 @@ def _create_case_ticket(
     conversation.status = ChatConversation.STATUS_ACTIVE
     conversation.flow_state = 'help_options'
     conversation.save(update_fields=[
-        'case_conversation', 'escalation_reason', 'escalated_at',
-        'status', 'flow_state', 'updated_at',
+        'case_conversation',
+        'escalation_reason',
+        'escalated_at',
+        'status',
+        'flow_state',
+        'updated_at',
     ])
     return case_conversation
 
@@ -175,7 +208,9 @@ def _ticket_confirmation(conversation: ChatConversation, ticket: CaseConversatio
 
 
 def _submit_question(
+    conversation: ChatConversation,
     workflow: ChatbotWorkflow,
+    sender: str,
     question: str,
     external_message_id: str = '',
 ) -> list[str]:
@@ -183,33 +218,38 @@ def _submit_question(
     if result.get('valid') and result.get('needs_human_attention'):
         reason = 'El chatbot no encontró una respuesta con suficiente confianza.'
         ticket = _create_case_ticket(
-            conversation, sender, question, reason, external_message_id,
+            conversation,
+            sender,
+            question,
+            reason,
+            external_message_id,
         )
-        return [result['message'], _ticket_confirmation(conversation, ticket)]
-    return [result['message']]
-
-
-def handle_message(sender: str, text: str, external_message_id: str = '') -> list[str]:
+        return [result['answer_message'], _ticket_confirmation(conversation, ticket)]
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
         return [result['answer_message'], result['follow_up_message']]
     return [result['message']]
 
 
-def _case_ticket_is_closed(conversation: ChatConversation) -> bool:
-    return (
-        conversation.case_conversation_id is not None
-        and conversation.case_conversation.status == CaseConversation.Status.CERRADO
-    )
+def _case_ticket_status(conversation: ChatConversation) -> str | None:
+    if conversation.case_conversation_id is None:
+        return None
+    try:
+        status = get_case_status(conversation.case_conversation_id)
+    except CaseStatusAPIError as exc:
+        logger.warning(
+            'No se pudo consultar el estado remoto del ticket %s; se usará el estado local: %s',
+            conversation.case_conversation_id,
+            exc,
+        )
+        return conversation.case_conversation.status
+    return status
 
 
-def _case_ticket_is_open(conversation: ChatConversation) -> bool:
-    return (
-        conversation.case_conversation_id is not None
-        and conversation.case_conversation.status != CaseConversation.Status.CERRADO
-    )
-
-
-def handle_message(sender: str, text: str) -> list[str]:
+def handle_message(
+    sender: str,
+    text: str,
+    external_message_id: str = '',
+) -> list[str]:
     contact = _find_contact(sender)
     conversations = _manager(ChatConversation).filter(
         channel='whatsapp',
@@ -217,9 +257,6 @@ def handle_message(sender: str, text: str) -> list[str]:
     ).select_related('case_conversation')
     conversation = conversations.filter(
         status=ChatConversation.STATUS_ACTIVE,
-    ).filter(
-        Q(case_conversation__isnull=True)
-        | ~Q(case_conversation__status=CaseConversation.Status.CERRADO)
     ).order_by('-updated_at', '-created_at').first()
     if conversation is None:
         conversation = conversations.order_by('-updated_at', '-created_at').first()
@@ -227,18 +264,26 @@ def handle_message(sender: str, text: str) -> list[str]:
     start_new_conversation = conversation is None
     had_previous_conversation = conversation is not None
     inactivity_result = None
+    ticket_status = _case_ticket_status(conversation) if conversation else None
 
-    if conversation and _case_ticket_is_closed(conversation):
+    if conversation and ticket_status == CaseConversation.Status.CERRADO:
         conversation.status = ChatConversation.STATUS_ENDED
         conversation.flow_state = 'ended'
         conversation.save(update_fields=['status', 'flow_state', 'updated_at'])
         start_new_conversation = True
 
-    if conversation and _case_ticket_is_open(conversation):
-        if (
+    if (
+        conversation
+        and conversation.case_conversation_id is not None
+        and ticket_status is not None
+        and ticket_status != CaseConversation.Status.CERRADO
+    ):
+        is_pending = (
             conversation.status == ChatConversation.STATUS_PENDING
             or conversation.flow_state == 'pending'
-            or conversation.status == ChatConversation.STATUS_ENDED
+        )
+        if not is_pending and (
+            conversation.status == ChatConversation.STATUS_ENDED
             or conversation.flow_state == 'ended'
         ):
             conversation.status = ChatConversation.STATUS_ACTIVE
@@ -285,11 +330,25 @@ def handle_message(sender: str, text: str) -> list[str]:
             return [greeting]
 
     state = conversation.flow_state
+    if state == 'pending' and conversation.case_conversation_id is not None:
+        _forward_inbound_to_case(
+            conversation,
+            sender,
+            text,
+            external_message_id,
+        )
+        return []
     if state == 'waiting_question':
         if _requests_advisor(text):
             replies = [workflow.escalate('El usuario solicitó atención humana.')['message']]
         else:
-            replies = _submit_question(workflow, text)
+            replies = _submit_question(
+                conversation,
+                workflow,
+                sender,
+                text,
+                external_message_id,
+            )
         if new_conversation and greeting:
             replies.insert(0, greeting)
         if inactivity_result is not None:
@@ -306,7 +365,13 @@ def handle_message(sender: str, text: str) -> list[str]:
     if state == 'help_options':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
-        return _submit_question(conversation, workflow, sender, text, external_message_id)
+        return _submit_question(
+            conversation,
+            workflow,
+            sender,
+            text,
+            external_message_id,
+        )
     if state == 'waiting_advisor_question':
         result = workflow.submit_advisor_question(text)
         if result.get('valid'):
@@ -316,36 +381,16 @@ def handle_message(sender: str, text: str) -> list[str]:
             )
             return [result['message'], _ticket_confirmation(conversation, ticket)]
         return [result['message']]
-    if state == 'pending':
-        _forward_inbound_to_case(
-            conversation,
-            sender,
-            text,
-            external_message_id=external_message_id,
-        )
-        return []
     if state == 'ended':
         return ['Esta conversación ya está cerrada. Envía un nuevo mensaje para iniciar otra conversación.']
     workflow.start()
-    return _submit_question(conversation, workflow, sender, text, external_message_id)
-    if state in {'ended', 'pending'}:
-        conversation.status = ChatConversation.STATUS_ENDED
-        conversation.flow_state = 'ended'
-        conversation.save(update_fields=['status', 'flow_state', 'updated_at'])
-        conversation = _manager(ChatConversation).create(
-            channel='whatsapp',
-            external_user_id=sender,
-            status=ChatConversation.STATUS_ACTIVE,
-            contact=contact,
-        )
-        workflow = ChatbotWorkflow(conversation)
-        greeting = workflow.start()['message']
-        if _requests_advisor(text):
-            reply = workflow.escalate('El usuario solicitó atención humana.')['message']
-            return [greeting, reply]
-        return [greeting, *_submit_question(workflow, text)]
-    workflow.start()
-    return _submit_question(workflow, text)
+    return _submit_question(
+        conversation,
+        workflow,
+        sender,
+        text,
+        external_message_id,
+    )
 
 
 def send_text(recipient: str, text: str) -> bool:
@@ -361,8 +406,12 @@ def send_text(recipient: str, text: str) -> bool:
 
 def process_webhook(payload: dict[str, Any]) -> int:
     processed = 0
-    for sender, text, message_id in _messages(payload):
-        for reply in handle_message(sender, text, message_id):
+    for sender, text, external_message_id in _messages(payload):
+        for reply in handle_message(
+            sender,
+            text,
+            external_message_id=external_message_id,
+        ):
             send_text(sender, reply)
         processed += 1
     return processed
