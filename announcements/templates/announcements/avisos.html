@@ -36,7 +36,7 @@
 
 <div class="two-col-layout">
   <!-- Tarjeta de creacion: oculta hasta presionar "Crear aviso" arriba -->
-  <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data">
+  <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data" style="flex: 1 1 60%; max-width: 60%;">
     {% csrf_token %}
     <div
       style="
@@ -145,7 +145,7 @@
   </form>
 
   <!-- Lista de avisos guardados y publicados -->
-  <div class="list-col">
+  <div class="list-col" style="flex: 1 1 40%;">
     <div class="list-head">
       <div class="list-title font-brand">Avisos guardados/publicados</div>
       <div class="list-count">{{ announcements|length }} avisos activos</div>

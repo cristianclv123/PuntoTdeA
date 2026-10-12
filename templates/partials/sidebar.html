@@ -60,13 +60,13 @@
         </a>
       </div>
     </details>
-    <a href="{% url 'audiences' %}" class="sidebar-link {% if active_nav == 'segments' %}active{% endif %}" title="Gestionar audiencias" aria-label="Gestionar audiencias">
-      {% icon 'settings-2' %}
-      <span>Gestionar audiencias</span>
-    </a>
     <a href="{% url 'announcements:index' %}" class="sidebar-link {% if active_nav == 'announcements' %}active{% endif %}" title="Avisos" aria-label="Avisos">
       {% icon 'megaphone' %}
       <span>Avisos</span>
+    </a>
+    <a href="{% url 'audiences' %}" class="sidebar-link {% if active_nav == 'segments' %}active{% endif %}" title="Gestionar audiencias" aria-label="Gestionar audiencias">
+      {% icon 'users-round' %}
+      <span>Gestionar audiencias</span>
     </a>
     {% if user.is_staff %}
       <details class="sidebar-group" {% if active_nav == 'whatsapp-test' or active_nav == 'whatsapp-config' %}open{% endif %}>

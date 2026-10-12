@@ -5,9 +5,10 @@
 .audience-card {
     display: block;
     padding: 12px;
-    border: 1px solid #e4e4e4;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 10px;
-    background: #fff;
+    background: var(--bg-secondary, #1f1f1f);
+    color: var(--text-primary, #e0e0e0);
 }
 
 .audience-card-label {

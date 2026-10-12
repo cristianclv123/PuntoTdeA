@@ -103,7 +103,7 @@
             '<span class="ap-selection-count" data-ap-count></span>' +
             "</div>" +
             '<div class="ap-selection-actions">' +
-            '<button type="button" class="ap-btn ap-btn-sm' + (viewStyle === "gray" ? " ap-btn-view" : "") + '" data-ap-view>' +
+            '<button type="button" class="ap-btn ap-btn-sm' + (viewStyle === "gray" ? " ap-btn-view" : "") + '" data-ap-view type="button">' +
             (viewIcon === "eye"
                 ? '<span class="ap-btn-icon ap-btn-icon-svg">' +
                   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
@@ -422,15 +422,18 @@
         }
 
         // --- Ver audiencia (contactos) ---
-        root.querySelector("[data-ap-view]").addEventListener("click", async function () {
-            if (!selected) return;
-            setFeedback(viewFeedback, "");
-            viewTitle.textContent = "Audiencia: " + (selected.name || "");
-            contactsEl.innerHTML =
-                '<div class="ap-loading"><span class="ap-spinner"></span> Cargando contactos...</div>';
-            moreButton.hidden = true;
-            openDialog(viewDialog);
-            await loadContacts(apiBase + "/segments/" + encodeURIComponent(selected.id) + "/contacts/", false);
+        root.addEventListener("click", async function (event) {
+            var viewBtn = event.target.closest("[data-ap-view]");
+            if (viewBtn && selected) {
+                event.preventDefault();
+                setFeedback(viewFeedback, "");
+                viewTitle.textContent = "Audiencia: " + (selected.name || "");
+                contactsEl.innerHTML =
+                    '<div class="ap-loading"><span class="ap-spinner"></span> Cargando contactos...</div>';
+                moreButton.hidden = true;
+                openDialog(viewDialog);
+                await loadContacts(apiBase + "/segments/" + encodeURIComponent(selected.id) + "/contacts/", false);
+            }
         });
 
         async function loadContacts(url, append) {
