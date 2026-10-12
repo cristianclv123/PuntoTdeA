@@ -1,0 +1,23 @@
+{# Componente reutilizable: tarjeta de selección de audiencia de destino. #}
+{# Usar en Avisos y Campañas para no duplicar markup. #}
+{# Parámetros: #}
+{#   picker_id  (requerido) id del contenedor del selector #}
+{#   label      (opcional)  texto del encabezado de la tarjeta #}
+{#   input_name (opcional)  nombre del input oculto con el id de la audiencia #}
+{#   context    (opcional)  etiqueta de contexto usada al crear la audiencia #}
+{#   api_base   (opcional)  base de la API interna (default: /campanas/api) #}
+<div class="audience-card" data-audience-card>
+  {% if label %}<div class="audience-card-label">{{ label }}</div>{% endif %}
+  <div
+    id="{{ picker_id }}"
+    class="audience-picker"
+    data-audience-picker
+    data-api-base="{{ api_base|default:'/campanas/api' }}"
+    {% if input_name %}data-input-name="{{ input_name }}"{% endif %}
+    {% if context %}data-context="{{ context }}"{% endif %}
+    data-remove-mode="true"
+    data-view-icon="eye"
+    data-view-style="gray"
+    data-actions-inline="true"
+  ></div>
+</div>

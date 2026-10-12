@@ -1,0 +1,357 @@
+/* Selector de audiencia reutilizable (Avisos y Campañas). */
+
+/* Tarjeta contenedora del selector de audiencia de destino.
+   Se usa vía el partial templates/partials/audience_card.html. */
+.audience-card {
+    display: block;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: var(--bg-secondary, #1f1f1f);
+    color: var(--text-primary, #e0e0e0);
+}
+
+.audience-card-label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #444;
+    margin-bottom: 8px;
+}
+
+.audience-picker {
+    display: block;
+    font-size: 0.9rem;
+}
+
+.audience-picker .ap-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.audience-picker .ap-actions.ap-actions-inline {
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.audience-picker .ap-actions.ap-actions-inline .ap-btn {
+    flex: 1 1 0;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.audience-picker .ap-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--color-primary, #3dff8a);
+    border-radius: 8px;
+    background: var(--color-primary, #3dff8a);
+    color: #0f0f0f;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    line-height: 1.2;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    text-decoration: none;
+}
+
+.audience-picker .ap-btn:hover {
+    filter: brightness(0.95);
+}
+
+.audience-picker .ap-btn-primary {
+    background: #111;
+    color: var(--color-primary, #3dff8a);
+    border-color: #111;
+}
+
+.audience-picker .ap-btn-primary:hover {
+    filter: brightness(0.95);
+}
+
+.audience-picker .ap-btn-sm {
+    padding: 0.3rem 0.65rem;
+    font-size: 0.8rem;
+}
+
+.audience-picker .ap-btn-ghost {
+    border-color: #cfcfcf;
+    color: #555;
+}
+
+.audience-picker .ap-btn-ghost:hover {
+    background: #f2f2f2;
+}
+
+.audience-picker .ap-btn-view {
+    color: #6b7280;
+    border-color: #d1d5db;
+    background: #fff;
+}
+
+.audience-picker .ap-btn-view:hover {
+    background: #f9fafb;
+}
+
+.audience-picker .ap-btn-icon-svg {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+}
+
+.audience-picker .ap-empty {
+    margin-top: 0.6rem;
+    color: #888;
+    font-size: 0.85rem;
+}
+
+.audience-picker .ap-selection {
+    margin-top: 0.6rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(61, 255, 138, 0.25);
+    border-left: 4px solid var(--color-primary, #3dff8a);
+    border-radius: 8px;
+    background: rgba(61, 255, 138, 0.05);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.audience-picker .ap-selection-label {
+    color: #555;
+}
+
+.audience-picker .ap-selection-name {
+    font-weight: 700;
+    color: #0f7c3f;
+}
+
+.audience-picker .ap-selection-count {
+    color: #555;
+}
+
+.audience-picker .ap-selection-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+/* --- Diálogos --- */
+.ap-dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 0;
+    width: min(560px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+    color: #1c1c1c;
+}
+
+.ap-dialog-wide {
+    width: min(1000px, calc(100vw - 2rem));
+}
+
+.ap-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.ap-dialog-form {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 2rem);
+    font-size: 0.9rem;
+}
+
+.ap-dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #eee;
+}
+
+.ap-dialog-head h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.ap-dialog-close {
+    border: none;
+    background: transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #777;
+}
+
+.ap-dialog-close:hover {
+    color: #333;
+}
+
+.ap-dialog-body {
+    padding: 1rem 1.25rem;
+    overflow: auto;
+}
+
+.ap-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.9rem 1.25rem;
+    border-top: 1px solid #eee;
+}
+
+.ap-dialog .ap-field {
+    display: block;
+    margin-bottom: 0.9rem;
+}
+
+.ap-dialog .ap-field span {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-weight: 600;
+}
+
+.ap-dialog .ap-field input {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.ap-dialog .ap-search {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.ap-dialog .ap-hint {
+    margin: 0;
+    color: #888;
+    font-size: 0.8rem;
+}
+
+.ap-feedback {
+    margin: 0.5rem 0;
+    padding: 0.55rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.ap-feedback.is-error {
+    background: #fdecea;
+    color: #b3261e;
+}
+
+.ap-feedback.is-ok {
+    background: #eaf7ef;
+    color: #1a5c38;
+}
+
+.ap-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.ap-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e2e2e2;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    font-size: 0.88rem;
+}
+
+.ap-list-item:hover {
+    border-color: #1f8a4c;
+    background: #f4fbf6;
+}
+
+.ap-list-item.is-selected {
+    border-color: #1f8a4c;
+    background: #eaf7ef;
+}
+
+.ap-list-name {
+    font-weight: 600;
+}
+
+.ap-list-count {
+    color: #777;
+    white-space: nowrap;
+}
+
+.ap-empty-inline {
+    padding: 0.75rem 0;
+    color: #888;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.ap-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.ap-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(61, 255, 138, 0.25);
+    border-top-color: var(--color-primary, #3dff8a);
+    border-radius: 50%;
+    animation: ap-spin 0.7s linear infinite;
+}
+
+@keyframes ap-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.ap-table-scroll {
+    max-height: 45vh;
+    overflow: auto;
+    border: 1px solid #eee;
+    border-radius: 8px;
+}
+
+.ap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.ap-table th,
+.ap-table td {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.ap-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f7f7f7;
+    z-index: 1;
+}

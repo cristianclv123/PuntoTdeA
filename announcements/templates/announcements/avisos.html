@@ -6,6 +6,10 @@
 {% block page_title %}Avisos y novedades{% endblock %} 
 {% block page_subtitle %}Publica anuncios visibles para toda la comunidad{% endblock %} 
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/audience-picker.css' %}?v=1">
+{% endblock %}
+
 {% block content %}
 <link rel="stylesheet" href="{% static 'announcements/avisos.css' %}?v=8">
 
@@ -32,7 +36,7 @@
 
 <div class="two-col-layout">
   <!-- Tarjeta de creacion: oculta hasta presionar "Crear aviso" arriba -->
-  <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data">
+  <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data" style="flex: 1 1 60%; max-width: 60%;">
     {% csrf_token %}
     <div
       style="
@@ -93,36 +97,33 @@
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <label class="field-label" for="image2">Imagen (opcional)</label>
+      <label class="field-label" for="image2">Imagen</label>
       <input
         id="image2"
         name="image"
         class="field-input"
         type="file"
         accept="image/*"
+        required
       />
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <div class="field-label">Audiencia (segmentos)</div>
-      {% if segments %}
-      <div class="segmented-row">
-        {% for segment in segments %}
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="{{ segment.id }}"{% if forloop.first %} checked{% endif %} />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            {{ segment.name }}
-          </span>
-        </label>
-        {% endfor %}
+      <div class="audience-card" data-audience-card>
+        <div class="audience-card-label">Audiencia de destino</div>
+        <div
+          id="avisoAudiencePicker"
+          class="audience-picker"
+          data-audience-picker
+          data-api-base="/campanas/api"
+          data-input-name="audience"
+          data-context="aviso"
+          data-remove-mode="true"
+          data-view-icon="eye"
+          data-view-style="gray"
+          data-actions-inline="true"
+        ></div>
       </div>
-      {% else %}
-      <div style="color: #888; font-size: 0.85rem">
-        No hay segmentos. Crea uno en Campañas para usarlo como audiencia.
-      </div>
-      {% endif %}
     </div>
 
     <div class="form-actions">
@@ -144,13 +145,13 @@
   </form>
 
   <!-- Lista de avisos guardados y publicados -->
-  <div class="list-col">
+  <div class="list-col" style="flex: 1 1 40%;">
     <div class="list-head">
       <div class="list-title font-brand">Avisos guardados/publicados</div>
       <div class="list-count">{{ announcements|length }} avisos activos</div>
     </div>
     {% for a in announcements %}
-    <div class="list-card">
+    <div class="list-card" style="padding: 12px 14px;">
       <div class="list-card-top">
         <div class="list-card-name" style="flex: 1">{{ a.title }}</div>
         {% if a.is_urgent %}
@@ -159,16 +160,8 @@
         <span class="pill pill-info" style="padding: 5px 12px">Informativo</span>
         {% endif %}
       </div>
-      <div class="list-card-body">{{ a.content }}</div>
-
-      {% if a.image %}
-      <div style="margin-top: 10px; margin-bottom: 10px;">
-          <img src="{{ a.image.url }}" alt="{{ a.title }}" style="max-width: 100%; border-radius: 8px; max-height: 250px; object-fit: cover;" />
-      </div>
-      {% endif %}
-
       {% with status_ad=a.status_ads.first %}
-      <div class="status-row">
+      <div class="status-row" style="margin-top: 4px; margin-bottom: 8px;">
         <span class="status-label">WhatsApp Status:</span>
         {% if not status_ad %}
         <span class="status-pill status-none">Sin publicar</span>
@@ -183,6 +176,17 @@
         {% endif %}
         {% if status_ad %}
         <span class="status-date">{{ status_ad.created_at|date:"d M Y H:i" }}</span>
+        {% endif %}
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: flex-start;">
+        <div style="flex: 1;">
+          <div class="list-card-body">{{ a.content }}</div>
+        </div>
+        {% if a.has_image %}
+        <div style="flex-shrink: 0; margin-top: 2px;">
+          <img src="{% url 'announcements:image' a.pk %}" alt="{{ a.title }}" style="max-width: 160px; border-radius: 8px; max-height: 120px; object-fit: cover;" />
+        </div>
         {% endif %}
       </div>
       {% if status_ad and status_ad.error %}
@@ -366,5 +370,16 @@
       openConfirm(source, form, submitter);
     });
   })();
+</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/audience-picker.js' %}?v=1"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.AudiencePicker && typeof window.AudiencePicker.mountAll === "function") {
+      window.AudiencePicker.mountAll();
+    }
+  });
 </script>
 {% endblock %}

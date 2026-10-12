@@ -77,6 +77,7 @@ urlpatterns = [
     path('bandeja/', include('cases.urls')),
     path('base-de-conocimiento/', include('knowledge.urls')),
     path('campanas/', include('communications.urls')),
+    path('audiencias/', communications_views.segments, name='audiences'),
     path('plantillas/', communications_views.templates, name='plantillas'),
     path('avisos/', include('announcements.urls')),
 
