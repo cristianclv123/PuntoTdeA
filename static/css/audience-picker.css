@@ -1,5 +1,22 @@
 /* Selector de audiencia reutilizable (Avisos y Campañas). */
 
+/* Tarjeta contenedora del selector de audiencia de destino.
+   Se usa vía el partial templates/partials/audience_card.html. */
+.audience-card {
+    display: block;
+    padding: 12px;
+    border: 1px solid #e4e4e4;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.audience-card-label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #444;
+    margin-bottom: 8px;
+}
+
 .audience-picker {
     display: block;
     font-size: 0.9rem;

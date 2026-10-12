@@ -55,15 +55,20 @@
 
                     <div class="mb-3">
                         <h2 class="h6 fw-bold mb-3">Base de datos de destinatarios</h2>
-
-                        <div id="campaignAudiencePicker"
+                        <div class="audience-card" data-audience-card>
+                          <div
+                            id="campaignAudiencePicker"
+                            class="audience-picker"
                             data-audience-picker
                             data-api-base="/campanas/api"
+                            data-input-name="audience"
                             data-context="campaña"
                             data-remove-mode="true"
                             data-view-icon="eye"
                             data-view-style="gray"
-                            data-actions-inline="true"></div>
+                            data-actions-inline="true"
+                          ></div>
+                        </div>
                     </div>
                 </section>
 

@@ -109,14 +109,15 @@
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <div class="field-label">Audiencia de destino</div>
-      <div class="card" style="padding: 12px; border-radius: 10px;">
+      <div class="audience-card" data-audience-card>
+        <div class="audience-card-label">Audiencia de destino</div>
         <div
           id="avisoAudiencePicker"
           class="audience-picker"
           data-audience-picker
           data-api-base="/campanas/api"
           data-input-name="audience"
+          data-context="aviso"
           data-remove-mode="true"
           data-view-icon="eye"
           data-view-style="gray"
