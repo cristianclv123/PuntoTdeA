@@ -31,18 +31,7 @@
 {% block content %}
   <div class="outbound-panel">
     <div class="outbound-toolbar">
-      <ul class="outbound-tabs">
-        <li>
-          <a class="{% if nav_section == 'campaigns' %}is-active{% endif %}" href="{% url 'communications:campaigns' %}">
-            <i class="bi bi-megaphone"></i> Campañas
-          </a>
-        </li>
-        <li>
-          <a class="{% if nav_section == 'segments' %}is-active{% endif %}" href="{% url 'communications:segments' %}">
-            <i class="bi bi-people"></i> Audiencias
-          </a>
-        </li>
-      </ul>
+
       <div class="outbound-toolbar-actions">
         {% block hero_actions %}{% endblock %}
       </div>

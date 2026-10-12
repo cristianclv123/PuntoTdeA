@@ -81,6 +81,7 @@ class AnnouncementViewsTests(TestCase):
         self.assertContains(response, "Sin publicar")
 
     def test_create_button_only_saves(self):
+        segment = self._segment_with_contact()
         response = self.client.post(
             reverse("announcements:index"),
             {
@@ -89,6 +90,7 @@ class AnnouncementViewsTests(TestCase):
                 "body": "Sin clases",
                 "type": "urgente",
                 "image": _image(),
+                "audience": str(segment.id),
             },
         )
 
@@ -294,6 +296,7 @@ class AnnouncementViewsTests(TestCase):
         self.assertContains(response, 'value="delete"')
 
     def test_create_stores_image_bytes_in_database_not_media(self):
+        segment = self._segment_with_contact()
         response = self.client.post(
             reverse("announcements:index"),
             {
@@ -302,6 +305,7 @@ class AnnouncementViewsTests(TestCase):
                 "body": "Cuerpo",
                 "type": "informativo",
                 "image": _image("banner.png"),
+                "audience": str(segment.id),
             },
         )
 

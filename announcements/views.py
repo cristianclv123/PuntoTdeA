@@ -95,6 +95,10 @@ def index(request):
         if not image_file:
             messages.error(request, "La imagen es obligatoria.")
             return redirect("announcements:index")
+        audience = request.POST.get("audience")
+        if not audience:
+            messages.error(request, "Debe seleccionar una audiencia de destino.")
+            return redirect("announcements:index")
 
         announcement = Announcement(
             title=title,
@@ -104,6 +108,14 @@ def index(request):
         # La imagen se guarda como bytes en la BD (no en MEDIA_ROOT).
         announcement.set_image(image_file)
         announcement.save()
+        try:
+            from communications.models import AudienceSegment
+
+            seg = AudienceSegment.objects.get(pk=int(audience))
+            announcement.target_audience_segment = seg
+            announcement.save(update_fields=["target_audience_segment"])
+        except Exception:
+            pass
         messages.success(request, "Aviso creado.")
 
         if publish_status:

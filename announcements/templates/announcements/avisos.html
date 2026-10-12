@@ -110,17 +110,19 @@
 
     <div class="field-group" style="margin-bottom: 8px">
       <div class="field-label">Audiencia de destino</div>
-      <div
-        id="avisoAudiencePicker"
-        class="audience-picker"
-        data-audience-picker
-        data-api-base="/campanas/api"
-        data-input-name="audience"
-        data-remove-mode="true"
-        data-view-icon="eye"
-        data-view-style="gray"
-        data-actions-inline="true"
-      ></div>
+      <div class="card" style="padding: 12px; border-radius: 10px;">
+        <div
+          id="avisoAudiencePicker"
+          class="audience-picker"
+          data-audience-picker
+          data-api-base="/campanas/api"
+          data-input-name="audience"
+          data-remove-mode="true"
+          data-view-icon="eye"
+          data-view-style="gray"
+          data-actions-inline="true"
+        ></div>
+      </div>
     </div>
 
     <div class="form-actions">
@@ -148,7 +150,7 @@
       <div class="list-count">{{ announcements|length }} avisos activos</div>
     </div>
     {% for a in announcements %}
-    <div class="list-card">
+    <div class="list-card" style="padding: 12px 14px;">
       <div class="list-card-top">
         <div class="list-card-name" style="flex: 1">{{ a.title }}</div>
         {% if a.is_urgent %}
@@ -157,16 +159,8 @@
         <span class="pill pill-info" style="padding: 5px 12px">Informativo</span>
         {% endif %}
       </div>
-      <div class="list-card-body">{{ a.content }}</div>
-
-      {% if a.has_image %}
-      <div style="margin-top: 10px; margin-bottom: 10px;">
-          <img src="{% url 'announcements:image' a.pk %}" alt="{{ a.title }}" style="max-width: 100%; border-radius: 8px; max-height: 250px; object-fit: cover;" />
-      </div>
-      {% endif %}
-
       {% with status_ad=a.status_ads.first %}
-      <div class="status-row">
+      <div class="status-row" style="margin-top: 4px; margin-bottom: 8px;">
         <span class="status-label">WhatsApp Status:</span>
         {% if not status_ad %}
         <span class="status-pill status-none">Sin publicar</span>
@@ -181,6 +175,17 @@
         {% endif %}
         {% if status_ad %}
         <span class="status-date">{{ status_ad.created_at|date:"d M Y H:i" }}</span>
+        {% endif %}
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: flex-start;">
+        <div style="flex: 1;">
+          <div class="list-card-body">{{ a.content }}</div>
+        </div>
+        {% if a.has_image %}
+        <div style="flex-shrink: 0; margin-top: 2px;">
+          <img src="{% url 'announcements:image' a.pk %}" alt="{{ a.title }}" style="max-width: 160px; border-radius: 8px; max-height: 120px; object-fit: cover;" />
+        </div>
         {% endif %}
       </div>
       {% if status_ad and status_ad.error %}

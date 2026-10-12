@@ -18,8 +18,9 @@
 }
 
 .audience-picker .ap-actions.ap-actions-inline .ap-btn {
-    flex: 1 1 50%;
+    flex: 1 1 0;
     justify-content: center;
+    white-space: nowrap;
 }
 
 .audience-picker .ap-btn {
@@ -29,8 +30,8 @@
     padding: 0.45rem 0.9rem;
     border: 1px solid var(--color-primary, #3dff8a);
     border-radius: 8px;
-    background: #fff;
-    color: var(--color-primary, #3dff8a);
+    background: var(--color-primary, #3dff8a);
+    color: #0f0f0f;
     font-weight: 600;
     font-size: 0.85rem;
     cursor: pointer;
@@ -40,13 +41,13 @@
 }
 
 .audience-picker .ap-btn:hover {
-    background: rgba(61, 255, 138, 0.08);
+    filter: brightness(0.95);
 }
 
 .audience-picker .ap-btn-primary {
-    background: var(--color-primary, #3dff8a);
-    color: #0f0f0f;
-    border-color: var(--color-primary, #3dff8a);
+    background: #111;
+    color: var(--color-primary, #3dff8a);
+    border-color: #111;
 }
 
 .audience-picker .ap-btn-primary:hover {
@@ -75,6 +76,12 @@
 
 .audience-picker .ap-btn-view:hover {
     background: #f9fafb;
+}
+
+.audience-picker .ap-btn-icon-svg {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
 }
 
 .audience-picker .ap-empty {

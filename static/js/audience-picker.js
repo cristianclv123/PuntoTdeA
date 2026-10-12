@@ -91,9 +91,9 @@
 
         root.innerHTML =
             '<div class="ap-actions' + (actionsInline ? " ap-actions-inline" : "") + '">' +
-            '<button type="button" class="ap-btn ap-btn-primary" data-ap-create>' +
+            '<button type="button" class="ap-btn" data-ap-create>' +
             '<span class="ap-btn-icon">+</span> Crear nueva audiencia</button>' +
-            '<button type="button" class="ap-btn" data-ap-choose>Escoger audiencia existente</button>' +
+            '<button type="button" class="ap-btn" data-ap-choose>Seleccionar audiencia</button>' +
             "</div>" +
             '<div class="ap-empty" data-ap-empty>Sin audiencia seleccionada.</div>' +
             '<div class="ap-selection" data-ap-selection hidden>' +
@@ -104,10 +104,14 @@
             "</div>" +
             '<div class="ap-selection-actions">' +
             '<button type="button" class="ap-btn ap-btn-sm' + (viewStyle === "gray" ? " ap-btn-view" : "") + '" data-ap-view>' +
-            (viewIcon ? '<span class="ap-btn-icon">' + escapeHtml(viewIcon) + '</span> ' : "") +
-            'Ver audiencia</button>' +
+            (viewIcon === "eye"
+                ? '<span class="ap-btn-icon ap-btn-icon-svg">' +
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
+                  '</span> '
+                : (viewIcon ? '<span class="ap-btn-icon">' + escapeHtml(viewIcon) + '</span> ' : "")) +
+            'Ver contactos</button>' +
             (removeMode
-                ? '<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost" data-ap-clear aria-label="Retirar audiencia">&times;</button>'
+                ? '<button type="button" class="ap-btn ap-btn-sm ap-btn-view" data-ap-clear aria-label="Retirar audiencia">&times;</button>'
                 : '<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost" data-ap-change>Cambiar</button>') +
             "</div>" +
             "</div>" +
@@ -199,15 +203,18 @@
         }
 
         function renderSelection() {
+            var actions = root.querySelector(".ap-actions");
             if (!selected) {
                 emptyEl.hidden = false;
                 selectionEl.hidden = true;
                 if (inputEl) inputEl.value = "";
+                if (actions) actions.style.display = "";
                 onChange(null);
                 return;
             }
             emptyEl.hidden = true;
             selectionEl.hidden = false;
+            if (actions) actions.style.display = "none";
             nameEl.textContent = selected.name || "";
             countEl.textContent = selected.contact_count !== undefined
                 ? "· " + formatCount(selected.contact_count) + " contactos"
@@ -241,6 +248,21 @@
 
         host.querySelectorAll("[data-ap-close]").forEach(function (button) {
             button.addEventListener("click", closeDialogs);
+        });
+        
+        // Click directo en botón clear del DOM generado
+        root.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-ap-clear]");
+            if (btn) {
+                e.preventDefault();
+                selected = null;
+                if (inputEl) inputEl.value = "";
+                if (emptyEl) emptyEl.hidden = false;
+                if (selectionEl) selectionEl.hidden = true;
+                var actionsRoot = root.querySelector(".ap-actions");
+                if (actionsRoot) actionsRoot.style.display = "";
+                onChange(null);
+            }
         });
         host.querySelectorAll("dialog").forEach(function (dialog) {
             dialog.addEventListener("click", function (event) {
@@ -478,12 +500,15 @@
         });
 
         // --- Cambiar ---
-        root.querySelector("[data-ap-change]").addEventListener("click", function () {
-            setFeedback(chooseFeedback, "");
-            chooseSearch.value = "";
-            openDialog(chooseDialog);
-            loadSegments();
-        });
+        var changeBtn = root.querySelector("[data-ap-change]");
+        if (changeBtn) {
+            changeBtn.addEventListener("click", function () {
+                setFeedback(chooseFeedback, "");
+                chooseSearch.value = "";
+                openDialog(chooseDialog);
+                loadSegments();
+            });
+        }
 
         var instance = {
             root: root,
