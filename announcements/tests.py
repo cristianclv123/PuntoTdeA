@@ -1,5 +1,6 @@
 """Pruebas del modulo de Avisos y su publicacion en WhatsApp Status."""
 
+import os
 import shutil
 import tempfile
 from unittest.mock import patch
@@ -18,6 +19,13 @@ from .models import Announcement, StatusAd
 
 def _image(name="aviso.png"):
     return SimpleUploadedFile(name, b"fake-image-bytes", content_type="image/png")
+
+
+def _announcement_with_image(**kwargs):
+    announcement = Announcement(**kwargs)
+    announcement.set_image(_image())
+    announcement.save()
+    return announcement
 
 
 def _ok_status_ad_result():
@@ -57,14 +65,17 @@ class AnnouncementViewsTests(TestCase):
         SegmentMembership.objects.create(segment=segment, contact=contact)
         return segment
 
-    def test_page_lists_segments_and_two_buttons(self):
+    def test_page_lists_two_buttons_and_audience_picker(self):
         self._segment_with_contact()
-        Announcement.objects.create(title="Aviso sin status", content="Cuerpo")
+        _announcement_with_image(title="Aviso sin status", content="Cuerpo")
 
         response = self.client.get(reverse("announcements:index"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Aspirantes")
+        # Las audiencias ya no se renderizan en el servidor: el selector
+        # compartido las carga por API desde el navegador.
+        self.assertContains(response, "avisoAudiencePicker")
+        self.assertNotContains(response, "Aspirantes")
         self.assertContains(response, 'value="create"')
         self.assertContains(response, 'value="publish_status_create"')
         self.assertContains(response, "Sin publicar")
@@ -77,6 +88,7 @@ class AnnouncementViewsTests(TestCase):
                 "title": "Suspension",
                 "body": "Sin clases",
                 "type": "urgente",
+                "image": _image(),
             },
         )
 
@@ -139,11 +151,11 @@ class AnnouncementViewsTests(TestCase):
                 },
             )
 
-        self.assertEqual(Announcement.objects.count(), 1)
+        self.assertEqual(Announcement.objects.count(), 0)
         self.assertEqual(StatusAd.objects.count(), 0)
         create_ad.assert_not_called()
         messages = [str(m) for m in get_messages(response.wsgi_request)]
-        self.assertTrue(any("falta la imagen" in m.lower() for m in messages))
+        self.assertTrue(any("imagen" in m.lower() for m in messages))
 
     def test_meta_error_is_recorded_on_status_ad(self):
         segment = self._segment_with_contact()
@@ -184,8 +196,8 @@ class AnnouncementViewsTests(TestCase):
 
     def test_card_retry_reuses_last_audience_and_segments(self):
         segment = self._segment_with_contact()
-        announcement = Announcement.objects.create(
-            title="Ya existe", content="Cuerpo", image=_image()
+        announcement = _announcement_with_image(
+            title="Ya existe", content="Cuerpo"
         )
         StatusAd.objects.create(
             announcement=announcement,
@@ -280,3 +292,50 @@ class AnnouncementViewsTests(TestCase):
         self.assertContains(response, "Publicar en estado WhatsApp")
         self.assertContains(response, 'value="publish_status"')
         self.assertContains(response, 'value="delete"')
+
+    def test_create_stores_image_bytes_in_database_not_media(self):
+        response = self.client.post(
+            reverse("announcements:index"),
+            {
+                "action": "create",
+                "title": "Con imagen",
+                "body": "Cuerpo",
+                "type": "informativo",
+                "image": _image("banner.png"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        announcement = Announcement.objects.get()
+        self.assertEqual(bytes(announcement.image_data), b"fake-image-bytes")
+        self.assertEqual(announcement.image_name, "banner.png")
+        self.assertEqual(announcement.image_content_type, "image/png")
+        # No se escribe nada en MEDIA_ROOT.
+        self.assertEqual(os.listdir(self._media), [])
+
+    def test_image_endpoint_serves_stored_bytes(self):
+        announcement = _announcement_with_image(title="Con imagen", content="Cuerpo")
+
+        response = self.client.get(
+            reverse("announcements:image", args=[announcement.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertEqual(response.content, b"fake-image-bytes")
+
+    def test_image_endpoint_returns_404_without_image(self):
+        announcement = Announcement.objects.create(title="Sin imagen", content="Cuerpo")
+
+        response = self.client.get(
+            reverse("announcements:image", args=[announcement.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_page_renders_audience_picker_container(self):
+        response = self.client.get(reverse("announcements:index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "avisoAudiencePicker")
+        self.assertContains(response, "audience-picker.js")

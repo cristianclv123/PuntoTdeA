@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 
+from django.core.files.base import ContentFile
+
 from communications.models import AudienceSegment
 from communications.services import ads_service
 
@@ -91,18 +93,18 @@ def publish_announcement(
             audience_ids = [audience_id]
     status_ad.audience_ids = audience_ids
 
-    image_path = ""
-    if announcement.image:
-        try:
-            image_path = announcement.image.path
-        except (NotImplementedError, ValueError):
-            image_path = ""
+    image_file = None
+    if announcement.has_image:
+        image_file = ContentFile(
+            announcement.get_image_bytes(),
+            name=announcement.image_name or "aviso.jpg",
+        )
 
     result = ads_service.create_status_ad(
         name=f"Aviso: {announcement.title}"[:200],
         message=announcement.content,
         daily_budget=daily_budget,
-        image=image_path or None,
+        image=image_file,
         title=announcement.title[:200],
         countries=countries,
         custom_audiences=audience_ids,

@@ -428,7 +428,6 @@ const OutboundUI = (() => {
         }
 
         let templates = [];
-        let segments = [];
         const TEMPLATE_CATEGORY_LABELS = {
             marketing: 'Marketing',
             utility: 'Utilidad',
@@ -437,179 +436,29 @@ const OutboundUI = (() => {
         const state = {
             step: 1,
             channel: 'whatsapp',
-            include: [],
-            exclude: [],
+            segment: null,
             templateId: '',
             vars: {},
         };
 
-        const loadRecipientsFileBtn = document.getElementById('loadRecipientsFileBtn');
-        const recipientsFileInput = document.getElementById('recipientsFileInput');
-        const selectedRecipientsFileName = document.getElementById('selectedRecipientsFileName');
-        const previewRecipientsFileBtn = document.getElementById('previewRecipientsFileBtn');
-        let selectedRecipientsFile = null;
-        let importingRecipients = false;
-        if (loadRecipientsFileBtn && recipientsFileInput && selectedRecipientsFileName) {
-            loadRecipientsFileBtn.addEventListener('click', () => recipientsFileInput.click());
-            recipientsFileInput.addEventListener('change', () => {
-                const file = recipientsFileInput.files && recipientsFileInput.files[0];
-                if (!file) return;
-
-                if (!file.name.toLowerCase().endsWith('.xlsx')) {
-                    toast('Selecciona un archivo con formato .xlsx.');
-                    return;
-                }
-
-                selectedRecipientsFile = file;
-                selectedRecipientsFileName.textContent = `Archivo seleccionado: ${file.name}`;
-                selectedRecipientsFileName.classList.remove('d-none');
+        // Selector de audiencia compartido (crear nueva / escoger existente).
+        // Reemplaza la antigua carga de archivo "inline" y los chips de segmentos.
+        const audiencePickerEl = document.getElementById('campaignAudiencePicker');
+        let audiencePicker = null;
+        if (audiencePickerEl && window.AudiencePicker) {
+            audiencePicker = window.AudiencePicker.mount(audiencePickerEl, {
+                apiBase: '/campanas/api',
+                context: 'campaña',
+                onChange: (segment) => {
+                    state.segment = segment
+                        ? {
+                            id: Number(segment.id),
+                            name: segment.name,
+                            contact_count: segment.contact_count,
+                        }
+                        : null;
+                },
             });
-        }
-
-        if (previewRecipientsFileBtn) {
-            const previewModalId = 'recipientsSpreadsheetPreviewModal';
-            document.body.insertAdjacentHTML('beforeend', `
-                <div class="modal fade" id="${previewModalId}" tabindex="-1" aria-labelledby="recipientsSpreadsheetPreviewTitle" aria-hidden="true">
-                    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h2 class="modal-title fs-5" id="recipientsSpreadsheetPreviewTitle">Vista previa del archivo</h2>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                            </div>
-                            <div class="modal-body">
-                                <p id="spreadsheetPreviewFileName" class="small text-muted"></p>
-                                <label for="spreadsheetPreviewSheet" class="form-label">Hoja</label>
-                                <select id="spreadsheetPreviewSheet" class="form-select mb-3"></select>
-                                <div id="spreadsheetPreviewContent" aria-live="polite"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `);
-            const previewModal = bootstrap.Modal.getOrCreateInstance(
-                document.getElementById(previewModalId)
-            );
-            const previewSheetSelect = document.getElementById('spreadsheetPreviewSheet');
-            const previewContent = document.getElementById('spreadsheetPreviewContent');
-            let previewWorkbook = null;
-
-            function renderSpreadsheetPreview(sheetName) {
-                const worksheet = previewWorkbook && previewWorkbook.Sheets[sheetName];
-                if (!worksheet) {
-                    previewContent.innerHTML = '<div class="alert alert-warning">No fue posible leer esta hoja.</div>';
-                    return;
-                }
-
-                const rows = XLSX.utils.sheet_to_json(worksheet, {
-                    header: 1,
-                    defval: '',
-                    blankrows: false,
-                });
-                if (!rows.length) {
-                    previewContent.innerHTML = '<div class="alert alert-info">La hoja seleccionada no contiene datos.</div>';
-                    return;
-                }
-
-                const columns = rows.reduce((max, row) => Math.max(max, row.length), 0);
-                const visibleRows = rows.slice(0, 501);
-                const previewNote = rows.length >= 501
-                    ? '<p class="small text-muted">La vista previa muestra las primeras 500 filas, además del encabezado.</p>'
-                    : '';
-                const headerCells = Array.from({ length: columns }, (_, index) => `
-                    <th scope="col">${escapeHtml(rows[0][index] || `Columna ${index + 1}`)}</th>
-                `).join('');
-                const bodyRows = visibleRows.slice(1).map((row) => `
-                    <tr>${Array.from({ length: columns }, (_, index) => `
-                        <td>${escapeHtml(row[index] === undefined || row[index] === null ? '' : row[index])}</td>
-                    `).join('')}</tr>
-                `).join('');
-
-                previewContent.innerHTML = `${previewNote}
-                    <div class="spreadsheet-preview-scroll">
-                        <table class="table table-sm table-bordered table-striped spreadsheet-preview-table mb-0">
-                            <thead><tr>${headerCells}</tr></thead>
-                            <tbody>${bodyRows}</tbody>
-                        </table>
-                    </div>
-                `;
-            }
-
-            previewRecipientsFileBtn.addEventListener('click', async () => {
-                if (!selectedRecipientsFile) {
-                    toast('Selecciona un archivo .xlsx para visualizarlo.');
-                    return;
-                }
-                if (!selectedRecipientsFile.name.toLowerCase().endsWith('.xlsx')) {
-                    toast('El archivo seleccionado no es compatible. Usa un archivo .xlsx.');
-                    return;
-                }
-                if (typeof XLSX === 'undefined') {
-                    toast('No fue posible cargar el lector de archivos Excel.');
-                    return;
-                }
-                if (selectedRecipientsFile.size > 20 * 1024 * 1024) {
-                    toast('El archivo es demasiado grande para generar una vista previa (máximo 20 MB).');
-                    return;
-                }
-
-                document.getElementById('spreadsheetPreviewFileName').textContent =
-                    selectedRecipientsFile.name;
-                previewSheetSelect.innerHTML = '';
-                previewContent.innerHTML = `
-                    <div class="text-center py-4">
-                        <div class="spinner-border text-success" role="status"></div>
-                        <p class="small text-muted mt-2 mb-0">Leyendo archivo localmente...</p>
-                    </div>
-                `;
-                previewModal.show();
-
-                try {
-                    previewWorkbook = XLSX.read(await selectedRecipientsFile.arrayBuffer(), {
-                        type: 'array',
-                        cellDates: true,
-                        sheetRows: 501,
-                    });
-                    if (!previewWorkbook.SheetNames.length) {
-                        previewContent.innerHTML = '<div class="alert alert-info">El archivo no contiene hojas para mostrar.</div>';
-                        return;
-                    }
-
-                    previewSheetSelect.innerHTML = previewWorkbook.SheetNames.map((sheetName) => `
-                        <option value="${escapeHtml(sheetName)}">${escapeHtml(sheetName)}</option>
-                    `).join('');
-                    renderSpreadsheetPreview(previewWorkbook.SheetNames[0]);
-                } catch (error) {
-                    console.error('No fue posible leer el archivo Excel:', error);
-                    previewContent.innerHTML = '<div class="alert alert-danger">No fue posible leer este archivo. Verifica que sea un archivo .xlsx válido.</div>';
-                }
-            });
-
-            previewSheetSelect.addEventListener('change', () => {
-                renderSpreadsheetPreview(previewSheetSelect.value);
-            });
-        }
-
-        async function loadSegments() {
-            try {
-                const response = await fetch('/campanas/api/segments/');
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                segments = Array.isArray(data)
-                    ? data
-                    : (data.results || []);
-
-                renderSegments();
-                return true;
-            } catch (error) {
-                console.error('Error cargando audiencias:', error);
-                toast('No se pudieron cargar las audiencias.');
-                return false;
-            }
         }
 
         const picker = document.getElementById('channelPicker');
@@ -619,15 +468,6 @@ const OutboundUI = (() => {
                 <div class="fw-semibold">${meta.label}</div>
             </button>
         `).join('');
-
-        const includeBox = document.getElementById('includeSegments');
-        const excludeBox = document.getElementById('excludeSegments');
-
-        function chip(s, kind) {
-            return `<button type="button" class="segment-chip" data-kind="${kind}" data-id="${s.id}">
-        ${s.name} · ${(s.contact_count || 0).toLocaleString('es-CO')}
-    </button>`;
-        }
 
         async function renderAudiencesPage() {
             const grid = document.getElementById('segmentsGrid');
@@ -802,45 +642,12 @@ const OutboundUI = (() => {
             }
         }
 
-        function renderSegments() {
-            includeBox.innerHTML = segments
-                .map((s) => chip(s, 'include'))
-                .join('');
-
-            excludeBox.innerHTML = segments
-                .map((s) => chip(s, 'exclude'))
-                .join('');
-
-            document.querySelectorAll('.segment-chip').forEach((btn) => {
-                const id = Number(btn.dataset.id);
-                const selectedSegments = btn.dataset.kind === 'include' ? state.include : state.exclude;
-                btn.classList.toggle('is-selected', selectedSegments.includes(id));
-                btn.addEventListener('click', () => {
-                    const kind = btn.dataset.kind;
-                    const list = kind === 'include' ? state.include : state.exclude;
-                    const idx = list.indexOf(id);
-
-                    if (idx >= 0) {
-                        list.splice(idx, 1);
-                    } else if (kind === 'include' && list.length >= 5) {
-                        toast('Puedes incluir hasta 5 audiencias.');
-                        return;
-                    } else {
-                        list.push(id);
-                    }
-
-                    btn.classList.toggle('is-selected');
-                });
-            });
-        }
-
         function fillAccounts() {
             document.getElementById('senderAccount').innerHTML =
                 `<option>${CHANNELS[state.channel].account}</option>`;
         }
 
         fillAccounts();
-        loadSegments();
 
         picker.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-channel]');
@@ -961,17 +768,8 @@ const OutboundUI = (() => {
             const type = document.getElementById('campaignType').value;
             const tpl = currentTpl();
 
-            const includeNames = segments
-                .filter((s) => state.include.includes(Number(s.id)))
-                .map((s) => s.name);
-
-            const excludeNames = segments
-                .filter((s) => state.exclude.includes(Number(s.id)))
-                .map((s) => s.name);
-
-            const size = segments
-                .filter((s) => state.include.includes(Number(s.id)))
-                .reduce((total, s) => total + Number(s.contact_count || 0), 0);
+            const audienceName = state.segment ? state.segment.name : 'Ninguna';
+            const size = state.segment ? Number(state.segment.contact_count || 0) : 0;
 
             document.getElementById('reviewList').innerHTML = `
                 <dt class="col-sm-4">Nombre</dt>
@@ -983,11 +781,8 @@ const OutboundUI = (() => {
                 <dt class="col-sm-4">Tipo</dt>
                 <dd class="col-sm-8">${type}</dd>
 
-                <dt class="col-sm-4">Audiencias</dt>
-                <dd class="col-sm-8">${includeNames.join(', ') || 'Ninguna'}</dd>
-
-                <dt class="col-sm-4">Excluir</dt>
-                <dd class="col-sm-8">${excludeNames.join(', ') || 'Ninguna'}</dd>
+                <dt class="col-sm-4">Audiencia</dt>
+                <dd class="col-sm-8">${audienceName}</dd>
 
                 <dt class="col-sm-4">Plantilla</dt>
                 <dd class="col-sm-8">${tpl ? tpl.name : 'Sin seleccionar'}</dd>
@@ -1011,141 +806,15 @@ const OutboundUI = (() => {
             return '';
         }
 
-        async function importRecipientsFile(nextButton) {
-            if (importingRecipients) return;
-
-            importingRecipients = true;
-            nextButton.disabled = true;
-            toast('Importando archivo...');
-
-            try {
-                const segmentNameInput = document.getElementById('segmentName');
-                const segmentName = segmentNameInput
-                    ? segmentNameInput.value.trim()
-                    : '';
-
-                if (!segmentName) {
-                    toast('Escribe el nombre de la audiencia.');
-                    return false;
-                }
-
-                const formData = new FormData();
-                formData.append('name', segmentName);
-                formData.append('description', 'Importada desde campaña');
-                formData.append('file', selectedRecipientsFile);
-
-                const response = await fetch('/campanas/api/segments/import_excel/', {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'same-origin',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                });
-
-                if (!response.ok) {
-                    let backendError;
-
-                    try {
-                        backendError = await response.json();
-                    } catch (error) {
-                        backendError = {
-                            detail: 'El servidor rechazó la importación.',
-                        };
-                    }
-
-                    console.error('Error al importar archivo:', backendError);
-
-                    const message = backendError.detail
-                        || Object.entries(backendError)
-                            .map(([field, messages]) =>
-                                `${field}: ${Array.isArray(messages)
-                                    ? messages.join(' ')
-                                    : messages}`
-                            )
-                            .join(' ');
-
-                    toast(message || 'No fue posible importar el archivo.');
-                    return false;
-                }
-
-                const data = await response.json();
-                const segment = data.segment;
-
-                if (!segment || segment.id === undefined || segment.id === null) {
-                    console.error('Respuesta de importación sin segmento:', data);
-                    toast(
-                        'La importación respondió correctamente, pero no se recibió la audiencia creada.'
-                    );
-                    return false;
-                }
-
-                const segmentsLoaded = await loadSegments();
-                const segmentId = Number(segment.id);
-
-                if (!segments.some((item) => Number(item.id) === segmentId)) {
-                    segments.push(segment);
-                }
-
-                let audienceLimitReached = false;
-
-                if (!state.include.includes(segmentId)) {
-                    if (state.include.length < 5) {
-                        state.include.push(segmentId);
-                    } else {
-                        audienceLimitReached = true;
-                    }
-                }
-
-                renderSegments();
-
-                const summary =
-                    `Importación completada: ${data.created || 0} creados, ` +
-                    `${data.updated || 0} actualizados y ` +
-                    `${data.skipped || 0} omitidos.`;
-
-                const reloadWarning = segmentsLoaded
-                    ? ''
-                    : ' No se pudo recargar la lista; la audiencia importada se conservó en ella.';
-
-                toast(
-                    `${summary}` +
-                    `${audienceLimitReached
-                        ? ' Se alcanzó el máximo de 5 audiencias; la nueva audiencia quedó en la lista, pero no se seleccionó.'
-                        : ''}` +
-                    `${reloadWarning}`
-                );
-
-                showStep(2);
-                return true;
-
-            } catch (error) {
-                console.error('Error al importar archivo:', error);
-                toast(
-                    'No se pudo importar el archivo. Verifica la conexión con el servidor.'
-                );
-                return false;
-
-            } finally {
-                importingRecipients = false;
-                nextButton.disabled = false;
-            }
-        }
-
         document.getElementById('wizardBack').addEventListener('click', () => showStep(Math.max(1, state.step - 1)));
-        document.getElementById('wizardNext').addEventListener('click', async (event) => {
-            if (importingRecipients) return;
+        document.getElementById('wizardNext').addEventListener('click', async () => {
             if (state.step === 1) {
                 if (!document.getElementById('campaignName').value.trim()) {
                     return toast('Escribe un nombre de campaña.');
                 }
 
-                if (!state.include.length && !selectedRecipientsFile) {
-                    return toast('Selecciona una audiencia o carga un archivo .xlsx.');
-                }
-
-                if (selectedRecipientsFile) {
-                    return importRecipientsFile(event.currentTarget);
+                if (!state.segment) {
+                    return toast('Crea o escoge una audiencia de destino.');
                 }
 
                 return showStep(2);
@@ -1204,8 +873,8 @@ const OutboundUI = (() => {
 
             const name = document.getElementById('campaignName').value.trim();
 
-            if (!state.include.length) {
-                toast('Selecciona al menos una audiencia.');
+            if (!state.segment) {
+                toast('Crea o escoge una audiencia de destino.');
                 return;
             }
 
@@ -1233,7 +902,7 @@ const OutboundUI = (() => {
                         body_text: selectedTemplate.body || '',
                         buttons: Array.isArray(selectedTemplate.buttons) ? selectedTemplate.buttons : [],
                     },
-                    segment: state.include[0],
+                    segment: state.segment.id,
                     default_params: state.vars,
                 };
 

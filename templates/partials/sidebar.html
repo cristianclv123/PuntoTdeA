@@ -45,17 +45,31 @@
         </a>
       </div>
     </details>
-    <a href="{% url 'communications:campaigns' %}" class="sidebar-link {% if active_nav == 'campaigns' %}active{% endif %}" title="Campañas" aria-label="Campañas">
-      {% icon 'send' %}
-      <span>Campañas</span>
+    <details class="sidebar-group" {% if active_nav == 'campaigns' or active_nav == 'templates' or active_nav == 'segments' %}open{% endif %}>
+      <summary class="sidebar-link {% if active_nav == 'campaigns' or active_nav == 'templates' or active_nav == 'segments' %}active{% endif %}" title="Campañas" aria-label="Campañas">
+        {% icon 'send' %}
+        <span>Campañas</span>
+        {% icon 'chevron-down' size=14 %}
+      </summary>
+      <div class="sidebar-submenu">
+        <a href="{% url 'communications:campaigns' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'campaigns' %}active{% endif %}">
+          <span>Campañas</span>
+        </a>
+        <a href="{% url 'plantillas' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'templates' %}active{% endif %}">
+          <span>Gestionar plantillas</span>
+        </a>
+        <a href="{% url 'communications:segments' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'segments' %}active{% endif %}">
+          <span>Audiencias</span>
+        </a>
+      </div>
+    </details>
+    <a href="{% url 'communications:segments' %}" class="sidebar-link {% if active_nav == 'segments' %}active{% endif %}" title="Audiencias" aria-label="Audiencias">
+      {% icon 'users' %}
+      <span>Audiencias</span>
     </a>
     <a href="{% url 'announcements:index' %}" class="sidebar-link {% if active_nav == 'announcements' %}active{% endif %}" title="Avisos" aria-label="Avisos">
       {% icon 'megaphone' %}
       <span>Avisos</span>
-    </a>
-    <a href="{% url 'plantillas' %}" class="sidebar-link {% if active_nav == 'templates' %}active{% endif %}" title="Gestionar plantillas" aria-label="Gestionar plantillas">
-      {% icon 'layout-template' %}
-      <span>Gestionar plantillas</span>
     </a>
     {% if user.is_staff %}
       <details class="sidebar-group" {% if active_nav == 'whatsapp-test' or active_nav == 'whatsapp-config' %}open{% endif %}>

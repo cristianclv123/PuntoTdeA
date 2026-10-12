@@ -56,51 +56,14 @@
                     <div class="mb-3">
                         <h2 class="h6 fw-bold mb-3">Base de datos de destinatarios</h2>
 
-                        <div class="d-flex flex-wrap align-items-center gap-2">
-                            <button type="button" class="btn btn-outline-success" id="loadRecipientsFileBtn">
-                                <i class="bi bi-folder-plus me-1"></i>
-                                Cargar archivo
-                            </button>
-                            <input type="file" id="recipientsFileInput" class="d-none"
-                                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                            <span id="selectedRecipientsFileName" class="selected-file-name d-none" aria-live="polite"></span>
-
-                            <button type="button" class="btn btn-outline-secondary" id="previewRecipientsFileBtn">
-                                <i class="bi bi-eye me-1"></i>
-                                Visualizar archivo
-                            </button>
-                        </div>
-
-                        <p class="small text-muted mt-2 mb-0">
-                            Formatos permitidos: .xlsx
-                        </p>
-
-                        <div class="mt-3">
-                            <label for="segmentName" class="form-label fw-semibold">
-                                Nombre de la audiencia
-                            </label>
-
-                            <input type="text" id="segmentName" class="form-control" maxlength="150"
-                                placeholder="Ej. Estudiantes de Ingeniería de Software">
-
-                            <div class="form-text">
-                                Este nombre identificará la audiencia creada a partir del archivo.
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">
-                                Audiencias a incluir (máx. 5)
-                            </label>
-                            <div id="includeSegments" class="segment-chips"></div>
-                        </div>
-
-                        <div>
-                            <label class="form-label fw-semibold">
-                                Audiencias a excluir
-                            </label>
-                            <div id="excludeSegments" class="segment-chips"></div>
-                        </div>
+                        <div id="campaignAudiencePicker"
+                            data-audience-picker
+                            data-api-base="/campanas/api"
+                            data-context="campaña"
+                            data-remove-mode="true"
+                            data-view-icon="eye"
+                            data-view-style="gray"
+                            data-actions-inline="true"></div>
                     </div>
                 </section>
 
@@ -195,7 +158,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         if (typeof OutboundUI !== 'undefined' && typeof OutboundUI.initWizard === 'function') {

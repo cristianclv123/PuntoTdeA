@@ -6,5 +6,5 @@ app_name = "announcements"
 
 urlpatterns = [
     path("", views.index, name="index"),
-    
+    path("imagen/<int:pk>/", views.announcement_image, name="image"),
 ]

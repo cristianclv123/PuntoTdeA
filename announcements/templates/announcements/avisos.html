@@ -6,6 +6,10 @@
 {% block page_title %}Avisos y novedades{% endblock %} 
 {% block page_subtitle %}Publica anuncios visibles para toda la comunidad{% endblock %} 
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/audience-picker.css' %}?v=1">
+{% endblock %}
+
 {% block content %}
 <link rel="stylesheet" href="{% static 'announcements/avisos.css' %}?v=8">
 
@@ -93,36 +97,30 @@
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <label class="field-label" for="image2">Imagen (opcional)</label>
+      <label class="field-label" for="image2">Imagen</label>
       <input
         id="image2"
         name="image"
         class="field-input"
         type="file"
         accept="image/*"
+        required
       />
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <div class="field-label">Audiencia (segmentos)</div>
-      {% if segments %}
-      <div class="segmented-row">
-        {% for segment in segments %}
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="{{ segment.id }}"{% if forloop.first %} checked{% endif %} />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            {{ segment.name }}
-          </span>
-        </label>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div style="color: #888; font-size: 0.85rem">
-        No hay segmentos. Crea uno en Campañas para usarlo como audiencia.
-      </div>
-      {% endif %}
+      <div class="field-label">Audiencia de destino</div>
+      <div
+        id="avisoAudiencePicker"
+        class="audience-picker"
+        data-audience-picker
+        data-api-base="/campanas/api"
+        data-input-name="audience"
+        data-remove-mode="true"
+        data-view-icon="eye"
+        data-view-style="gray"
+        data-actions-inline="true"
+      ></div>
     </div>
 
     <div class="form-actions">
@@ -161,9 +159,9 @@
       </div>
       <div class="list-card-body">{{ a.content }}</div>
 
-      {% if a.image %}
+      {% if a.has_image %}
       <div style="margin-top: 10px; margin-bottom: 10px;">
-          <img src="{{ a.image.url }}" alt="{{ a.title }}" style="max-width: 100%; border-radius: 8px; max-height: 250px; object-fit: cover;" />
+          <img src="{% url 'announcements:image' a.pk %}" alt="{{ a.title }}" style="max-width: 100%; border-radius: 8px; max-height: 250px; object-fit: cover;" />
       </div>
       {% endif %}
 
@@ -366,5 +364,16 @@
       openConfirm(source, form, submitter);
     });
   })();
+</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/audience-picker.js' %}?v=1"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.AudiencePicker && typeof window.AudiencePicker.mountAll === "function") {
+      window.AudiencePicker.mountAll();
+    }
+  });
 </script>
 {% endblock %}

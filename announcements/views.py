@@ -1,9 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-
-from communications.models import AudienceSegment
 
 from .models import Announcement, StatusAd
 from .status_ad_service import publish_announcement
@@ -35,7 +33,7 @@ def _notify(request: HttpRequest, status_ad: StatusAd) -> None:
 
 def _retry_status(request: HttpRequest, announcement: Announcement) -> None:
     """Reintenta la publicacion en Status reutilizando el ultimo intento."""
-    if not announcement.image:
+    if not announcement.has_image:
         messages.error(
             request,
             "El aviso no tiene imagen: no se puede publicar en WhatsApp Status.",
@@ -94,16 +92,22 @@ def index(request):
             messages.error(request, "Título y contenido son obligatorios.")
             return redirect("announcements:index")
 
-        announcement = Announcement.objects.create(
+        if not image_file:
+            messages.error(request, "La imagen es obligatoria.")
+            return redirect("announcements:index")
+
+        announcement = Announcement(
             title=title,
             content=body_text,
-            image=image_file,
             is_urgent=notice_type == "urgente",
         )
+        # La imagen se guarda como bytes en la BD (no en MEDIA_ROOT).
+        announcement.set_image(image_file)
+        announcement.save()
         messages.success(request, "Aviso creado.")
 
         if publish_status:
-            if not announcement.image:
+            if not announcement.has_image:
                 messages.warning(
                     request,
                     "El aviso se guardó, pero no se publicó en Status: falta la imagen.",
@@ -124,7 +128,22 @@ def index(request):
     context = {
         "announcements": announcements,
         "urgent_announcements": urgent_announcements,
-        "segments": AudienceSegment.objects.all().order_by("name"),
         "active_nav": "announcements",
     }
     return render(request, "announcements/avisos.html", context)
+
+
+@login_required
+def announcement_image(request: HttpRequest, pk: int) -> HttpResponse:
+    """Sirve el binario de la imagen del aviso guardado en la base de datos."""
+    announcement = get_object_or_404(Announcement, pk=pk)
+    data = announcement.get_image_bytes()
+    if not data:
+        return HttpResponse(status=404)
+    response = HttpResponse(
+        data, content_type=announcement.image_content_type or "application/octet-stream"
+    )
+    response["Cache-Control"] = "private, max-age=86400"
+    if announcement.image_name:
+        response["Content-Disposition"] = f'inline; filename="{announcement.image_name}"'
+    return response
