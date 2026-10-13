@@ -41,15 +41,20 @@
     white-space: nowrap;
 }
 
+/* Botones principales del selector ("Crear nueva audiencia" y
+   "Seleccionar audiencia"). Usan el estilo neutro común de la app
+   (como "Guardar"/"Informativo"): píldora, fondo transparente, texto
+   claro y borde sutil, con hover en el verde acento. */
 .audience-picker .ap-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.35rem;
-    padding: 0.45rem 0.9rem;
-    border: 1px solid var(--color-primary, #3dff8a);
-    border-radius: 8px;
-    background: var(--color-primary, #3dff8a);
-    color: #0f0f0f;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border, #333333);
+    border-radius: var(--radius-pill, 999px);
+    background: transparent;
+    color: var(--text, #fafafa);
     font-weight: 600;
     font-size: 0.85rem;
     cursor: pointer;
@@ -59,7 +64,9 @@
 }
 
 .audience-picker .ap-btn:hover {
-    filter: brightness(0.95);
+    border-color: var(--accent, #3dff8a);
+    color: var(--accent, #3dff8a);
+    background: rgba(61, 255, 138, 0.08);
 }
 
 .audience-picker .ap-btn-primary {

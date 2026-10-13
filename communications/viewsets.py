@@ -338,9 +338,11 @@ class AudienceSegmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def contacts(self, request, pk=None):
         segment = self.get_object()
-        page = self.paginate_queryset(segment.contacts.all())
-        serializer = ContactSerializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
+        queryset = segment.contacts.all().order_by("pk")
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(ContactSerializer(page, many=True).data)
+        return Response(ContactSerializer(queryset, many=True).data)
 
 
 @extend_schema(auth=INTERNAL_AUTH)
@@ -395,6 +397,10 @@ class CampaignViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def recipients(self, request, pk=None):
         campaign = self.get_object()
-        page = self.paginate_queryset(campaign.recipients.select_related("contact").all())
-        serializer = BroadcastRecipientSerializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
+        queryset = campaign.recipients.select_related("contact").all()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(
+                BroadcastRecipientSerializer(page, many=True).data
+            )
+        return Response(BroadcastRecipientSerializer(queryset, many=True).data)
