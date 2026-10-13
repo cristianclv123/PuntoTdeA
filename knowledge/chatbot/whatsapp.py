@@ -134,14 +134,6 @@ def _create_case_ticket(
     reason: str,
     external_message_id: str = '',
 ) -> CaseConversation:
-    theme = (reason or conversation.escalation_reason or '')[:120]
-    case_conversation, _, _ = ingest_inbound_message(
-        InboundPayload(
-            channel_code='whatsapp',
-            external_thread_id=sender,
-            body=text,
-            external_message_id=external_message_id,
-            theme=theme,
     case_thread_id = sender
     previous_case = _manager(CaseConversation).filter(
         channel__code='whatsapp',
@@ -160,26 +152,7 @@ def _create_case_ticket(
             **_case_contact_values(conversation.contact, sender),
         )
     )
-    if conversation.case_conversation_id != case_conversation.id:
-        conversation.case_conversation = case_conversation
-        conversation.save(update_fields=['case_conversation', 'updated_at'])
-    return case_conversation
-
-
-def _create_case_ticket(
-    conversation: ChatConversation,
-    sender: str,
-    question: str,
-    reason: str,
-    external_message_id: str = '',
-) -> CaseConversation:
-    case_conversation = _forward_inbound_to_case(
-        conversation,
-        sender,
-        question,
-        reason=reason,
-        external_message_id=external_message_id,
-    )
+    conversation.case_conversation = case_conversation
     conversation.escalation_reason = reason
     conversation.escalated_at = timezone.now()
     conversation.status = ChatConversation.STATUS_ACTIVE

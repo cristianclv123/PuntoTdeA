@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from django.test import TestCase
 
+from cases.models import Conversation as CaseConversation, Message as CaseMessage
 from knowledge.chatbot.schedule import BusinessSchedule
 from knowledge.chatbot.whatsapp import handle_message
 from knowledge.chatbot.workflow import ChatbotWorkflow
@@ -79,8 +80,28 @@ class KnowledgeEstadoTests(TestCase):
         handle_message("573000000001", "Quiero un asesor")
         handle_message("573000000001", "Ayuda con matrícula")
         conv = ChatConversation.objects.get(external_user_id="573000000001")
-        self.assertEqual(conv.status, ChatConversation.STATUS_PENDING)
+        # La app crea el ticket y conserva el chat activo (puede seguir
+        # conversando con el bot); el estado pending se activa aparte.
+        self.assertEqual(conv.status, ChatConversation.STATUS_ACTIVE)
+        self.assertIsNotNone(conv.case_conversation_id)
+
+        # Una conversación pendiente de asesor deja de avanzar el flujo y
+        # reenvía el mensaje entrante al ticket de cases.
+        conv.status = ChatConversation.STATUS_PENDING
+        conv.flow_state = "pending"
+        conv.save(update_fields=["status", "flow_state"])
+
         again = handle_message("573000000001", "Otro mensaje")
         self.assertEqual(again, [])
+        case = CaseConversation.objects.get(
+            channel__code="whatsapp",
+            external_thread_id="573000000001",
+        )
+        bodies = list(
+            CaseMessage.objects.filter(conversation=case).values_list(
+                "body", flat=True
+            )
+        )
+        self.assertIn("Otro mensaje", bodies)
         conv.refresh_from_db()
         self.assertEqual(conv.flow_state, "pending")

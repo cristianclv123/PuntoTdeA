@@ -66,7 +66,9 @@ class CommunicationsWebhookE2ETests(TestCase):
             HTTP_X_HUB_SIGNATURE_256=self._sign(body),
         )
         self.assertEqual(res.status_code, 200)
-        handle.assert_called_once_with("573001112233", "Hola")
+        handle.assert_called_once_with(
+            "573001112233", "Hola", external_message_id="wamid.e2e.in"
+        )
         send_text.assert_called_once_with("573001112233", "Hola")
         self.assertTrue(
             WhatsAppWebhookEvent.objects.filter(provider_message_id="wamid.e2e.in").exists()

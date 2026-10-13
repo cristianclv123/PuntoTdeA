@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from communications.adapters.base import SendResult
 from communications.adapters.mock_adapter import MockAdapter
@@ -23,17 +23,22 @@ class CommunicationsUnitTests(TestCase):
         )
         self.template = MessageTemplate.objects.create(
             name="Aviso",
-            meta_template_name="aviso_ok",
             body_text="Hola {{1}}",
-            status=MessageTemplate.Status.APPROVED,
         )
         self.segment = AudienceSegment.objects.create(name="Segmento prueba")
         self.segment.contacts.add(self.contact, self.opted_out)
         self.campaign = Campaign.objects.create(
             name="Campaña unit",
-            template=self.template,
             segment=self.segment,
             default_params={"1": "contact.full_name"},
+            template_meta_id="",
+            template_name=self.template.name,
+            template_language="es_CO",
+            template_snapshot={
+                "body_text": self.template.body_text,
+                "header_type": self.template.header_type,
+                "header_media_url": self.template.header_media_url,
+            },
         )
 
     def test_resolve_recipients_is_idempotent(self):
@@ -51,6 +56,7 @@ class CommunicationsUnitTests(TestCase):
         self.assertEqual(by_phone["573001112244"], "opted_out")
         self.assertIn(by_phone["573001112233"], {"sent", "delivered", "read"})
 
+    @override_settings(META_ACCESS_TOKEN="", WHATSAPP_PHONE_NUMBER_ID="")
     def test_send_text_without_config_fails_cleanly(self):
         result = send_text_message("573001112233", "Hola")
         self.assertIsInstance(result, SendResult)

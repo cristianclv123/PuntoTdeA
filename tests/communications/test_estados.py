@@ -21,16 +21,21 @@ class CampaignEstadoTests(TestCase):
         )
         template = MessageTemplate.objects.create(
             name="Estado tpl",
-            meta_template_name="estado_tpl",
             body_text="Hola",
-            status=MessageTemplate.Status.APPROVED,
         )
         segment = AudienceSegment.objects.create(name="Seg estado")
         segment.contacts.add(contact)
         self.campaign = Campaign.objects.create(
             name="Campaña estados",
-            template=template,
             segment=segment,
+            template_meta_id="",
+            template_name=template.name,
+            template_language="es_CO",
+            template_snapshot={
+                "body_text": template.body_text,
+                "header_type": template.header_type,
+                "header_media_url": template.header_media_url,
+            },
         )
 
     def test_draft_a_sending_a_sent(self):

@@ -266,9 +266,7 @@ class OutboundMetaUnitTests(AssignmentOutboundFixtures):
         conversation = self._conv(assigned_to=self.owner)
         template = MessageTemplate.objects.create(
             name="Unit tpl",
-            meta_template_name="unit_tpl_ok",
             body_text="Hola {{1}}",
-            status=MessageTemplate.Status.APPROVED,
         )
         message = create_outbound_message(
             conversation,

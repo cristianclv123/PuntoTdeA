@@ -188,9 +188,7 @@ class OutboundClaimReplyCloseE2ETests(AdvisorE2EMixin, TestCase):
         claim_conversation(self.conversation.id, self.owner)
         template = MessageTemplate.objects.create(
             name="Certificado",
-            meta_template_name="certificado_ok",
             body_text="Hola {{1}}, tu certificado está listo.",
-            status=MessageTemplate.Status.APPROVED,
         )
 
         res = self._auth(self.owner).post(

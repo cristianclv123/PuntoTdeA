@@ -37,7 +37,8 @@ class KnowledgeE2ETests(TestCase):
         self.assertTrue(any(case.ticket_number in r for r in responses))
         bot = ChatConversation.objects.get(external_user_id="573000111223")
         self.assertEqual(bot.case_conversation_id, case.id)
-        self.assertEqual(bot.status, ChatConversation.STATUS_PENDING)
+        self.assertEqual(bot.status, ChatConversation.STATUS_ACTIVE)
+        self.assertEqual(bot.flow_state, "help_options")
         self.assertEqual(
             CaseMessage.objects.get(conversation=case).body,
             "No pude matricularme",
