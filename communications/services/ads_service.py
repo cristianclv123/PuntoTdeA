@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import mimetypes
 import os
 import re
 from dataclasses import dataclass, field
@@ -438,7 +439,7 @@ def create_status_ad_set(
     )
 
 
-def upload_ad_image(image: Any, *, name: str = "") -> AdsResult:
+def upload_ad_image(image: Any, *, name: str = "", content_type: str = "") -> AdsResult:
     """Sube una imagen (ruta en disco o archivo abierto) y devuelve su hash."""
     close_after = not hasattr(image, "read")
     file_obj = image
@@ -449,12 +450,21 @@ def upload_ad_image(image: Any, *, name: str = "") -> AdsResult:
             filename = name or os.path.basename(str(image))
         else:
             filename = name or getattr(image, "name", "aviso.jpg") or "aviso.jpg"
+
+        inferred_type = ""
+        if filename:
+            guessed, _ = mimetypes.guess_type(filename)
+            inferred_type = guessed or ""
+        if not inferred_type and hasattr(file_obj, "content_type"):
+            inferred_type = str(getattr(file_obj, "content_type") or "")
+
+        mime_type = (content_type or inferred_type or "image/jpeg").strip() or "image/jpeg"
         data = {"name": filename}
         ok, body, error = _call(
             "POST",
             f"{ad_account_id()}/adimages",
             data=data,
-            files={"filename": (filename, file_obj)},
+            files={"filename": (filename, file_obj, mime_type)},
         )
     except OSError as exc:
         return AdsResult(False, "No se pudo abrir la imagen.", error=str(exc))
