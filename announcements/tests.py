@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.templatetags.static import static
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -342,4 +343,6 @@ class AnnouncementViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "avisoAudiencePicker")
-        self.assertContains(response, "audience-picker.js")
+        # Con DEBUG=false whitenoise sirve el asset con hash en el nombre; se
+        # compara contra la ruta real del manifest, no contra el nombre literal.
+        self.assertContains(response, static("js/audience-picker.js"))
