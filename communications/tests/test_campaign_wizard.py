@@ -30,3 +30,7 @@ class CampaignWizardPageTests(TestCase):
         self.assertNotIn('id="recipientsFileInput"', content)
         self.assertNotIn('id="includeSegments"', content)
         self.assertNotIn('id="excludeSegments"', content)
+        # El asistente ya no pide "Tipo" ni "Cuenta de envío": el modelo de
+        # campaña no tiene esos campos, así que eran solo decorativos.
+        self.assertNotIn('id="campaignType"', content)
+        self.assertNotIn('id="senderAccount"', content)

@@ -642,20 +642,12 @@ const OutboundUI = (() => {
             }
         }
 
-        function fillAccounts() {
-            document.getElementById('senderAccount').innerHTML =
-                `<option>${CHANNELS[state.channel].account}</option>`;
-        }
-
-        fillAccounts();
-
         picker.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-channel]');
             if (!btn) return;
             state.channel = btn.dataset.channel;
             state.templateId = '';
             picker.querySelectorAll('.channel-option').forEach((el) => el.classList.toggle('is-selected', el === btn));
-            fillAccounts();
             renderTemplates();
             updatePreview();
         });
@@ -769,7 +761,6 @@ const OutboundUI = (() => {
 
         function fillReview() {
             const name = document.getElementById('campaignName').value || 'Sin nombre';
-            const type = document.getElementById('campaignType').value;
             const tpl = currentTpl();
 
             const audienceName = state.segment ? state.segment.name : 'Ninguna';
@@ -781,9 +772,6 @@ const OutboundUI = (() => {
 
                 <dt class="col-sm-4">Canal</dt>
                 <dd class="col-sm-8">${CHANNELS[state.channel].label}</dd>
-
-                <dt class="col-sm-4">Tipo</dt>
-                <dd class="col-sm-8">${type}</dd>
 
                 <dt class="col-sm-4">Audiencia</dt>
                 <dd class="col-sm-8">${audienceName}</dd>
