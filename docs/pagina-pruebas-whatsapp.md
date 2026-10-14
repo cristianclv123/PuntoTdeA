@@ -68,9 +68,9 @@ enviar (ver §3.1).
 La **única** vía que funciona fuera de la ventana de 24 horas.
 
 Envía `type: template` con el nombre exacto de la plantilla aprobada en la
-cuenta de Meta. El selector offers una opción por cada plantilla **aprobada** en
-la base de datos, y al elegir una aparecen los campos de parámetros que
-corresponden a sus marcadores `{{1}}`, `{{2}}`, etc.
+cuenta de Meta. El selector ofrece una opción por cada plantilla **aprobada** en
+la cuenta de Meta (se lee en vivo; no hay lista local), y al elegir una aparecen
+los campos de parámetros que corresponden a sus marcadores `{{1}}`, `{{2}}`, etc.
 
 Los índices de los marcadores se extraen del cuerpo de la plantilla, no de
 `param_count`: el formulario necesita saber *qué* marcadores hay, no cuántos.
@@ -81,6 +81,11 @@ configurar `header_media_url`, porque Meta rechaza la plantilla sin ella.
 Si no hay ninguna plantilla aprobada, la tarjeta lo dice explícitamente. Es un
 bloqueo real: sin plantilla aprobada no hay forma de iniciar una conversación,
 porque el texto libre está condicionado a la ventana de 24 horas.
+
+Las **plantillas de muestra** de Meta (`hello_world`) aparecen marcadas como
+**PLANTILLA DE PRUEBA META**: no se pueden editar ni eliminar (`2388094`) y Meta
+solo las deja enviar desde el número de prueba público, así que desde un número
+real fallan con `131058`.
 
 ### 2.3 Estado de configuración (Prueba, columna derecha)
 
@@ -261,6 +266,12 @@ Meta, para no inventar un diagnóstico.
 
 La página muestra siempre la explicación **junto al texto crudo de Meta**, para
 poder contrastar los dos.
+
+Fuera de esa tabla hay dos códigos que salen al trabajar con plantillas:
+`131058` (una plantilla de muestra como `hello_world` solo se envía desde el
+número de prueba público) y `2388094` (las plantillas de muestra no se pueden
+editar ni eliminar). PuntoTdeA las marca como **PLANTILLA DE PRUEBA META** en los
+selectores para que el error no sorprenda.
 
 ---
 

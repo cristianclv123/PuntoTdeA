@@ -45,7 +45,9 @@
       Es la única vía que funciona <strong>fuera</strong> de la ventana de 24 h,
       porque Meta solo permite texto libre cuando el usuario ya escribió primero.
       El nombre y el idioma tienen que coincidir exactamente con una plantilla
-      aprobada en tu cuenta de Meta.
+      aprobada en tu cuenta de Meta. Las que llevan la marca
+      <strong>PLANTILLA DE PRUEBA META</strong> son de muestra y solo se envían
+      desde el número de prueba público.
     </p>
     {% if templates %}
       <form method="post" action="{% url 'meta-whatsapp-test-send-template' %}">
@@ -55,7 +57,7 @@
           <select class="wa-select" id="wa-template" name="template">
             {% for t in templates %}
               <option value="{{ t.meta_id }}" data-params="{{ t.indexes|length }}">
-                {{ t.name }} — {{ t.category }}
+                {{ t.name }} — {{ t.category }}{% if t.is_sample %} · PLANTILLA DE PRUEBA META{% endif %}
               </option>
             {% endfor %}
           </select>
@@ -68,6 +70,13 @@
                 <input class="wa-input" id="wa-param-{{ t.meta_id }}-{{ index }}" name="param_{{ index }}" placeholder="Valor para {_{{ index }}}">
               </div>
             {% endfor %}
+            {% if t.is_sample %}
+              <div class="wa-note warn">
+                PLANTILLA DE PRUEBA META: es una plantilla de muestra de Meta y
+                solo se envía desde el número de prueba público. Desde un número
+                real Meta la rechaza con <code>131058</code>.
+              </div>
+            {% endif %}
             {% if t.needs_header %}
               <div class="wa-note warn">
                 Esta plantilla tiene encabezado multimedia: el encabezado se toma

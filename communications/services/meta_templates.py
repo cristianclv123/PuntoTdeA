@@ -210,6 +210,19 @@ def build_payload(
     }
 
 
+#: Plantillas de muestra que Meta crea por defecto en toda cuenta de WhatsApp.
+#: No se pueden editar ni eliminar (Meta responde 2388094) y Meta solo permite
+#: enviarlas desde el número de prueba público (rechaza con 131058 desde un
+#: número real), así que la interfaz las marca como «PLANTILLA DE PRUEBA META»
+#: en vez de esconderlas. Se comparan por nombre.
+SAMPLE_TEMPLATE_NAMES = frozenset({"hello_world"})
+
+
+def is_sample_template(name: Any) -> bool:
+    """True si ``name`` es una plantilla de muestra de Meta (``hello_world``)."""
+    return str(name or "").strip().lower() in SAMPLE_TEMPLATE_NAMES
+
+
 def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
     """Convierte la respuesta cruda de Meta en un diccionario uniforme.
 
@@ -263,6 +276,7 @@ def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
         "buttons": buttons,
         "indexes": [int(number) for number in order],
         "param_count": len(order),
+        "is_sample": is_sample_template(data.get("name", "")),
     }
 
 

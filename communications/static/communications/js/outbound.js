@@ -667,6 +667,7 @@ const OutboundUI = (() => {
                 <button type="button" class="template-card ${String(t.id) === state.templateId ? 'is-selected' : ''}" data-tpl="${t.id}">
                     <div class="small text-muted mb-1">${t.type}</div>
                     <div class="fw-semibold">${t.name}</div>
+                    ${t.isSample ? '<span class="template-sample">PLANTILLA DE PRUEBA META</span>' : ''}
                     <p class="small mb-0 mt-2 text-muted">${t.body}</p>
                 </button>
             `).join('');
@@ -693,6 +694,9 @@ const OutboundUI = (() => {
                         type: TEMPLATE_CATEGORY_LABELS[template.category] || template.category || 'Plantilla',
                         body: template.body_text || '',
                         buttons: Array.isArray(template.buttons) ? template.buttons : [],
+                        // Las plantillas de muestra (`hello_world`) se marcan, no se
+                        // ocultan: solo se envían desde el número de prueba (131058).
+                        isSample: Boolean(template.is_sample),
                     }));
                 renderTemplates();
             } catch (error) {
@@ -1041,6 +1045,7 @@ const OutboundUI = (() => {
 
         function templateCard(kind, template) {
             const isDraft = kind === 'draft';
+            const isSample = !isDraft && Boolean(template.is_sample);
             const id = isDraft ? template.id : template.meta_id;
             const source = isDraft
                 ? '<span class="template-source template-source--draft" title="Borrador local" aria-label="Borrador local"><i class="bi bi-file-earmark-text" aria-hidden="true"></i></span>'
@@ -1054,6 +1059,7 @@ const OutboundUI = (() => {
                 : `<div class="d-flex align-items-center gap-2 flex-wrap">
                        <span class="template-status template-status--${escapeHtml(String(template.status || 'pending').toLowerCase())}">${escapeHtml(META_STATUS_LABELS[String(template.status || '').toUpperCase()] || template.status || 'Sin estado')}</span>
                        <span class="template-category">${escapeHtml(category)}</span>
+                       ${isSample ? '<span class="template-sample">PLANTILLA DE PRUEBA META</span>' : ''}
                    </div>`;
             const rejection = !isDraft && template.rejected_reason
                 ? `<div class="template-rejection">${escapeHtml(template.rejected_reason)}</div>`
@@ -1072,6 +1078,25 @@ const OutboundUI = (() => {
                    </button>`
                 : '';
 
+            // Las plantillas de muestra de Meta (`hello_world`) no se pueden
+            // editar ni eliminar: Meta responde 2388094. Se dejan los botones
+            // deshabilitados con el motivo en el tooltip.
+            const sampleHint = 'Las plantillas de muestra de Meta no se pueden editar ni eliminar.';
+            const editButton = isSample
+                ? `<button type="button" class="btn btn-outline-secondary btn-sm" disabled title="${sampleHint}">
+                       <i class="bi bi-pencil"></i>
+                   </button>`
+                : `<button type="button" class="btn btn-outline-secondary btn-sm" data-action="edit" data-kind="${kind}" data-id="${escapeHtml(id)}" title="Editar">
+                       <i class="bi bi-pencil"></i>
+                   </button>`;
+            const deleteButton = isSample
+                ? `<button type="button" class="btn btn-outline-danger btn-sm" disabled title="${sampleHint}">
+                       <i class="bi bi-trash"></i>
+                   </button>`
+                : `<button type="button" class="btn btn-outline-danger btn-sm" data-action="delete" data-kind="${kind}" data-id="${escapeHtml(id)}" data-name="${escapeHtml(template.name || '')}" title="Eliminar">
+                       <i class="bi bi-trash"></i>
+                   </button>`;
+
             return `
                 <div class="col-md-6 col-xl-4">
                     <article class="template-card h-100">
@@ -1086,12 +1111,8 @@ const OutboundUI = (() => {
                         <div class="template-actions">
                             ${sendButton}
                             ${duplicateButton}
-                            <button type="button" class="btn btn-outline-secondary btn-sm" data-action="edit" data-kind="${kind}" data-id="${escapeHtml(id)}" title="Editar">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button type="button" class="btn btn-outline-danger btn-sm" data-action="delete" data-kind="${kind}" data-id="${escapeHtml(id)}" data-name="${escapeHtml(template.name || '')}" title="Eliminar">
-                                <i class="bi bi-trash"></i>
-                            </button>
+                            ${editButton}
+                            ${deleteButton}
                         </div>
                     </article>
                 </div>`;

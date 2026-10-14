@@ -116,6 +116,11 @@ def approved_templates() -> list[dict]:
     Meta es la fuente de verdad: la lista se lee en vivo de la cuenta. Si la
     integración no está configurada o Meta no responde, se devuelve una lista
     vacía para no romper el resto de la consola.
+
+    Las plantillas de muestra (`hello_world`) **sí** se incluyen, con
+    `is_sample=True`: la página las marca como «PLANTILLA DE PRUEBA META» en
+    lugar de esconderlas, porque Meta solo las deja enviar desde el número de
+    prueba público (desde un número real responde `131058`).
     """
     result = meta_templates.list_templates()
     if not result.ok:
@@ -134,6 +139,7 @@ def approved_templates() -> list[dict]:
                 "indexes": template.get("indexes", []),
                 "needs_header": template.get("header_type", "none") != "none",
                 "body": (template.get("body_text") or "").replace("\n", " ")[:160],
+                "is_sample": meta_templates.is_sample_template(template.get("name", "")),
             }
         )
     return approved

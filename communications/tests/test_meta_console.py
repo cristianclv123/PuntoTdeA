@@ -4,8 +4,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from io import StringIO
+from unittest.mock import patch
 
-from communications.services import meta_config
+from communications import meta_console_views
+from communications.services import meta_config, meta_templates
 
 
 class MetaConfigStatusTests(TestCase):
@@ -288,6 +290,59 @@ class MetaResultsPageTests(TestCase):
         response = self.client.get(reverse("meta-whatsapp-test"))
         self.assertNotContains(response, "Recorrido completo")
         self.assertNotContains(response, "Estados por mensaje")
+
+
+class SampleTemplateLabelTests(TestCase):
+    """`hello_world` es de muestra: se lista, pero marcada como PLANTILLA DE PRUEBA META."""
+
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-test")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+
+    @staticmethod
+    def _template(name, status="APPROVED"):
+        return {
+            "meta_id": f"id-{name}",
+            "name": name,
+            "status": status,
+            "category": "utility",
+            "language": "es_CO",
+        }
+
+    def test_approved_templates_flags_the_sample_template(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[
+                self._template("hello_world"),
+                self._template("aviso_de_pago"),
+                self._template("en_revision", status="PENDING"),
+            ],
+        )
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            offered = meta_console_views.approved_templates()
+
+        self.assertEqual(
+            [(template["name"], template["is_sample"]) for template in offered],
+            [("hello_world", True), ("aviso_de_pago", False)],
+        )
+
+    def test_the_form_lists_the_sample_template_with_its_mark(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[self._template("hello_world"), self._template("aviso_de_pago")],
+        )
+        self.client.force_login(self.staff)
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # La plantilla de muestra se ofrece, pero con la marca pegada al nombre.
+        self.assertIn("hello_world — utility · PLANTILLA DE PRUEBA META", content)
+        self.assertIn("aviso_de_pago — utility", content)
+        self.assertNotIn("aviso_de_pago — utility · PLANTILLA DE PRUEBA META", content)
 
 
 class CheckMetaCommandTests(TestCase):
