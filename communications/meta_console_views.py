@@ -169,13 +169,33 @@ def recent_chats(limit: int = 5) -> list[dict]:
 
 @_staff_required
 def index(request: HttpRequest):
-    """Estado de configuración, envío de prueba y estados reales de Meta."""
+    """Envío de prueba: formularios de texto y plantilla y estado de configuración.
+
+    Las tablas de resultados viven aparte, en `results()`: acá solo quedan las
+    acciones que producen datos.
+    """
     context = {
         "config": meta_config.capability_status(),
         "callback_path": meta_config.WEBHOOK_PATH,
-        "recent_events": WhatsAppWebhookEvent.objects.all()[:20],
-        "event_count": WhatsAppWebhookEvent.objects.count(),
+        "templates": approved_templates(),
+        "active_nav": "whatsapp-test",
+    }
+    return render(request, "communications/whatsapp_test.html", context)
+
+
+@_staff_required
+def results(request: HttpRequest):
+    """Tablas de resultados: lo que Meta reporta de vuelta por webhook.
+
+    Reúne en una sola página los estados por `wamid`, los envíos de prueba, los
+    eventos del webhook, las conversaciones del bot y los destinatarios de
+    campaña. Se separó de la página de prueba para no amontonar cinco tablas
+    distintas debajo de los formularios; la plantilla las organiza por pestañas.
+    """
+    context = {
         "threads": status_threads(),
+        "event_count": WhatsAppWebhookEvent.objects.count(),
+        "recent_events": WhatsAppWebhookEvent.objects.all()[:20],
         "test_sends": WhatsAppWebhookEvent.objects.filter(
             event_key__startswith=TEST_SEND_KEY_PREFIX
         ).order_by("-created_at")[:10],
@@ -184,11 +204,10 @@ def index(request: HttpRequest):
             .select_related("campaign", "contact")
             .order_by("-id")[:10]
         ),
-        "templates": approved_templates(),
         "chats": recent_chats(),
-        "active_nav": "whatsapp-test",
+        "active_nav": "whatsapp-results",
     }
-    return render(request, "communications/whatsapp_test.html", context)
+    return render(request, "communications/whatsapp_results.html", context)
 
 
 @_staff_required

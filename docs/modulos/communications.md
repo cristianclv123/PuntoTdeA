@@ -16,7 +16,7 @@ communications/
   urls.py
   serializers.py
   permissions.py           # IsInternalService
-  meta_console_views.py    # /whatsapp-prueba/, /whatsapp-configuracion/
+  meta_console_views.py    # /whatsapp-prueba/, /whatsapp-prueba/resultados/, /whatsapp-configuracion/
   admin.py
   adapters/
     base.py                # ChannelAdapter, SendResult
@@ -101,6 +101,7 @@ Permiso `IsInternalService`: sesión autenticada o `X-Internal-Token`. Con `DEBU
 | Ruta | Uso |
 | --- | --- |
 | `/whatsapp-prueba/` | Enviar texto/plantilla de prueba, ventana 24 h |
+| `/whatsapp-prueba/resultados/` | Tablas de resultados por pestañas (estados, envíos, eventos, chats, destinatarios) |
 | `/whatsapp-configuracion/` | Estado de variables |
 
 Ver [pagina-pruebas-whatsapp.md](../pagina-pruebas-whatsapp.md).

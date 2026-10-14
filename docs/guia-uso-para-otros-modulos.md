@@ -265,8 +265,8 @@ payload, la firma ni la capa HTTP.
 ### 5.5 Probar el flujo completo
 
 Hace falta un WhatsApp de verdad. Escribile **un saludo** al número de negocio y
-recargá la página **WhatsApp (Meta) → Prueba de integración**: el evento
-`inbound` aparece en *Eventos del webhook* y el hilo en *Conversaciones del bot*.
+recargá la página **WhatsApp (Meta) → Resultados**: el evento `inbound` aparece
+en *Eventos del webhook* y el hilo en *Conversaciones del bot*.
 Mandá el segundo turno desde un WhatsApp cualquiera (no hace falta el de la
 persona) y seguí la conversación. Como el bot responde al número que escribió,
 el intercambio se ve en la página pero la otra persona no ve nada: es lo

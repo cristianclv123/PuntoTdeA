@@ -145,6 +145,22 @@
       font-size: .78rem; font-weight: 700; text-transform: uppercase;
       letter-spacing: .05em; color: #9aa0a6; margin: 0 0 .6rem;
     }
+    /* Pestañas de la página de resultados: una tabla por pestaña en vez de
+       cinco bloques apilados. */
+    .wa-tabs {
+      display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: 1rem;
+    }
+    .wa-tab {
+      background: none; border: 1px solid var(--border); border-radius: 999px;
+      color: #cfd3d6; cursor: pointer; font-family: inherit;
+      font-size: .8rem; font-weight: 600; padding: .4rem .9rem;
+    }
+    .wa-tab:hover { border-color: var(--blue); color: #fff; }
+    .wa-tab.active {
+      background: var(--blue-soft); border-color: var(--blue); color: var(--blue);
+    }
+    .wa-panel { display: none; }
+    .wa-panel.active { display: block; }
     @media (max-width: 1100px) {
       .wa-console-layout { grid-template-columns: 1fr; }
     }
