@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.templatetags.static import static
 from django.test import TestCase
 from django.urls import reverse
 
@@ -21,7 +22,9 @@ class CampaignWizardPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("campaignAudiencePicker", content)
-        self.assertIn("audience-picker.js", content)
+        # Con DEBUG=false whitenoise sirve el asset con hash en el nombre; se
+        # compara contra la ruta real del manifest, no contra el nombre literal.
+        self.assertIn(static("js/audience-picker.js"), content)
         # No debe renderizar el input de archivo inline ni chips de segmentos.
         self.assertNotIn('id="loadRecipientsFileBtn"', content)
         self.assertNotIn('id="recipientsFileInput"', content)
