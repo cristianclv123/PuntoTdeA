@@ -99,6 +99,11 @@ def publish_announcement(
             announcement.get_image_bytes(),
             name=announcement.image_name or "aviso.jpg",
         )
+        if announcement.image_content_type:
+            try:
+                image_file.content_type = announcement.image_content_type
+            except Exception:
+                pass
 
     result = ads_service.create_status_ad(
         name=f"Aviso: {announcement.title}"[:200],
