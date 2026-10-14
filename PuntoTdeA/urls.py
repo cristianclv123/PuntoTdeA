@@ -20,6 +20,7 @@ from communications import views as communications_views
 from communications.meta_console_views import config as meta_console_config
 from communications.meta_console_views import health as meta_console_health
 from communications.meta_console_views import index as meta_console_index
+from communications.meta_console_views import results as meta_console_results
 from communications.meta_console_views import send_test_message as meta_console_send
 from communications.meta_console_views import send_test_template as meta_console_send_template
 from communications.meta_console_views import validate_credentials as meta_console_validate
@@ -42,6 +43,11 @@ urlpatterns = [
     ),
     # Consola de verificación de la integración. Solo para personal staff.
     path('whatsapp-prueba/', meta_console_index, name='meta-whatsapp-test'),
+    path(
+        'whatsapp-prueba/resultados/',
+        meta_console_results,
+        name='meta-whatsapp-results',
+    ),
     path('whatsapp-prueba/enviar/', meta_console_send, name='meta-whatsapp-test-send'),
     path(
         'whatsapp-prueba/enviar-plantilla/',

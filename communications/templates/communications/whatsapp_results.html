@@ -1,0 +1,265 @@
+{% extends "communications/whatsapp_base.html" %}
+
+{% block title %}Resultados WhatsApp (Meta) — Punto TdeA{% endblock %}
+{% block page_title %}Resultados de la integración{% endblock %}
+{% block page_subtitle %}Lo que Meta reporta de vuelta, por pestañas{% endblock %}
+
+{% block wa_content %}
+
+  <p class="wa-note" style="margin:0 0 1rem">
+    Todo lo que aparece acá viene de Meta de verdad: cada fila ocurrió en la
+    cuenta real. Para producir datos nuevos, andá a
+    <a href="{% url 'meta-whatsapp-test' %}">Prueba de integración</a>.
+  </p>
+
+  <div class="wa-tabs" role="tablist">
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="estados">Estados por mensaje</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="envios">Envíos de prueba</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="eventos">Eventos del webhook</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="chats">Conversaciones del bot</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="destinatarios">Destinatarios de campaña</button>
+  </div>
+
+  <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="estados">
+    <h2>Estados por mensaje</h2>
+    <p class="hint">
+      Cada fila agrupa los estados de un mismo <code>wamid</code>, en el orden en
+      que los reportó Meta. <strong>Un envío hecho desde la página de pruebas
+      queda registrado con su <code>wamid</code></strong>, así que aquí vas a ver
+      <code>sent</code> → <code>delivered</code> → <code>read</code> tal como
+      los reporta Meta.
+    </p>
+    {% if threads %}
+      {% for thread in threads %}
+        <div class="wa-row">
+          <div style="min-width:0">
+            <code style="font-size:.74rem">{{ thread.wamid|truncatechars:58 }}</code>
+            <button type="button" class="wa-copy" data-copy="{{ thread.wamid }}" title="Copiar">copiar</button>
+            <div class="wa-timeline">
+              {% for step in thread.steps %}
+                <span class="wa-chip wa-chip-{{ step.status }}">{{ step.status }}</span>
+                <span class="wa-thread-meta">{{ step.created_at|date:"d/m H:i:s" }}</span>
+                {% for err in step.payload.errors %}
+                  <span class="wa-err">#{{ err.code }} {% if err.title %}{{ err.title }}{% else %}{{ err.message }}{% endif %}</span>
+                {% endfor %}
+              {% endfor %}
+            </div>
+            {% if thread.steps.0.payload.detail %}
+              <div class="wa-note">{{ thread.steps.0.payload.to }} · {{ thread.steps.0.payload.detail }}</div>
+            {% endif %}
+          </div>
+          <div class="wa-thread-meta">{{ thread.steps.0.created_at|date:"d/m/Y H:i" }}</div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="hint" style="margin:0">
+        Todavía no hay estados. Enviá un mensaje o una plantilla desde
+        <a href="{% url 'meta-whatsapp-test' %}">Prueba de integración</a>: Meta
+        devuelve un <code>wamid</code> y después reporta <code>sent</code> y
+        <code>delivered</code> por webhook.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="envios">
+    <h2>Envíos de prueba con wamid</h2>
+    <p class="hint">
+      Cada envío hecho desde la página de pruebas, con el <code>wamid</code> real
+      que devolvió Meta. Copiá uno y buscá esa misma cadena en
+      <strong>Estados por mensaje</strong> para ver cómo avanzó sus estados.
+    </p>
+    {% if test_sends %}
+      <table class="wa-table">
+        <thead>
+          <tr><th>wamid</th><th>Tipo</th><th>Destinatario</th><th>Contenido</th><th>Cuándo</th></tr>
+        </thead>
+        <tbody>
+          {% for send in test_sends %}
+            <tr>
+              <td>
+                <code style="font-size:.72rem">{{ send.provider_message_id|truncatechars:40 }}</code>
+                <button type="button" class="wa-copy" data-copy="{{ send.provider_message_id }}">copiar</button>
+              </td>
+              <td>
+                {% if send.status == "test_template" %}
+                  <span class="wa-chip test_template">plantilla</span>
+                {% else %}
+                  <span class="wa-chip test_text">texto</span>
+                {% endif %}
+              </td>
+              <td>{{ send.payload.to }}</td>
+              <td style="max-width:22rem">{{ send.payload.detail|truncatechars:70 }}</td>
+              <td>{{ send.created_at|date:"d/m H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="hint" style="margin:0">
+        Todavía no hay envíos de prueba. Cada envío exitoso desde
+        <a href="{% url 'meta-whatsapp-test' %}">Prueba de integración</a> queda
+        registrado acá con su <code>wamid</code>.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="eventos">
+    <h2>Eventos del webhook</h2>
+    <p class="hint">
+      {{ event_count }} evento(s) registrado(s). Sirven para confirmar que Meta sí está llegando
+      y para verificar que los reintentos no se procesen dos veces.
+    </p>
+    {% if recent_events %}
+      <table class="wa-table">
+        <thead>
+          <tr><th>Tipo</th><th>Estado</th><th>provider_message_id</th><th>Procesado</th><th>Recibido</th></tr>
+        </thead>
+        <tbody>
+          {% for event in recent_events %}
+            <tr>
+              <td>
+                {{ event.get_event_type_display }}
+              </td>
+              <td>
+                <span class="wa-chip wa-chip-{{ event.status }}">{{ event.status|default:"—" }}</span>
+                {% for err in event.payload.errors %}
+                  <div class="wa-err">#{{ err.code }} {% if err.title %}{{ err.title }}{% else %}{{ err.message }}{% endif %}</div>
+                {% endfor %}
+              </td>
+              <td><code style="font-size:.75rem">{{ event.provider_message_id }}</code></td>
+              <td>{% if event.processed_at %}{{ event.processed_at|date:"d/m/Y H:i" }}{% else %}pendiente{% endif %}</td>
+              <td>{{ event.created_at|date:"d/m/Y H:i" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="hint" style="margin:0">
+        Aún no hay eventos. Eso significa que Meta todavía no hizo ningún POST al
+        callback: pedile a alguien que escriba al número de negocio y esperá unos
+        segundos.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="chats">
+    <h2>Conversaciones del bot</h2>
+    <p class="hint">
+      Últimas conversaciones originadas por WhatsApp. Ojo: <strong>el primer
+      mensaje siempre se descarta y solo devuelve el saludo</strong>, sin importar
+      qué escriba la persona. Para una conversación completa, el primer mensaje
+      tiene que ser un saludo.
+    </p>
+    {% if chats %}
+      {% for chat in chats %}
+        <div class="wa-row">
+          <div style="min-width:0;flex:1">
+            <div>
+              <strong>{{ chat.conversation.external_user_id }}</strong>
+              <span class="wa-chip">{{ chat.conversation.get_status_display }}</span>
+              <span class="wa-thread-meta">{{ chat.conversation.flow_state }} · {{ chat.turns }} mensajes</span>
+            </div>
+            {% if chat.last_user %}
+              <div class="wa-who">Escribió</div>
+              <div class="wa-bubble user">{{ chat.last_user.content|truncatechars:180 }}</div>
+            {% endif %}
+            {% if chat.last_bot %}
+              <div class="wa-who" style="margin-top:.35rem">Respondió el bot</div>
+              <div class="wa-bubble bot">{{ chat.last_bot.content|truncatechars:180 }}</div>
+            {% endif %}
+          </div>
+          <a class="wa-btn link" href="/admin/knowledge/chatconversation/?q={{ chat.conversation.external_user_id }}">ver</a>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="hint" style="margin:0">
+        Todavía no hay conversaciones. Escribile <strong>un saludo</strong> al
+        número de negocio desde un WhatsApp: ese primer mensaje ya queda registrado
+        acá.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="destinatarios">
+    <h2>Destinatarios de campaña con wamid</h2>
+    <p class="hint">Los estados de Meta se aplican a estos destinatarios por su <code>provider_message_id</code>.</p>
+    {% if recent_recipients %}
+      <table class="wa-table">
+        <thead>
+          <tr><th>Campaña</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th>wamid</th><th>Leído</th></tr>
+        </thead>
+        <tbody>
+          {% for recipient in recent_recipients %}
+            <tr>
+              <td>{{ recipient.campaign.name }}</td>
+              <td>{{ recipient.contact.full_name }}</td>
+              <td>{{ recipient.phone_snapshot }}</td>
+              <td>{{ recipient.get_status_display }}</td>
+              <td><code style="font-size:.72rem">{{ recipient.provider_message_id }}</code></td>
+              <td>{% if recipient.read_at %}{{ recipient.read_at|date:"d/m H:i" }}{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="hint" style="margin:0">
+        Todavía no hay destinatarios de campaña con <code>wamid</code>. Aparecen
+        cuando se envía una campaña y Meta devuelve el identificador de cada
+        mensaje.
+      </p>
+    {% endif %}
+  </section>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    // Pestañas: cada tabla vive en su propio panel y se muestra una a la vez.
+    const tabs = document.querySelectorAll('[data-wa-tab]');
+    const panels = document.querySelectorAll('[data-wa-panel]');
+    function activate(name) {
+      tabs.forEach(function (tab) {
+        const isActive = tab.dataset.waTab === name;
+        tab.classList.toggle('active', isActive);
+        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      panels.forEach(function (panel) {
+        panel.classList.toggle('active', panel.dataset.waPanel === name);
+      });
+    }
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () { activate(tab.dataset.waTab); });
+    });
+    // Si la URL trae un ancla (#eventos), se abre esa pestaña directamente.
+    const hash = (window.location.hash || '').replace('#', '');
+    const known = Array.prototype.some.call(tabs, function (tab) {
+      return tab.dataset.waTab === hash;
+    });
+    if (tabs.length) activate(known ? hash : tabs[0].dataset.waTab);
+
+    // Copiar wamid al portapapeles.
+    document.querySelectorAll('[data-copy]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        const value = button.dataset.copy;
+        const done = function () {
+          const original = button.textContent;
+          button.textContent = 'copiado';
+          setTimeout(function () { button.textContent = original; }, 1200);
+        };
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(value).then(done);
+        } else {
+          const helper = document.createElement('textarea');
+          helper.value = value;
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand('copy');
+          document.body.removeChild(helper);
+          done();
+        }
+      });
+    });
+  })();
+</script>
+{% endblock %}

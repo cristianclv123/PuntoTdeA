@@ -41,6 +41,23 @@ class MetaTemplateServiceTests(TestCase):
         # Nunca devuelve vacío: Meta exige un nombre válido.
         self.assertEqual(meta_templates.slugify_meta_name("###"), "plantilla")
 
+    def test_is_sample_template_matches_hello_world_only(self):
+        self.assertTrue(meta_templates.is_sample_template("hello_world"))
+        self.assertTrue(meta_templates.is_sample_template(" Hello_World "))
+        self.assertFalse(meta_templates.is_sample_template("recordatorio"))
+        self.assertFalse(meta_templates.is_sample_template(None))
+
+    def test_normalize_marks_sample_templates(self):
+        sample = meta_templates.normalize_meta_template(
+            {"id": "1", "name": "hello_world", "status": "APPROVED"}
+        )
+        real = meta_templates.normalize_meta_template(
+            {"id": "2", "name": "aviso_de_pago", "status": "APPROVED"}
+        )
+
+        self.assertTrue(sample["is_sample"])
+        self.assertFalse(real["is_sample"])
+
     @patch("communications.services.meta_templates.requests.post")
     def test_create_from_draft_sends_components(self, post):
         post.return_value = _response(

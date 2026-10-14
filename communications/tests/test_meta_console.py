@@ -4,8 +4,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from io import StringIO
+from unittest.mock import patch
 
-from communications.services import meta_config
+from communications import meta_console_views
+from communications.services import meta_config, meta_templates
 
 
 class MetaConfigStatusTests(TestCase):
@@ -206,11 +208,13 @@ class SidebarMenuTests(TestCase):
         body = self._sidebar()
         self.assertIn(reverse("meta-whatsapp-config"), body)
         self.assertIn(reverse("meta-whatsapp-test"), body)
+        self.assertIn(reverse("meta-whatsapp-results"), body)
 
     def test_regular_user_does_not_see_it(self):
         self.client.force_login(self.regular)
         body = self._sidebar()
         self.assertNotIn(reverse("meta-whatsapp-config"), body)
+        self.assertNotIn(reverse("meta-whatsapp-results"), body)
 
     def test_the_group_follows_the_same_markup_as_knowledge(self):
         self.client.force_login(self.staff)
@@ -235,6 +239,110 @@ class MetaConfigPageActiveNavTests(TestCase):
             self.client.get(reverse("meta-whatsapp-test")).context["active_nav"],
             "whatsapp-test",
         )
+        self.assertEqual(
+            self.client.get(reverse("meta-whatsapp-results")).context["active_nav"],
+            "whatsapp-results",
+        )
+
+
+class MetaResultsPageTests(TestCase):
+    """La página de resultados reúne las tablas y solo la ve el staff."""
+
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-results")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+        self.regular = get_user_model().objects.create_user(
+            username="asesor", password="x"
+        )
+
+    def test_anonymous_is_redirected_to_login(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+    def test_non_staff_cannot_open_the_page(self):
+        self.client.force_login(self.regular)
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+
+    def test_staff_sees_every_tab(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        for label in (
+            "Estados por mensaje",
+            "Envíos de prueba",
+            "Eventos del webhook",
+            "Conversaciones del bot",
+            "Destinatarios de campaña",
+        ):
+            self.assertContains(response, label)
+
+    def test_the_form_page_links_to_the_results_page(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("meta-whatsapp-test"))
+        self.assertContains(response, reverse("meta-whatsapp-results"))
+
+    def test_the_form_page_no_longer_holds_the_result_tables(self):
+        """Las tablas se movieron: en la página de pruebas no deben quedar."""
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("meta-whatsapp-test"))
+        self.assertNotContains(response, "Recorrido completo")
+        self.assertNotContains(response, "Estados por mensaje")
+
+
+class SampleTemplateLabelTests(TestCase):
+    """`hello_world` es de muestra: se lista, pero marcada como PLANTILLA DE PRUEBA META."""
+
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-test")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+
+    @staticmethod
+    def _template(name, status="APPROVED"):
+        return {
+            "meta_id": f"id-{name}",
+            "name": name,
+            "status": status,
+            "category": "utility",
+            "language": "es_CO",
+        }
+
+    def test_approved_templates_flags_the_sample_template(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[
+                self._template("hello_world"),
+                self._template("aviso_de_pago"),
+                self._template("en_revision", status="PENDING"),
+            ],
+        )
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            offered = meta_console_views.approved_templates()
+
+        self.assertEqual(
+            [(template["name"], template["is_sample"]) for template in offered],
+            [("hello_world", True), ("aviso_de_pago", False)],
+        )
+
+    def test_the_form_lists_the_sample_template_with_its_mark(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[self._template("hello_world"), self._template("aviso_de_pago")],
+        )
+        self.client.force_login(self.staff)
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        # La plantilla de muestra se ofrece, pero con la marca pegada al nombre.
+        self.assertIn("hello_world — utility · PLANTILLA DE PRUEBA META", content)
+        self.assertIn("aviso_de_pago — utility", content)
+        self.assertNotIn("aviso_de_pago — utility · PLANTILLA DE PRUEBA META", content)
 
 
 class CheckMetaCommandTests(TestCase):

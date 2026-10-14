@@ -90,7 +90,7 @@ El chatbot busca el contacto de comunicaciones por teléfono y copia datos al cr
 - UI: sesión Django (`login_required`). Login por username o email.
 - `/api/cases/` y `/api/knowledge/`: `IsAuthenticated` en ViewSets de gestión; webhooks de ingesta pueden ser públicos.
 - `/campanas/api/`: `IsInternalService` (sesión **o** header `X-Internal-Token`). En `DEBUG=True` queda abierto.
-- Consola `/whatsapp-prueba/` y `/whatsapp-configuracion/`: solo `is_staff`.
+- Consola `/whatsapp-prueba/`, `/whatsapp-prueba/resultados/` y `/whatsapp-configuracion/`: solo `is_staff`.
 
 ## Tiempo real
 
