@@ -318,8 +318,30 @@
   justify-content: flex-start;
 }
 
+.btn-create-out {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.2;
+  text-align: center;
+}
+
 .btn-create-out-cancel {
   display: none;
+}
+
+#toggle-nuevo-cuadro:checked ~ .btn-create-out-wrap .btn-create-out {
+  background-color: var(--surface-2, #1c1c1c);
+  color: var(--text, #f3f4f6);
+  border: 1px solid var(--border, #2a2a2a);
+  box-shadow: none;
+}
+
+#toggle-nuevo-cuadro:checked ~ .btn-create-out-wrap .btn-create-out:hover {
+  background-color: var(--surface, #141414);
+  border-color: rgba(148, 163, 184, 0.6);
+  box-shadow: none;
 }
 
 #toggle-nuevo-cuadro:checked ~ .btn-create-out-wrap .btn-create-out-label {
@@ -327,7 +349,10 @@
 }
 
 #toggle-nuevo-cuadro:checked ~ .btn-create-out-wrap .btn-create-out-cancel {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 /* Resalta el aviso que se está previsualizando. */
