@@ -107,7 +107,7 @@ Graph API"**, que sí hace la consulta real:
 La diferencia es importante: una variable puede estar perfectamente escrita y el
 token llevar meses revocado. Solo la segunda consulta lo detecta.
 
-### Página de movimientos: las seis pestañas
+### Página de movimientos: las cinco pestañas
 
 Arriba hay un bloque plegable **"¿Cómo leer Movimientos?"** con las cuatro ideas
 que cuesta recordar de una integración asíncrona:
@@ -119,11 +119,11 @@ que cuesta recordar de una integración asíncrona:
 
 Debajo de ese bloque hay un **filtro libre** ("Filtrar por wamid..."): oculta las
 filas de la pestaña activa que no contengan el texto buscado. Es la forma más
-rápida de seguir un `wamid`: se copia de *Envíos de prueba* o *Destinatarios de
+rápida de seguir un `wamid`: se copia de *Eventos del webhook* o *Destinatarios de
 campañas* y se pega en el filtro.
 
 Al entrar se abre la primera pestaña. La URL admite un ancla (`#estados`,
-`#envios`, `#eventos`, `#chats`, `#destinatarios`, `#campanas`) para enlazar una
+`#eventos`, `#chats`, `#destinatarios`, `#campanas`) para enlazar una
 concreta; al pulsar una pestaña la barra de direcciones se actualiza.
 
 #### 2.4 Estados de entrega (por wamid)
@@ -136,20 +136,13 @@ Un envío hecho desde la página de prueba queda registrado con su `wamid` real,
 así que esta tabla se llena sola. Si un estado llega `failed`, se muestra el
 código y el texto de error de Meta traducidos a algo accionable (ver §4).
 
-#### 2.5 Envíos de prueba (con wamid)
-
-Cada envío hecho desde la página de prueba, con el `wamid` que devolvió Meta y un
-botón para copiarlo. Sirve para correlacionar: copiá un `wamid` y usalo en el
-filtro o buscá esa misma cadena en "Estados de entrega (por wamid)" para ver cómo
-avanzó.
-
-Estos registros se guardan en la misma tabla que los eventos del webhook, con
-una clave que los distingue. Por eso los mensajes de `error 131047` y compañía
-quedan guardados aunque el webhook nunca los reporte.
-
-#### 2.6 Eventos del webhook (crudos)
+#### 2.5 Eventos del webhook (crudos)
 
 Todo lo que Meta ha enviado por POST al callback, con su marca de procesamiento.
+La tabla incluye además **los envíos hechos desde la página de prueba** —que se
+guardan en la misma tabla con una clave propia— con su destinatario y el
+contenido enviado. Por eso los mensajes de `error 131047` y compañía quedan
+registrados aunque el webhook nunca los reporte.
 
 El campo "Procesado" distingue dos cosas:
 
@@ -160,7 +153,7 @@ También sirve para verificar **idempotencia**: cada evento tiene una
 `event_key` única, así que si Meta reintenta un POST, el segundo intento se
 registra como duplicado y no se procesa dos veces.
 
-#### 2.7 Conversaciones del chatbot (WhatsApp)
+#### 2.6 Conversaciones del chatbot (WhatsApp)
 
 Las conversaciones originadas por WhatsApp, con el último mensaje de la persona
 y la última respuesta del bot.
@@ -171,13 +164,13 @@ la persona. Es el comportamiento del chatbot (`knowledge/chatbot/whatsapp.py`),
 no un error. Para una conversación completa, el primer mensaje tiene que ser un
 saludo.
 
-#### 2.8 Destinatarios de campañas (con wamid)
+#### 2.7 Destinatarios de campañas (con wamid)
 
 Aparece solo si hay destinatarios. Son los registros contra los que Meta aplica
 los estados de las campañas: cuando llega un `status`, se busca el destinatario
 por su `provider_message_id` y se actualiza su estado y su `read_at`.
 
-#### 2.9 Objetos creados en Meta (campañas/ad sets/creativos/anuncios)
+#### 2.8 Objetos creados en Meta (campañas/ad sets/creativos/anuncios)
 
 Los objetos que la integración creó en la **cuenta de anuncios** (Marketing API)
 al publicar avisos en WhatsApp Status: campaña, ad set, creativo y anuncio, con
@@ -243,9 +236,10 @@ Dashboard (§5), no en el código.
 3. Si la comprobación falla, responde con **HTTP 400** y `error.code = 131047`.
 4. Si todo está bien, responde con **HTTP 200** y un `wamid`.
 
-**Qué hace nuestra aplicación con la respuesta.** Registra el `wamid` en la
-tabla de envíos de prueba y muestra el resultado. Si vino un error, busca el
-código en la tabla de errores conocidos y lo traduce.
+**Qué hace nuestra aplicación con la respuesta.** Registra el `wamid` como un
+evento del webhook (aparece en la pestaña *Eventos del webhook*, con el
+destinatario y el contenido enviado) y muestra el resultado. Si vino un error,
+busca el código en la tabla de errores conocidos y lo traduce.
 
 ### 3.3 Los estados: el paso que casi nadie mira
 
@@ -379,7 +373,7 @@ python manage.py reset_whatsapp_test_data           # ensayo: solo informa
 python manage.py reset_whatsapp_test_data --ejecutar
 ```
 
-Borra los eventos del webhook, los envíos de prueba, las campañas de
+Borra los eventos del webhook (incluidos los envíos de prueba), las campañas de
 demostración con sus destinatarios, y las conversaciones del bot que llegaron
 por WhatsApp.
 

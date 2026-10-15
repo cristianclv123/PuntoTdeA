@@ -16,7 +16,7 @@
     <summary style="cursor:pointer; color:var(--text)">¿Cómo leer Movimientos?</summary>
     <div style="margin-top:.4rem; line-height:1.5">
       • <strong>Asíncrono</strong>: un POST al enviar devuelve <code>wamid</code> (Meta aceptó), los estados (<code>sent</code> → <code>delivered</code> → <code>read</code> o <code>failed</code>) llegan por POST al webhook.
-      • <strong>Correlación por wamid</strong>: copiá el <code>wamid</code> de <em>Envíos de prueba</em> o <em>Destinatarios de campañas</em> y buscalo en <em>Estados de entrega</em>.
+      • <strong>Correlación por wamid</strong>: copiá el <code>wamid</code> de <em>Eventos del webhook</em> o <em>Destinatarios de campañas</em> y buscalo en <em>Estados de entrega</em>.
       • <strong>Webhook crudo</strong>: <em>Eventos del webhook</em> muestra lo recibido (útil para detectar duplicados/reintentos).
       • <strong>Huérfanos</strong>: en <em>Objetos creados en Meta</em>, "huérfano" = campaña/ad set creados pero sin anuncio (falló el creativo, p.ej. app en modo Development).
     </div>
@@ -26,7 +26,6 @@
 
   <div class="wa-tabs" role="tablist">
     <button type="button" class="wa-tab" role="tab" data-wa-tab="estados">Estados de entrega (por wamid)</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="envios">Envíos de prueba (con wamid)</button>
     <button type="button" class="wa-tab" role="tab" data-wa-tab="eventos">Eventos del webhook (crudos)</button>
     <button type="button" class="wa-tab" role="tab" data-wa-tab="chats">Conversaciones del chatbot (WhatsApp)</button>
     <button type="button" class="wa-tab" role="tab" data-wa-tab="destinatarios">Destinatarios de campañas (con wamid)</button>
@@ -37,7 +36,7 @@
     <h2>Estados de entrega (por wamid)</h2>
     <p class="hint">
       Cada fila agrupa los estados de un mismo <code>wamid</code>, en el orden en
-      que los reportó Meta. <strong>Un 200 solo confirma que Meta aceptó el mensaje. La entrega es asíncrona</strong>: los estados llegan por POST al webhook. Buscá el <code>wamid</code> en <em>Envíos de prueba</em> o <em>Destinatarios de campañas</em> para correlacionar.
+      que los reportó Meta. <strong>Un 200 solo confirma que Meta aceptó el mensaje. La entrega es asíncrona</strong>: los estados llegan por POST al webhook. Buscá el <code>wamid</code> en <em>Eventos del webhook</em> o <em>Destinatarios de campañas</em> para correlacionar.
     </p>
     {% if threads %}
       {% for thread in threads %}
@@ -71,57 +70,15 @@
     {% endif %}
   </section>
 
-  <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="envios">
-    <h2>Envíos de prueba (con wamid)</h2>
-    <p class="hint">
-      Cada envío hecho desde la página de pruebas, con el <code>wamid</code> real
-      que devolvió Meta. Copiá uno y usalo para buscarlo en
-      <strong>Estados de entrega (por wamid)</strong>.
-    </p>
-    {% if test_sends %}
-      <table class="wa-table">
-        <thead>
-          <tr><th>wamid</th><th>Tipo</th><th>Destinatario</th><th>Contenido</th><th>Cuándo</th></tr>
-        </thead>
-        <tbody>
-          {% for send in test_sends %}
-            <tr>
-              <td>
-                <code style="font-size:.72rem">{{ send.provider_message_id|truncatechars:40 }}</code>
-                <button type="button" class="wa-copy" data-copy="{{ send.provider_message_id }}">copiar</button>
-              </td>
-              <td>
-                {% if send.status == "test_template" %}
-                  <span class="wa-chip test_template">plantilla</span>
-                {% else %}
-                  <span class="wa-chip test_text">texto</span>
-                {% endif %}
-              </td>
-              <td>{{ send.payload.to }}</td>
-              <td style="max-width:22rem">{{ send.payload.detail|truncatechars:70 }}</td>
-              <td>{{ send.created_at|date:"d/m H:i" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="hint" style="margin:0">
-        Todavía no hay envíos de prueba. Cada envío exitoso desde
-        <a href="{% url 'meta-whatsapp-test' %}">Prueba de integración</a> queda
-        registrado acá con su <code>wamid</code>.
-      </p>
-    {% endif %}
-  </section>
-
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="eventos">
     <h2>Eventos del webhook (crudos)</h2>
     <p class="hint">
-      {{ event_count }} evento(s) registrado(s). POSTs reales a <code>/api/whatsapp/webhook/</code>. Cada evento tiene una <code>event_key</code> única (los reintentos de Meta no duplican el procesamiento). Si <strong>Procesado</strong> aparece como <em>pendiente</em>, Meta envió el evento pero su procesamiento no terminó.
+      {{ event_count }} evento(s) registrado(s). POSTs reales a <code>/api/whatsapp/webhook/</code>, más los envíos hechos desde <a href="{% url 'meta-whatsapp-test' %}">Prueba de integración</a> (con su destinatario y contenido). Cada evento tiene una <code>event_key</code> única (los reintentos de Meta no duplican el procesamiento). Si <strong>Procesado</strong> aparece como <em>pendiente</em>, Meta envió el evento pero su procesamiento no terminó.
     </p>
     {% if recent_events %}
       <table class="wa-table">
         <thead>
-          <tr><th>Tipo</th><th>Estado</th><th>provider_message_id</th><th>Procesado</th><th>Recibido</th></tr>
+          <tr><th>Tipo</th><th>Estado</th><th>provider_message_id</th><th>Destinatario / remitente</th><th>Contenido</th><th>Procesado</th><th>Recibido</th></tr>
         </thead>
         <tbody>
           {% for event in recent_events %}
@@ -135,7 +92,21 @@
                   <div class="wa-err">#{{ err.code }} {% if err.title %}{{ err.title }}{% else %}{{ err.message }}{% endif %}</div>
                 {% endfor %}
               </td>
-              <td><code style="font-size:.75rem">{{ event.provider_message_id }}</code></td>
+              <td>
+                <code style="font-size:.75rem">{{ event.provider_message_id }}</code>
+                <button type="button" class="wa-copy" data-copy="{{ event.provider_message_id }}">copiar</button>
+              </td>
+              <td>
+                {% if event.payload.to %}{{ event.payload.to }}
+                {% elif event.payload.from %}{{ event.payload.from }}
+                {% elif event.payload.recipient_id %}{{ event.payload.recipient_id }}
+                {% else %}—{% endif %}
+              </td>
+              <td style="max-width:20rem;word-break:break-word">
+                {% if event.payload.detail %}{{ event.payload.detail }}
+                {% elif event.payload.text %}{{ event.payload.text }}
+                {% else %}—{% endif %}
+              </td>
               <td>{% if event.processed_at %}{{ event.processed_at|date:"d/m/Y H:i" }}{% else %}pendiente{% endif %}</td>
               <td>{{ event.created_at|date:"d/m/Y H:i" }}</td>
             </tr>

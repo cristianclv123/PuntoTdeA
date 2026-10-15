@@ -197,7 +197,7 @@ sesión de personal `staff`. El grupo no se renderiza para usuarios sin `is_staf
 | --- | --- | --- |
 | Configuración | `/whatsapp-configuracion/` | Estado de las variables, capacidades, callback a registrar en Meta y los comandos para aplicar los cambios. **Solo lectura.** |
 | Prueba de integración | `/whatsapp-prueba/` | Envío de mensajes y plantillas reales, más el estado de las variables. No muestra tablas: solo produce datos. Ver [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md). |
-| Movimientos | `/whatsapp-prueba/resultados/` | Todo lo que Meta reporta de vuelta, organizado por pestañas: estados, envíos, eventos, conversaciones, destinatarios y las campañas creadas en Meta. Ver [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md). |
+| Movimientos | `/whatsapp-prueba/resultados/` | Todo lo que Meta reporta de vuelta, organizado por pestañas: estados, eventos, conversaciones, destinatarios y las campañas creadas en Meta. Ver [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md). |
 
 La página de configuración es deliberadamente de solo lectura: no hay ningún
 campo que escriba credenciales. Los secretos no travels por el navegador ni por

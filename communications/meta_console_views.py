@@ -27,10 +27,7 @@ from communications.models import (
 from communications.services import ads_service
 from communications.services import meta_config, meta_diagnostics, meta_errors
 from communications.services import meta_templates
-from communications.services.test_send_registry import (
-    TEST_SEND_KEY_PREFIX,
-    record_test_send,
-)
+from communications.services.test_send_registry import record_test_send
 
 
 def _staff_required(view):
@@ -194,19 +191,16 @@ def index(request: HttpRequest):
 def results(request: HttpRequest):
     """Movimientos de la integracion: lo que Meta reporta de vuelta.
 
-    Reúne en una sola página los estados por `wamid`, los envíos de prueba, los
-    eventos del webhook, las conversaciones del bot, los destinatarios de
-    campaña y los objetos que la integración creó en la cuenta de anuncios. Se
-    separó de la página de prueba para no amontonar seis tablas distintas
-    debajo de los formularios; la plantilla las organiza por pestañas.
+    Reúne en una sola página los estados por `wamid`, los eventos del webhook,
+    las conversaciones del bot, los destinatarios de campaña y los objetos que
+    la integración creó en la cuenta de anuncios. Se separó de la página de
+    prueba para no amontonar cinco tablas distintas debajo de los formularios;
+    la plantilla las organiza por pestañas.
     """
     context = {
         "threads": status_threads(),
         "event_count": WhatsAppWebhookEvent.objects.count(),
         "recent_events": WhatsAppWebhookEvent.objects.all()[:20],
-        "test_sends": WhatsAppWebhookEvent.objects.filter(
-            event_key__startswith=TEST_SEND_KEY_PREFIX
-        ).order_by("-created_at")[:10],
         "recent_recipients": (
             BroadcastRecipient.objects.exclude(provider_message_id="")
             .select_related("campaign", "contact")

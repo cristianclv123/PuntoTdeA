@@ -7,6 +7,7 @@ from io import StringIO
 from unittest.mock import patch
 
 from communications import meta_console_views
+from communications.models import WhatsAppWebhookEvent
 from communications.services import meta_config, meta_templates
 from communications.services.ads_service import AdsResult
 
@@ -275,13 +276,26 @@ class MetaResultsPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         for label in (
             "Estados de entrega (por wamid)",
-            "Envíos de prueba (con wamid)",
             "Eventos del webhook (crudos)",
             "Conversaciones del chatbot (WhatsApp)",
             "Destinatarios de campañas (con wamid)",
             "Objetos creados en Meta (campañas/ad sets/creativos/anuncios)",
         ):
             self.assertContains(response, label)
+        self.assertNotContains(response, "Envíos de prueba (con wamid)")
+
+    def test_events_tab_shows_the_test_send_recipient_and_content(self):
+        WhatsAppWebhookEvent.objects.create(
+            event_key="test-send:wamid-prueba",
+            provider_message_id="wamid-prueba",
+            event_type=WhatsAppWebhookEvent.Type.STATUS,
+            status="test_text",
+            payload={"to": "573001112233", "detail": "Hola desde Prueba"},
+        )
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "573001112233")
+        self.assertContains(response, "Hola desde Prueba")
 
     def test_the_page_is_named_movimientos(self):
         self.client.force_login(self.staff)
