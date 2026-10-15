@@ -73,6 +73,11 @@ cuenta de Meta. El selector ofrece una opción por cada plantilla **aprobada** e
 la cuenta de Meta (se lee en vivo; no hay lista local), y al elegir una aparecen
 los campos de parámetros que corresponden a sus marcadores `{{1}}`, `{{2}}`, etc.
 
+Mientras se llenan los parámetros, la tarjeta muestra una **previsualización**
+del mensaje —una burbuja de WhatsApp con el cuerpo resuelto con los valores que
+se van escribiendo, a todo el ancho de la tarjeta—, para revisarlo antes de
+enviarlo.
+
 Los índices de los marcadores se extraen del cuerpo de la plantilla, no de
 `param_count`: el formulario necesita saber *qué* marcadores hay, no cuántos.
 
@@ -83,10 +88,13 @@ Si no hay ninguna plantilla aprobada, la tarjeta lo dice explícitamente. Es un
 bloqueo real: sin plantilla aprobada no hay forma de iniciar una conversación,
 porque el texto libre está condicionado a la ventana de 24 horas.
 
-Las **plantillas de muestra** de Meta (`hello_world`) aparecen marcadas como
-**PLANTILLA DE PRUEBA META**: no se pueden editar ni eliminar (`2388094`) y Meta
-solo las deja enviar desde el número de prueba público, así que desde un número
-real fallan con `131058`.
+Las **plantillas de muestra** de Meta (`hello_world`) se ocultan salvo que sean
+la **única** plantilla aprobada (por ejemplo, una cuenta de demostración sin
+plantillas propias). En cuanto existe una plantilla propia aprobada desaparecen
+del selector, porque Meta solo las deja enviar desde el número de prueba público
+y desde un número real fallan con `131058`. Cuando sí se ofrecen, aparecen
+marcadas como **PLANTILLA DE PRUEBA META** (no se pueden editar ni eliminar:
+`2388094`).
 
 ### 2.3 Estado de configuración (Prueba, columna derecha)
 

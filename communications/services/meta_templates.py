@@ -223,6 +223,24 @@ def is_sample_template(name: Any) -> bool:
     return str(name or "").strip().lower() in SAMPLE_TEMPLATE_NAMES
 
 
+def selectable_templates(templates: Any) -> list[dict[str, Any]]:
+    """Plantillas aprobadas que la interfaz puede ofrecer para enviar.
+
+    Meta marca como ``APPROVED`` las plantillas de muestra (``hello_world``),
+    pero solo las deja enviar desde el número de prueba público: desde uno real
+    responde ``131058``. Por eso se ocultan en cuanto hay cualquier plantilla
+    propia aprobada y solo se ofrecen cuando son la única opción (cuentas de
+    demostración, sin nada más que enviar).
+    """
+    approved = [
+        template
+        for template in templates or []
+        if str(template.get("status", "")).upper() == "APPROVED"
+    ]
+    own = [template for template in approved if not template.get("is_sample")]
+    return own or approved
+
+
 def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
     """Convierte la respuesta cruda de Meta en un diccionario uniforme.
 

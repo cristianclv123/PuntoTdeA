@@ -676,8 +676,17 @@ const OutboundUI = (() => {
                     throw new Error(data.message || `No se pudieron cargar las plantillas (${response.status}).`);
                 }
                 const results = Array.isArray(data.templates) ? data.templates : [];
-                templates = results
-                    .filter((template) => String(template.status || '').toUpperCase() === 'APPROVED')
+                const approved = results.filter(
+                    (template) => String(template.status || '').toUpperCase() === 'APPROVED'
+                );
+                // Las plantillas de muestra (`hello_world`) solo se ofrecen si
+                // son la única aprobada: Meta solo las deja enviar desde el
+                // número de prueba público (131058), así que se ocultan en
+                // cuanto hay una plantilla propia.
+                const offerable = approved.some((template) => !template.is_sample)
+                    ? approved.filter((template) => !template.is_sample)
+                    : approved;
+                templates = offerable
                     .map((template) => ({
                         id: String(template.meta_id || ''),
                         name: template.name || '',
@@ -686,8 +695,6 @@ const OutboundUI = (() => {
                         type: TEMPLATE_CATEGORY_LABELS[template.category] || template.category || 'Plantilla',
                         body: template.body_text || '',
                         buttons: Array.isArray(template.buttons) ? template.buttons : [],
-                        // Las plantillas de muestra (`hello_world`) se marcan, no se
-                        // ocultan: solo se envían desde el número de prueba (131058).
                         isSample: Boolean(template.is_sample),
                     }));
                 renderTemplates();

@@ -130,9 +130,11 @@ otra vez en revisión.
 La lista de Meta se consulta con `GET /campanas/api/templates/meta/`. Las
 campañas y los avisos seleccionan de esa lista solo las plantillas
 `APPROVED` y guardan un *snapshot* en la campaña; no hay llave foránea local.
-Las **plantillas de muestra** (`hello_world`) se listan marcadas como
-**PLANTILLA DE PRUEBA META**, con edición y borrado deshabilitados: Meta no las
-deja enviar desde un número real (`131058`) ni editar ni eliminar (`2388094`).
+Las **plantillas de muestra** (`hello_world`) se ocultan en esos selectores
+salvo que sean la única plantilla aprobada (cuenta de demostración): Meta no las
+deja enviar desde un número real (`131058`). En la página de plantillas sí se
+listan, marcadas como **PLANTILLA DE PRUEBA META**, con edición y borrado
+deshabilitados (Meta no las deja editar ni eliminar: `2388094`).
 
 > Requiere `WHATSAPP_BUSINESS_ACCOUNT_ID` (el ID de la WABA) además del
 > `META_ACCESS_TOKEN`. Sin eso, la página avisa "Falta configurar".

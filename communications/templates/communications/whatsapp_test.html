@@ -50,48 +50,60 @@
       desde el número de prueba público.
     </p>
     {% if templates %}
-      <form method="post" action="{% url 'meta-whatsapp-test-send-template' %}">
-        {% csrf_token %}
-        <div class="wa-field">
-          <label class="wa-label" for="wa-template">Plantilla</label>
-          <select class="wa-select" id="wa-template" name="template">
-            {% for t in templates %}
-              <option value="{{ t.meta_id }}" data-params="{{ t.indexes|length }}">
-                {{ t.name }} — {{ t.category }}{% if t.is_sample %} · PLANTILLA DE PRUEBA META{% endif %}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-        {% for t in templates %}
-          <div class="wa-params" data-template="{{ t.meta_id }}" hidden>
-            {% for index in t.indexes %}
-              <div class="wa-field">
-                <label class="wa-label" for="wa-param-{{ t.meta_id }}-{{ index }}">Parámetro {{ index }}</label>
-                <input class="wa-input" id="wa-param-{{ t.meta_id }}-{{ index }}" name="param_{{ index }}" placeholder="Valor para {_{{ index }}}">
-              </div>
-            {% endfor %}
-            {% if t.is_sample %}
-              <div class="wa-note warn">
-                PLANTILLA DE PRUEBA META: es una plantilla de muestra de Meta y
-                solo se envía desde el número de prueba público. Desde un número
-                real Meta la rechaza con <code>131058</code>.
-              </div>
-            {% endif %}
-            {% if t.needs_header %}
-              <div class="wa-note warn">
-                Esta plantilla tiene encabezado multimedia: el encabezado se toma
-                de la definición en Meta.
-              </div>
-            {% endif %}
-            <p class="wa-note">Cuerpo: {{ t.body }}</p>
+      {{ templates|json_script:"wa-template-data" }}
+      <div class="wa-template-layout">
+        <form method="post" action="{% url 'meta-whatsapp-test-send-template' %}" class="wa-template-form">
+          {% csrf_token %}
+          <div class="wa-field">
+            <label class="wa-label" for="wa-template">Plantilla</label>
+            <select class="wa-select" id="wa-template" name="template">
+              {% for t in templates %}
+                <option value="{{ t.meta_id }}" data-params="{{ t.indexes|length }}">
+                  {{ t.name }} — {{ t.category }}{% if t.is_sample %} · PLANTILLA DE PRUEBA META{% endif %}
+                </option>
+              {% endfor %}
+            </select>
           </div>
-        {% endfor %}
-        <div class="wa-field">
-          <label class="wa-label" for="wa-phone-template">Teléfono</label>
-          <input class="wa-input" id="wa-phone-template" name="phone" placeholder="+573001234567" required>
+          {% for t in templates %}
+            <div class="wa-params" data-template="{{ t.meta_id }}" hidden>
+              {% for index in t.indexes %}
+                <div class="wa-field">
+                  <label class="wa-label" for="wa-param-{{ t.meta_id }}-{{ index }}">Parámetro {{ index }}</label>
+                  <input class="wa-input" id="wa-param-{{ t.meta_id }}-{{ index }}" name="param_{{ index }}" placeholder="Valor para {_{{ index }}}">
+                </div>
+              {% endfor %}
+              {% if t.is_sample %}
+                <div class="wa-note warn">
+                  PLANTILLA DE PRUEBA META: es una plantilla de muestra de Meta y
+                  solo se envía desde el número de prueba público. Desde un número
+                  real Meta la rechaza con <code>131058</code>.
+                </div>
+              {% endif %}
+              {% if t.needs_header %}
+                <div class="wa-note warn">
+                  Esta plantilla tiene encabezado multimedia: el encabezado se toma
+                  de la definición en Meta.
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <div class="wa-field">
+            <label class="wa-label" for="wa-phone-template">Teléfono</label>
+            <input class="wa-input" id="wa-phone-template" name="phone" placeholder="+573001234567" required>
+          </div>
+          <button class="wa-btn" type="submit">Enviar plantilla a Meta</button>
+        </form>
+
+        <div class="wa-preview">
+          <div class="wa-preview-phone">
+            <div class="wa-preview-head">Punto TdeA · WhatsApp</div>
+            <div class="wa-preview-screen">
+              <div class="wa-prev-bubble" id="wa-tpl-preview-body">Elegí una plantilla para ver la previsualización.</div>
+              <div id="wa-tpl-preview-buttons"></div>
+            </div>
+          </div>
         </div>
-        <button class="wa-btn" type="submit">Enviar plantilla a Meta</button>
-      </form>
+      </div>
     {% else %}
       <div class="wa-alert warn" style="margin:0">
         No hay plantillas aprobadas en Meta. Crealas desde
@@ -161,9 +173,70 @@
         });
       });
     }
+
+    // Previsualización: arma el cuerpo de la plantilla con los parámetros que
+    // se van escribiendo, para ver el mensaje antes de enviarlo.
+    const previewBody = document.getElementById('wa-tpl-preview-body');
+    const previewButtons = document.getElementById('wa-tpl-preview-buttons');
+    const templateData = document.getElementById('wa-template-data');
+    let previewTemplates = [];
+    try {
+      previewTemplates = JSON.parse(templateData ? templateData.textContent : '[]') || [];
+    } catch (error) {
+      previewTemplates = [];
+    }
+
+    function previewParams(template) {
+      const params = {};
+      const block = document.querySelector('.wa-params[data-template="' + template.meta_id + '"]');
+      if (block) {
+        block.querySelectorAll('input').forEach(function (input) {
+          const match = /^param_(\d+)$/.exec(input.name);
+          if (match) params[match[1]] = input.value;
+        });
+      }
+      return params;
+    }
+
+    function renderPreview() {
+      if (!previewBody || !templateSelect) return;
+      const template = previewTemplates.find(function (item) {
+        return String(item.meta_id) === String(templateSelect.value);
+      });
+      if (!template) {
+        previewBody.textContent = 'Elegí una plantilla para ver la previsualización.';
+        if (previewButtons) previewButtons.innerHTML = '';
+        return;
+      }
+      const params = previewParams(template);
+      previewBody.textContent = String(template.body_text || '').replace(
+        /\{\{(\d+)\}\}/g,
+        function (match, number) {
+          const value = (params[number] || '').trim();
+          return value || '{{' + number + '}}';
+        }
+      );
+      if (previewButtons) {
+        previewButtons.innerHTML = '';
+        (template.buttons || []).forEach(function (button) {
+          const chip = document.createElement('span');
+          chip.className = 'wa-prev-btn';
+          chip.textContent = button.text || '';
+          previewButtons.appendChild(chip);
+        });
+      }
+    }
+
     if (templateSelect) {
-      templateSelect.addEventListener('change', syncParams);
+      templateSelect.addEventListener('change', function () {
+        syncParams();
+        renderPreview();
+      });
+      paramBlocks.forEach(function (block) {
+        block.addEventListener('input', renderPreview);
+      });
       syncParams();
+      renderPreview();
     }
 
     // Consulta la ventana de servicio de 24 h sin recargar la página, para no

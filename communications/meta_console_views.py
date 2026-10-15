@@ -109,26 +109,27 @@ def status_threads(limit: int = 8, per_thread: int = 6) -> list[dict]:
 
 
 def approved_templates() -> list[dict]:
-    """Plantillas aprobadas en Meta, con los índices de sus parámetros.
+    """Plantillas que se ofrecen para enviar desde la pagina de prueba.
 
     Meta es la fuente de verdad: la lista se lee en vivo de la cuenta. Si la
-    integración no está configurada o Meta no responde, se devuelve una lista
-    vacía para no romper el resto de la consola.
+    integracion no esta configurada o Meta no responde, se devuelve una lista
+    vacia para no romper el resto de la consola.
 
-    Las plantillas de muestra (`hello_world`) **sí** se incluyen, con
-    `is_sample=True`: la página las marca como «PLANTILLA DE PRUEBA META» en
-    lugar de esconderlas, porque Meta solo las deja enviar desde el número de
-    prueba público (desde un número real responde `131058`).
+    Las plantillas de muestra (`hello_world`) solo se ofrecen cuando son la
+    unica aprobada (cuenta de demostracion): en cuanto hay una plantilla propia
+    aprobada se ocultan, porque Meta solo permite enviarlas desde el numero de
+    prueba publico (desde uno real responde `131058`).
+
+    Cada entrada trae `body_text` (cuerpo completo, para la previsualizacion) y
+    `buttons`, ademas del `body` recortado que usa la pista de la tarjeta.
     """
     result = meta_templates.list_templates()
     if not result.ok:
         return []
 
-    approved = []
-    for template in result.templates:
-        if template.get("status") != "APPROVED":
-            continue
-        approved.append(
+    offered = []
+    for template in meta_templates.selectable_templates(result.templates):
+        offered.append(
             {
                 "meta_id": template.get("meta_id", ""),
                 "name": template.get("name", ""),
@@ -137,10 +138,12 @@ def approved_templates() -> list[dict]:
                 "indexes": template.get("indexes", []),
                 "needs_header": template.get("header_type", "none") != "none",
                 "body": (template.get("body_text") or "").replace("\n", " ")[:160],
+                "body_text": template.get("body_text") or "",
+                "buttons": template.get("buttons") or [],
                 "is_sample": meta_templates.is_sample_template(template.get("name", "")),
             }
         )
-    return approved
+    return offered
 
 
 def recent_chats(limit: int = 5) -> list[dict]:

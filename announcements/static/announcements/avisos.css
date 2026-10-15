@@ -291,3 +291,228 @@
   background-color: rgba(59, 130, 246, 0.16);
   color: #93c5fd;
 }
+
+/* Vista previa del aviso como estado de WhatsApp. Con el formulario abierto
+   refleja lo que se escribe; con el listado visible, el aviso sobre el que se
+   pasa el mouse. Se queda pegada al hacer scroll. */
+.aviso-preview {
+  flex: 0 0 320px;
+  max-width: 320px;
+  align-self: flex-start;
+  position: sticky;
+  top: 20px;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 14px;
+  background: var(--surface, #141414);
+  padding: 14px;
+}
+
+/* Al crear un aviso, el listado cede su lugar al formulario. */
+#toggle-nuevo-cuadro:checked ~ .two-col-layout .list-col {
+  display: none;
+}
+
+/* Botón Crear/Volver: cambia de texto según el estado del formulario. */
+.btn-create-out-wrap {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.btn-create-out-cancel {
+  display: none;
+}
+
+#toggle-nuevo-cuadro:checked ~ .btn-create-out-wrap .btn-create-out-label {
+  display: none;
+}
+
+#toggle-nuevo-cuadro:checked ~ .btn-create-out-wrap .btn-create-out-cancel {
+  display: inline;
+}
+
+/* Resalta el aviso que se está previsualizando. */
+.list-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.list-card:hover {
+  border-color: rgba(61, 255, 138, 0.45);
+  box-shadow: 0 0 0 1px rgba(61, 255, 138, 0.15);
+}
+
+.aviso-preview-head {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #c4c4c4);
+  margin-bottom: 10px;
+}
+
+.aviso-preview-hint {
+  margin: 12px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #888;
+}
+
+.status-phone {
+  position: relative;
+  width: 100%;
+  max-width: 250px;
+  margin: 0 auto;
+  aspect-ratio: 9 / 16;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #101010;
+  border: 1px solid var(--border, #2a2a2a);
+}
+
+.status-media {
+  position: absolute;
+  inset: 0;
+  background: #1a1a1a;
+}
+
+.status-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+}
+
+.status-media.has-image img {
+  display: block;
+}
+
+/* Recuadro que tapa la imagen: se ve el ícono y el texto, y al hacer clic (si
+   hay imagen) se revela. */
+.status-media-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 1rem;
+  text-align: center;
+  border: 0;
+  background: rgba(17, 17, 17, 0.94);
+  color: #9aa0a6;
+  font: inherit;
+  cursor: default;
+}
+
+.status-media-cover-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.status-media-cover-text {
+  font-size: 0.8rem;
+}
+
+.status-media-cover-hint {
+  display: none;
+  font-size: 0.72rem;
+  color: #6b7280;
+}
+
+.status-media.has-image .status-media-cover {
+  display: none;
+}
+
+.status-bars {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+}
+
+.status-bars span {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.status-bars span:first-child {
+  background: #ffffff;
+}
+
+.status-head {
+  position: absolute;
+  top: 18px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 3;
+  color: #ffffff;
+  font-size: 0.78rem;
+}
+
+.status-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--tdea-green, #00873e);
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.status-user {
+  font-weight: 600;
+}
+
+.status-when {
+  margin-left: auto;
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.status-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 14px 12px 16px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0));
+}
+
+.status-caption-title {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.status-caption-body {
+  margin-top: 6px;
+  color: #e5e5e5;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  white-space: pre-line;
+  word-break: break-word;
+  max-height: 5.6em;
+  overflow: hidden;
+}
+
+@media (max-width: 960px) {
+  .aviso-preview {
+    position: static;
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+}

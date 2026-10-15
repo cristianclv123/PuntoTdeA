@@ -58,6 +58,27 @@ class MetaTemplateServiceTests(TestCase):
         self.assertTrue(sample["is_sample"])
         self.assertFalse(real["is_sample"])
 
+    def test_selectable_templates_hides_samples_when_an_own_template_is_approved(self):
+        templates = [
+            {"name": "hello_world", "status": "APPROVED", "is_sample": True},
+            {"name": "aviso_de_pago", "status": "APPROVED", "is_sample": False},
+            {"name": "en_revision", "status": "PENDING", "is_sample": False},
+        ]
+
+        offered = meta_templates.selectable_templates(templates)
+
+        self.assertEqual([template["name"] for template in offered], ["aviso_de_pago"])
+
+    def test_selectable_templates_offers_samples_when_they_are_the_only_ones(self):
+        templates = [
+            {"name": "hello_world", "status": "APPROVED", "is_sample": True},
+            {"name": "en_revision", "status": "PENDING", "is_sample": False},
+        ]
+
+        offered = meta_templates.selectable_templates(templates)
+
+        self.assertEqual([template["name"] for template in offered], ["hello_world"])
+
     @patch("communications.services.meta_templates.requests.post")
     def test_create_from_draft_sends_components(self, post):
         post.return_value = _response(

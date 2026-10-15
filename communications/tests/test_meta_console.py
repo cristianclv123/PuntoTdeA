@@ -386,7 +386,7 @@ class MetaAdsCleanupTests(TestCase):
 
 
 class SampleTemplateLabelTests(TestCase):
-    """`hello_world` es de muestra: se lista, pero marcada como PLANTILLA DE PRUEBA META."""
+    """`hello_world` es de muestra: se oculta salvo que sea la única aprobada."""
 
     def setUp(self):
         self.url = reverse("meta-whatsapp-test")
@@ -402,9 +402,10 @@ class SampleTemplateLabelTests(TestCase):
             "status": status,
             "category": "utility",
             "language": "es_CO",
+            "is_sample": meta_templates.is_sample_template(name),
         }
 
-    def test_approved_templates_flags_the_sample_template(self):
+    def test_approved_templates_hides_the_sample_when_there_is_an_own_template(self):
         result = meta_templates.TemplateListResult(
             ok=True,
             templates=[
@@ -416,12 +417,44 @@ class SampleTemplateLabelTests(TestCase):
         with patch.object(meta_templates, "list_templates", return_value=result):
             offered = meta_console_views.approved_templates()
 
+        self.assertEqual([template["name"] for template in offered], ["aviso_de_pago"])
+
+    def test_approved_templates_offers_the_sample_when_it_is_the_only_approved(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[
+                self._template("hello_world"),
+                self._template("en_revision", status="PENDING"),
+            ],
+        )
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            offered = meta_console_views.approved_templates()
+
         self.assertEqual(
             [(template["name"], template["is_sample"]) for template in offered],
-            [("hello_world", True), ("aviso_de_pago", False)],
+            [("hello_world", True)],
         )
 
-    def test_the_form_lists_the_sample_template_with_its_mark(self):
+    def test_approved_templates_includes_body_and_buttons_for_the_preview(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[
+                {
+                    **self._template("aviso_de_pago"),
+                    "body_text": "Hola {{1}}",
+                    "indexes": [1],
+                    "header_type": "none",
+                    "buttons": [{"text": "Ver", "url": "https://x.co"}],
+                }
+            ],
+        )
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            offered = meta_console_views.approved_templates()
+
+        self.assertEqual(offered[0]["body_text"], "Hola {{1}}")
+        self.assertEqual(offered[0]["buttons"], [{"text": "Ver", "url": "https://x.co"}])
+
+    def test_the_form_hides_the_sample_when_there_is_an_own_template(self):
         result = meta_templates.TemplateListResult(
             ok=True,
             templates=[self._template("hello_world"), self._template("aviso_de_pago")],
@@ -432,10 +465,23 @@ class SampleTemplateLabelTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
-        # La plantilla de muestra se ofrece, pero con la marca pegada al nombre.
-        self.assertIn("hello_world — utility · PLANTILLA DE PRUEBA META", content)
+        self.assertNotIn("hello_world", content)
         self.assertIn("aviso_de_pago — utility", content)
-        self.assertNotIn("aviso_de_pago — utility · PLANTILLA DE PRUEBA META", content)
+
+    def test_the_form_offers_the_sample_with_its_mark_when_it_is_the_only_one(self):
+        result = meta_templates.TemplateListResult(
+            ok=True, templates=[self._template("hello_world")]
+        )
+        self.client.force_login(self.staff)
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        # La plantilla de muestra se ofrece, pero con la marca pegada al nombre.
+        self.assertIn(
+            "hello_world — utility · PLANTILLA DE PRUEBA META",
+            response.content.decode(),
+        )
 
 
 class CheckMetaCommandTests(TestCase):
