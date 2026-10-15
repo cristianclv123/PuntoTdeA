@@ -62,7 +62,17 @@ META_APP_SECRET=app-secret-de-meta
 META_ACCESS_TOKEN=token-de-acceso-de-whatsapp
 WHATSAPP_PHONE_NUMBER_ID=id-del-numero-de-whatsapp
 WHATSAPP_API_VERSION=v21.0
+CASES_API_BASE_URL=https://puntotdea-qmcv.onrender.com
+CASES_API_SESSION_ID=sessionid-de-una-cuenta-de-servicio
 ```
+
+El chatbot consulta `GET /api/cases/tickets/{id}/` con una cookie de sesión de una
+cuenta de servicio. Configura `CASES_API_SESSION_ID` como secreto en el entorno del
+servidor; nunca lo guardes en el repositorio. Para consultar el ticket asociado a
+una conversación desde la API de conocimiento, usa
+`GET /api/knowledge/conversations/{uuid}/ticket-status/`; requiere autenticación
+de Django. Si la API remota no está disponible, el webhook registra una advertencia
+y usa el estado local del ticket; el endpoint de proxy devuelve HTTP 503.
 
 En Meta Developers, dentro de WhatsApp > Configuration, registra la URL anterior,
 usa el mismo `META_VERIFY_TOKEN` y suscribe el campo `messages`. El servidor debe
@@ -75,6 +85,24 @@ guarda en `ChatConversation.external_user_id`, por lo que el asesor conserva el
 historial completo. Si el número coincide de forma única con un contacto existente
 en `communications`, la conversación también queda asociada a ese contacto; el
 chatbot no crea contactos nuevos. Si el bot no encuentra una respuesta con
-suficiente confianza o el usuario completa una solicitud de atención humana, se
-registra el mensaje en el módulo de casos y se informa al usuario el número del
-ticket creado.
+suficiente confianza, mantiene activa la conversación y permite reformular la
+pregunta o solicitar un asesor. También informa que un asesor dará respuesta
+dentro del horario de atención; mientras tanto, el chatbot puede seguir atendiendo
+otras dudas. El ticket del módulo de casos se crea cuando el usuario completa
+explícitamente la solicitud de atención humana. Mientras el ticket siga abierto,
+el chat continúa activo y el bot puede responder nuevas preguntas; cuando el asesor
+cierra el ticket, un mensaje posterior inicia una conversación nueva.
+Después de cada respuesta, el bot pregunta si el usuario tiene otra duda, necesita
+un asesor o ya resolvió su consulta. Si responde que sí, le pide elegir entre hacer
+otra pregunta o hablar con un asesor; la pregunta de seguimiento se envía como un
+mensaje separado. Si responde que no, finaliza el chat; cualquier mensaje posterior
+inicia una conversación nueva.
+
+Las conversaciones de WhatsApp activas se cierran con un mensaje después de
+cinco minutos sin actividad solo si el último mensaje fue del bot y no hay una duda
+pendiente de respuesta de un asesor. Para que el aviso se envíe a la hora prevista,
+ejecuta periódicamente (por ejemplo, cada minuto) el comando:
+
+```powershell
+python manage.py close_inactive_chats
+```

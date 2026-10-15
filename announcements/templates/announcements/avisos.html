@@ -6,8 +6,12 @@
 {% block page_title %}Avisos y novedades{% endblock %} 
 {% block page_subtitle %}Publica anuncios visibles para toda la comunidad{% endblock %} 
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/audience-picker.css' %}?v=2">
+{% endblock %}
+
 {% block content %}
-<link rel="stylesheet" href="{% static 'announcements/avisos.css' %}?v=8">
+<link rel="stylesheet" href="{% static 'announcements/avisos.css' %}?v=10">
 
 {% if messages %}
 <div class="aviso-alerts" id="aviso-alerts">
@@ -23,16 +27,17 @@
 <!-- Checkbox invisible que controla la aparición/desaparición del segundo cuadro -->
 <input type="checkbox" id="toggle-nuevo-cuadro" />
 
-<!-- Botón verde para abrir el cuadro -->
-<div style="display: flex; justify-content: flex-start">
+<!-- Botón verde para abrir/cerrar el cuadro de creación -->
+<div class="btn-create-out-wrap">
   <label for="toggle-nuevo-cuadro" class="btn-create-out">
-    {% icon 'plus' size=16 %} Crear aviso
+    <span class="btn-create-out-label">{% icon 'plus' size=16 %} Crear aviso</span>
+    <span class="btn-create-out-cancel">{% icon 'arrow-left' size=16 %} Volver al listado</span>
   </label>
 </div>
 
 <div class="two-col-layout">
   <!-- Tarjeta de creacion: oculta hasta presionar "Crear aviso" arriba -->
-  <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data">
+  <form class="card form-col nuevo-cuadro-formulario" method="post" enctype="multipart/form-data" style="flex: 1 1 60%; max-width: 60%;">
     {% csrf_token %}
     <div
       style="
@@ -93,36 +98,33 @@
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <label class="field-label" for="image2">Imagen (opcional)</label>
+      <label class="field-label" for="image2">Imagen</label>
       <input
         id="image2"
         name="image"
         class="field-input"
         type="file"
         accept="image/*"
+        required
       />
     </div>
 
     <div class="field-group" style="margin-bottom: 8px">
-      <div class="field-label">Audiencia (segmentos)</div>
-      {% if segments %}
-      <div class="segmented-row">
-        {% for segment in segments %}
-        <label class="segmented-check">
-          <input type="checkbox" name="audience" value="{{ segment.id }}"{% if forloop.first %} checked{% endif %} />
-          <span class="segmented-label">
-            <span class="icon-checked">{% icon 'square-check' size=14 %}</span>
-            <span class="icon-unchecked">{% icon 'square' size=14 %}</span>
-            {{ segment.name }}
-          </span>
-        </label>
-        {% endfor %}
+      <div class="audience-card" data-audience-card>
+        <div class="audience-card-label">Audiencia de destino</div>
+        <div
+          id="avisoAudiencePicker"
+          class="audience-picker"
+          data-audience-picker
+          data-api-base="/campanas/api"
+          data-input-name="audience"
+          data-context="aviso"
+          data-remove-mode="true"
+          data-view-icon="eye"
+          data-view-style="gray"
+          data-actions-inline="true"
+        ></div>
       </div>
-      {% else %}
-      <div style="color: #888; font-size: 0.85rem">
-        No hay segmentos. Crea uno en Campañas para usarlo como audiencia.
-      </div>
-      {% endif %}
     </div>
 
     <div class="form-actions">
@@ -144,13 +146,19 @@
   </form>
 
   <!-- Lista de avisos guardados y publicados -->
-  <div class="list-col">
+  <div class="list-col" style="flex: 1 1 40%;">
     <div class="list-head">
       <div class="list-title font-brand">Avisos guardados/publicados</div>
       <div class="list-count">{{ announcements|length }} avisos activos</div>
     </div>
     {% for a in announcements %}
-    <div class="list-card">
+    <div
+      class="list-card"
+      style="padding: 12px 14px;"
+      data-title="{{ a.title }}"
+      data-body="{{ a.content }}"
+      data-image="{% if a.has_image %}{% url 'announcements:image' a.pk %}{% endif %}"
+    >
       <div class="list-card-top">
         <div class="list-card-name" style="flex: 1">{{ a.title }}</div>
         {% if a.is_urgent %}
@@ -159,16 +167,8 @@
         <span class="pill pill-info" style="padding: 5px 12px">Informativo</span>
         {% endif %}
       </div>
-      <div class="list-card-body">{{ a.content }}</div>
-
-      {% if a.image %}
-      <div style="margin-top: 10px; margin-bottom: 10px;">
-          <img src="{{ a.image.url }}" alt="{{ a.title }}" style="max-width: 100%; border-radius: 8px; max-height: 250px; object-fit: cover;" />
-      </div>
-      {% endif %}
-
       {% with status_ad=a.status_ads.first %}
-      <div class="status-row">
+      <div class="status-row" style="margin-top: 4px; margin-bottom: 8px;">
         <span class="status-label">WhatsApp Status:</span>
         {% if not status_ad %}
         <span class="status-pill status-none">Sin publicar</span>
@@ -183,6 +183,17 @@
         {% endif %}
         {% if status_ad %}
         <span class="status-date">{{ status_ad.created_at|date:"d M Y H:i" }}</span>
+        {% endif %}
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: flex-start;">
+        <div style="flex: 1;">
+          <div class="list-card-body">{{ a.content }}</div>
+        </div>
+        {% if a.has_image %}
+        <div style="flex-shrink: 0; margin-top: 2px;">
+          <img src="{% url 'announcements:image' a.pk %}" alt="{{ a.title }}" style="max-width: 160px; border-radius: 8px; max-height: 120px; object-fit: cover;" />
+        </div>
         {% endif %}
       </div>
       {% if status_ad and status_ad.error %}
@@ -256,6 +267,36 @@
       No hay avisos activos. Presiona "Crear aviso" para publicar el primero.
     </div>
     {% endfor %}
+  </div>
+
+  <!-- Vista previa tipo estado de WhatsApp. Con el formulario abierto refleja lo
+       que se escribe; con el listado visible, el aviso sobre el que se pasa el
+       mouse. La imagen queda tapada por un recuadro y se revela al hacer clic. -->
+  <div class="aviso-preview" id="aviso-preview">
+    <div class="aviso-preview-head">Vista previa · Estado de WhatsApp</div>
+    <div class="status-phone">
+      <div class="status-bars"><span></span><span></span><span></span></div>
+      <div class="status-head">
+        <span class="status-avatar">PT</span>
+        <span class="status-user">Punto TdeA</span>
+        <span class="status-when">ahora</span>
+      </div>
+      <div class="status-media" id="status-preview-media">
+        <img id="status-preview-image" alt="Imagen del aviso" />
+        <div class="status-media-cover" id="status-preview-cover">
+          <span class="status-media-cover-icon">{% icon 'image' size=26 %}</span>
+          <span class="status-media-cover-text">Vista previa de la imagen del aviso</span>
+        </div>
+      </div>
+      <div class="status-caption">
+        <div class="status-caption-title" id="status-preview-title">Vista previa</div>
+        <div class="status-caption-body" id="status-preview-body">Pasá el mouse por un aviso de la lista para verlo acá.</div>
+      </div>
+    </div>
+    <p class="aviso-preview-hint">
+      Al crear se actualiza mientras escribís; en el listado, pasá el mouse por
+      un aviso para verlo acá.
+    </p>
   </div>
 </div>
 
@@ -366,5 +407,111 @@
       openConfirm(source, form, submitter);
     });
   })();
+
+  // Vista previa tipo estado de WhatsApp. Tiene dos modos: con el formulario
+  // abierto muestra lo que se escribe; con el listado visible, el aviso sobre
+  // el que se pasa el mouse. La imagen queda tapada por un recuadro y se revela
+  // al hacer clic.
+  (function () {
+    var toggle = document.getElementById("toggle-nuevo-cuadro");
+    var titleInput = document.getElementById("title2");
+    var bodyInput = document.getElementById("body2");
+    var imageInput = document.getElementById("image2");
+    var titleOut = document.getElementById("status-preview-title");
+    var bodyOut = document.getElementById("status-preview-body");
+    var media = document.getElementById("status-preview-media");
+    var imageOut = document.getElementById("status-preview-image");
+    var cover = document.getElementById("status-preview-cover");
+    if (!titleOut || !bodyOut || !media) return;
+
+    var objectUrl = null;
+    var hoverCard = null;
+
+    function clearObjectUrl() {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+      }
+    }
+
+    function applyImage(src) {
+      if (src) {
+        imageOut.src = src;
+        media.classList.add("has-image");
+      } else {
+        imageOut.removeAttribute("src");
+        media.classList.remove("has-image");
+      }
+    }
+
+    function isCreating() {
+      return Boolean(toggle && toggle.checked);
+    }
+
+    function renderForm() {
+      clearObjectUrl();
+      titleOut.textContent = (titleInput.value || "").trim() || "Título del aviso";
+      bodyOut.textContent =
+        (bodyInput.value || "").trim() || "El contenido del aviso aparecerá acá.";
+      var file = imageInput && imageInput.files && imageInput.files[0];
+      if (file) {
+        objectUrl = URL.createObjectURL(file);
+        applyImage(objectUrl);
+      } else {
+        applyImage("");
+      }
+    }
+
+    function renderCard(card) {
+      clearObjectUrl();
+      titleOut.textContent = card.dataset.title || "Título del aviso";
+      bodyOut.textContent =
+        card.dataset.body || "El contenido del aviso aparecerá acá.";
+      applyImage(card.dataset.image || "");
+    }
+
+    function render() {
+      if (isCreating()) {
+        renderForm();
+      } else if (hoverCard) {
+        renderCard(hoverCard);
+      } else {
+        clearObjectUrl();
+        titleOut.textContent = "Vista previa";
+        bodyOut.textContent =
+          "Pasá el mouse por un aviso de la lista para verlo acá.";
+        applyImage("");
+      }
+    }
+
+    document.querySelectorAll(".list-card").forEach(function (card) {
+      card.addEventListener("mouseenter", function () {
+        hoverCard = card;
+        if (!isCreating()) render();
+      });
+      card.addEventListener("focusin", function () {
+        hoverCard = card;
+        if (!isCreating()) render();
+      });
+    });
+
+    if (toggle) toggle.addEventListener("change", render);
+    if (titleInput) titleInput.addEventListener("input", render);
+    if (bodyInput) bodyInput.addEventListener("input", render);
+    if (imageInput) imageInput.addEventListener("change", render);
+
+    render();
+  })();
+</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/audience-picker.js' %}?v=1"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.AudiencePicker && typeof window.AudiencePicker.mountAll === "function") {
+      window.AudiencePicker.mountAll();
+    }
+  });
 </script>
 {% endblock %}

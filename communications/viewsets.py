@@ -34,10 +34,45 @@ class TestSendRequestSerializer(serializers.Serializer):
         return value
 
 
+INTERNAL_AUTH = [{"cookieAuth": []}, {"internalToken": []}]
+
+_test_send_error = inline_serializer(
+    name="TestSendError",
+    fields={
+        "success": serializers.BooleanField(),
+        "message": serializers.CharField(),
+        "errors": serializers.DictField(required=False),
+    },
+)
+
+
 class TestSendAPIView(APIView):
     permission_classes = [IsInternalService]
     parser_classes = [JSONParser]
 
+    @extend_schema(
+        summary="Enviar plantilla de prueba",
+        description=(
+            "Envía una plantilla aprobada por Meta al número de pruebas "
+            "configurado en `WHATSAPP_TEST_RECIPIENT`."
+        ),
+        request=TestSendRequestSerializer,
+        responses={
+            200: inline_serializer(
+                name="TestSendResponse",
+                fields={
+                    "success": serializers.BooleanField(),
+                    "message": serializers.CharField(),
+                    "provider_message_id": serializers.CharField(allow_null=True),
+                },
+            ),
+            400: _test_send_error,
+            404: _test_send_error,
+            502: _test_send_error,
+            503: _test_send_error,
+        },
+        auth=INTERNAL_AUTH,
+    )
     def post(self, request):
         payload = TestSendRequestSerializer(data=request.data)
         if not payload.is_valid():
@@ -113,6 +148,7 @@ class TestSendAPIView(APIView):
         )
 
 
+@extend_schema(auth=INTERNAL_AUTH)
 class ContactViewSet(viewsets.ReadOnlyModelViewSet):
     """Solo lectura: los contactos se crean vía importación de Excel o desde
     otros módulos (Backend CRUD), no directamente desde esta API."""
@@ -134,6 +170,7 @@ class ContactViewSet(viewsets.ReadOnlyModelViewSet):
         return qs
 
 
+@extend_schema(auth=INTERNAL_AUTH)
 class MessageTemplateViewSet(viewsets.ModelViewSet):
     """Borradores locales de plantilla (aún no enviadas a Meta).
 
@@ -253,6 +290,7 @@ class MetaTemplateDetailView(APIView):
         return Response({"success": True, "message": result.message})
 
 
+@extend_schema(auth=INTERNAL_AUTH)
 class AudienceSegmentViewSet(viewsets.ModelViewSet):
     queryset = AudienceSegment.objects.all()
     serializer_class = AudienceSegmentSerializer
@@ -300,11 +338,14 @@ class AudienceSegmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def contacts(self, request, pk=None):
         segment = self.get_object()
-        page = self.paginate_queryset(segment.contacts.all())
-        serializer = ContactSerializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
+        queryset = segment.contacts.all().order_by("pk")
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(ContactSerializer(page, many=True).data)
+        return Response(ContactSerializer(queryset, many=True).data)
 
 
+@extend_schema(auth=INTERNAL_AUTH)
 class CampaignViewSet(viewsets.ModelViewSet):
     queryset = Campaign.objects.select_related("segment").all()
     serializer_class = CampaignSerializer
@@ -315,9 +356,15 @@ class CampaignViewSet(viewsets.ModelViewSet):
         initial_status = Campaign.Status.SCHEDULED if scheduled_at else Campaign.Status.DRAFT
         serializer.save(status=initial_status)
 
+    @extend_schema(
+        summary="Enviar campaña ahora",
+        description="Dispara el envío síncrono por Meta. Solo para campañas en borrador o programadas.",
+        request=None,
+        responses=CampaignSerializer,
+    )
     @action(detail=True, methods=["post"])
     def send(self, request, pk=None):
-        """HU-06: dispara el envío ahora mismo (síncrono, vía MockAdapter por ahora)."""
+        """HU-06: dispara el envío ahora mismo (síncrono, vía MetaAdapter)."""
         campaign = self.get_object()
         if campaign.status not in (Campaign.Status.DRAFT, Campaign.Status.SCHEDULED):
             return Response(
@@ -328,16 +375,19 @@ class CampaignViewSet(viewsets.ModelViewSet):
         campaign.refresh_from_db()
         return Response(self.get_serializer(campaign).data)
 
+    @extend_schema(summary="Pausar campaña", request=None, responses=CampaignSerializer)
     @action(detail=True, methods=["post"])
     def pause(self, request, pk=None):
         campaign = campaign_service.pause_campaign(self.get_object())
         return Response(self.get_serializer(campaign).data)
 
+    @extend_schema(summary="Reanudar campaña", request=None, responses=CampaignSerializer)
     @action(detail=True, methods=["post"])
     def resume(self, request, pk=None):
         campaign = campaign_service.resume_campaign(self.get_object())
         return Response(self.get_serializer(campaign).data)
 
+    @extend_schema(summary="Cancelar campaña", request=None, responses=CampaignSerializer)
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         campaign = campaign_service.cancel_campaign(self.get_object())
@@ -347,6 +397,10 @@ class CampaignViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def recipients(self, request, pk=None):
         campaign = self.get_object()
-        page = self.paginate_queryset(campaign.recipients.select_related("contact").all())
-        serializer = BroadcastRecipientSerializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
+        queryset = campaign.recipients.select_related("contact").all()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(
+                BroadcastRecipientSerializer(page, many=True).data
+            )
+        return Response(BroadcastRecipientSerializer(queryset, many=True).data)

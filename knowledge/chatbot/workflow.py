@@ -11,6 +11,12 @@ from .schedule import BusinessSchedule, get_business_schedule
 from .validation import validate_question
 
 
+FOLLOW_UP_MESSAGE = (
+    '¿Tienes otra duda, necesitas hablar con un asesor o ya quedó '
+    'resuelta tu duda? Responde sí para continuar o no si ya no necesitas ayuda.'
+)
+
+
 class ChatbotWorkflow:
     def __init__(
         self,
@@ -33,24 +39,43 @@ class ChatbotWorkflow:
         valid, error = validate_question(question)
         if not valid:
             self._add_message('bot', error)
+            self._save()
             return self._result('waiting_question', error, valid=False)
 
         question = question.strip()
         self.conversation.last_question = question
-        self.conversation.flow_state = 'waiting_confirmation'
         self._add_message('user', question)
         response = generate_response(question, self.responder) if self.responder else generate_response(question)
         answer = response.get('answer', 'No pude generar una respuesta.')
-        self._add_message('bot', answer)
+        needs_human_attention = response.get('needs_human_attention', False)
+        if needs_human_attention:
+            answer = (
+                f'{answer}\n\nUn asesor te dará respuesta en cuanto esté disponible, '
+                'dentro del horario de atención.'
+            )
+        answer_message = answer
+        answer = f'{answer}\n\n{FOLLOW_UP_MESSAGE}'
+        state = 'waiting_confirmation'
+        self.conversation.flow_state = state
+        self._add_message('bot', answer, awaiting_advisor=needs_human_attention)
         self._save()
-        result = self._result('waiting_confirmation', answer, valid=True)
+        result = self._result(
+            state,
+            answer,
+            valid=True,
+            answer_message=answer_message,
+            follow_up_message=FOLLOW_UP_MESSAGE,
+        )
         result.update(response)
-        result['state'] = 'waiting_confirmation'
+        result['message'] = answer
+        result['state'] = state
+        result['answer_message'] = answer_message
+        result['follow_up_message'] = FOLLOW_UP_MESSAGE
         return result
 
     def confirm_more_help(self, needs_more_help: bool) -> dict[str, Any]:
         if needs_more_help:
-            message = 'Claro. ¿Qué deseas hacer? Puedes ingresar una nueva pregunta o solicitar hablar con un asesor.'
+            message = '¿Quieres hacer otra pregunta o hablar con un asesor? Escribe tu duda o solicita un asesor.'
             state = 'help_options'
         else:
             message = 'Gracias por comunicarte con nosotros. Hemos finalizado el chat.'
@@ -60,6 +85,17 @@ class ChatbotWorkflow:
         self._add_message('bot', message)
         self._save()
         return self._result(state, message)
+
+    def close_for_inactivity(self) -> dict[str, Any]:
+        message = (
+            'La conversación se cerró por inactividad después de 5 minutos. '
+            'Cuando quieras, puedes escribirnos de nuevo.'
+        )
+        self.conversation.status = ChatConversation.STATUS_ENDED
+        self.conversation.flow_state = 'ended'
+        self._add_message('bot', message)
+        self._save()
+        return self._result('ended', message, inactivity=True)
 
     def escalate(self, reason: str = '') -> dict[str, Any]:
         message = 'Para ayudarte mejor, transferiremos esta conversación a un asesor. ¿Qué solicitud deseas enviarle?'
@@ -91,12 +127,15 @@ class ChatbotWorkflow:
         self._save()
         return self._result('pending', message, valid=True, within_business_hours=is_open)
 
-    def _add_message(self, author: str, content: str) -> None:
-        self.conversation.messages.append({
+    def _add_message(self, author: str, content: str, *, awaiting_advisor: bool = False) -> None:
+        message = {
             'author': author,
             'content': content,
             'created_at': timezone.now().isoformat(),
-        })
+        }
+        if awaiting_advisor:
+            message['awaiting_advisor'] = True
+        self.conversation.messages.append(message)
 
     def _save(self) -> None:
         self.conversation.save(update_fields=[

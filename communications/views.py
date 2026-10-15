@@ -51,7 +51,7 @@ def segments(request):
     return render(
         request,
         "communications/segments.html",
-        {"nav_section": "segments", "active_nav": "campaigns"},
+        {"nav_section": "segments", "active_nav": "segments"},
     )
 
 

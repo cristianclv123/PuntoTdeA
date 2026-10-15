@@ -260,7 +260,11 @@ def _process_inbound(message: dict[str, Any], phone_number_id: str) -> str:
         return "ignored"
 
     try:
-        replies = chatbot_whatsapp.handle_message(sender, text)
+        replies = chatbot_whatsapp.handle_message(
+            sender,
+            text,
+            external_message_id=message_id,
+        )
         for reply in replies:
             result = chatbot_whatsapp.send_text(sender, reply)
             if not result:

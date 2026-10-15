@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     "knowledge",
     "communications",
     "announcements",
+    "tests.apps.TestsConfig",
 ]
 
 MIDDLEWARE = [
@@ -191,10 +192,32 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Punto TdeA API",
-    "DESCRIPTION": "Documentación de las APIs del sistema Punto TdeA (casos, comunicaciones, base de conocimiento y avisos).",
-    "VERSION": "1.0.0",
+    "DESCRIPTION": (
+        "Documentación de las APIs del sistema Punto TdeA: casos (bandeja y widget web), "
+        "base de conocimiento (chatbot) y campañas de WhatsApp.\n\n"
+        "**Autenticación:** sesión de Django (cookie `sessionid`). La API de campañas "
+        "(`/campanas/api/`) también acepta el header `X-Internal-Token`.\n\n"
+        "El webhook de Meta (`/api/whatsapp/webhook/`) no se documenta aquí: lo llama "
+        "Meta directamente."
+    ),
+    "VERSION": "1.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": "/api/",
+    "TAGS": [
+        {"name": "cases", "description": "Bandeja de casos, contactos, mensajes y widget web."},
+        {"name": "knowledge", "description": "Base de conocimiento: artículos, FAQs, intenciones y chatbot."},
+        {"name": "campanas", "description": "Campañas de WhatsApp: plantillas, audiencias, envíos y pruebas."},
+    ],
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "internalToken": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-Internal-Token",
+                "description": "Token de servicio (`INTERNAL_API_TOKEN`) para consumidores BFF.",
+            },
+        },
+    },
     "ENUM_NAME_OVERRIDES": {
         "ConversationStatusEnum": "cases.models.Conversation.Status",
         "CampaignStatusEnum": "communications.models.Campaign.Status",

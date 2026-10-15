@@ -1,9 +1,13 @@
-# La página de pruebas de WhatsApp (`/whatsapp-prueba/`)
+# La consola de WhatsApp: pruebas (`/whatsapp-prueba/`) y movimientos (`/whatsapp-prueba/resultados/`)
 
 Documento de referencia de la consola interna que verifica la integración con
 Meta WhatsApp Cloud API. Explica qué hace cada sección, qué ocurre en cada lado
 —nuestro servidor y el de Meta— y qué hay que tener configurado en el App
 Dashboard para que todo funcione.
+
+La consola son **dos páginas**: la de **prueba**, donde se envían mensajes y
+plantillas reales, y la de **movimientos**, donde se lee lo que Meta reporta de
+vuelta.
 
 **No es parte del producto.** No la ven los estudiantes ni los coordinadores.
 Solo entra el personal con `is_staff`, mediante el decorador `_staff_required`.
@@ -26,13 +30,23 @@ interpretación genérica. Eso obliga a que cada paso sea verificable por fuera.
 
 ---
 
-## 2. Anatomía de la página
+## 2. Anatomía de las páginas
 
-La página tiene dos columnas: a la izquierda, las acciones de envío y las tablas
-de lo que se recibió; a la derecha, el estado de la configuración y el recorrido
-esperado.
+### Página de prueba (`/whatsapp-prueba/`)
 
-### 2.1 Enviar mensaje de texto
+Dos columnas: a la izquierda, los formularios que producen datos (envío de texto
+y de plantilla); a la derecha, el estado de la configuración. No tiene tablas.
+
+### Página de movimientos (`/whatsapp-prueba/resultados/`)
+
+Seis pestañas con lo que Meta reporta de vuelta: estados por mensaje, envíos de
+prueba, eventos del webhook, conversaciones del bot, destinatarios de campaña y
+campañas creadas en Meta.
+
+Se separaron a propósito: los formularios y las tablas se usan en momentos
+distintos y, juntos, obligaban a recorrer media página para llegar a lo de abajo.
+
+### 2.1 Enviar mensaje de texto (Prueba)
 
 Formulario que hace un `POST` real a `/{PHONE_NUMBER_ID}/messages` con
 `type: text`. Es el envío más simple, y también el que más confunde, porque
@@ -50,14 +64,19 @@ Es decir: si nunca te escribieron, no hay forma de que un texto libre llegue.
 Por eso la página lleva un campo de teléfono que consulta la ventana antes de
 enviar (ver §3.1).
 
-### 2.2 Enviar plantilla aprobada
+### 2.2 Enviar plantilla aprobada (Prueba)
 
 La **única** vía que funciona fuera de la ventana de 24 horas.
 
 Envía `type: template` con el nombre exacto de la plantilla aprobada en la
-cuenta de Meta. El selector offers una opción por cada plantilla **aprobada** en
-la base de datos, y al elegir una aparecen los campos de parámetros que
-corresponden a sus marcadores `{{1}}`, `{{2}}`, etc.
+cuenta de Meta. El selector ofrece una opción por cada plantilla **aprobada** en
+la cuenta de Meta (se lee en vivo; no hay lista local), y al elegir una aparecen
+los campos de parámetros que corresponden a sus marcadores `{{1}}`, `{{2}}`, etc.
+
+Mientras se llenan los parámetros, la tarjeta muestra una **previsualización**
+del mensaje —una burbuja de WhatsApp con el cuerpo resuelto con los valores que
+se van escribiendo, a todo el ancho de la tarjeta—, para revisarlo antes de
+enviarlo.
 
 Los índices de los marcadores se extraen del cuerpo de la plantilla, no de
 `param_count`: el formulario necesita saber *qué* marcadores hay, no cuántos.
@@ -69,57 +88,15 @@ Si no hay ninguna plantilla aprobada, la tarjeta lo dice explícitamente. Es un
 bloqueo real: sin plantilla aprobada no hay forma de iniciar una conversación,
 porque el texto libre está condicionado a la ventana de 24 horas.
 
-### 2.3 Estados por mensaje
+Las **plantillas de muestra** de Meta (`hello_world`) se ocultan salvo que sean
+la **única** plantilla aprobada (por ejemplo, una cuenta de demostración sin
+plantillas propias). En cuanto existe una plantilla propia aprobada desaparecen
+del selector, porque Meta solo las deja enviar desde el número de prueba público
+y desde un número real fallan con `131058`. Cuando sí se ofrecen, aparecen
+marcadas como **PLANTILLA DE PRUEBA META** (no se pueden editar ni eliminar:
+`2388094`).
 
-Agrupa los eventos de estado de un mismo `wamid` en el orden en que los reportó
-Meta, formando una línea de tiempo: `sent` → `delivered` → `read`, o
-`failed` con su motivo.
-
-Un envío hecho desde esta página queda registrado con su `wamid` real, así que
-esta tabla se llena sola. Si un estado llega `failed`, se muestra el código y el
-texto de error de Meta traducidos a algo accionable (ver §4).
-
-### 2.4 Envíos de prueba con wamid
-
-Cada envío hecho desde la página, con el `wamid` que devolvió Meta y un botón
-para copiarlo. Sirve para correlacionar: copiá un `wamid` y buscá esa misma
-cadena en "Estados por mensaje" para ver cómo avanzó.
-
-Estos registros se guardan en la misma tabla que los eventos del webhook, con
-una clave que los distingue. Por eso los mensajes de `error 131047` y compañía
-quedan guardados aunque el webhook nunca los reporte.
-
-### 2.5 Eventos del webhook
-
-Todo lo que Meta ha enviado por POST al callback, con su marca de procesamiento.
-
-El campo "Procesado" distingue dos cosas:
-
-- una hora → el webhook lo procesó;
-- `pendiente` → Meta lo entregó pero el procesamiento no terminó.
-
-También sirve para verificar **idempotencia**: cada evento tiene una
-`event_key` única, así que si Meta reintenta un POST, el segundo intento se
-registra como duplicado y no se procesa dos veces.
-
-### 2.6 Conversaciones del bot
-
-Las conversaciones originadas por WhatsApp, con el último mensaje de la persona
-y la última respuesta del bot.
-
-**Advertencia importante que la página 강조:** el primer mensaje entrante
-**siempre se descarta** y solo devuelve el saludo, sin importar qué haya escrito
-la persona. Es el comportamiento del chatbot (`knowledge/chatbot/whatsapp.py`),
-no un error. Para una conversación completa, el primer mensaje tiene que ser un
-saludo.
-
-### 2.7 Destinatarios de campaña con wamid
-
-Aparece solo si hay destinatarios. Son los registros contra los que Meta aplica
-los estados de las campañas: cuando llega un `status`, se busca el destinatario
-por su `provider_message_id` y se actualiza su estado y su `read_at`.
-
-### 2.8 Estado de configuración (columna derecha)
+### 2.3 Estado de configuración (Prueba, columna derecha)
 
 Un punto de luz por cada variable del entorno, con el detalle en el tooltip:
 
@@ -138,14 +115,84 @@ Graph API"**, que sí hace la consulta real:
 La diferencia es importante: una variable puede estar perfectamente escrita y el
 token llevar meses revocado. Solo la segunda consulta lo detecta.
 
-### 2.9 Recorrido completo (columna derecha)
+### Página de movimientos: las cinco pestañas
 
-Los cuatro pasos, en orden, de la prueba completa. Es el guion de qué hacer:
+Arriba hay un bloque plegable **"¿Cómo leer Movimientos?"** con las cuatro ideas
+que cuesta recordar de una integración asíncrona:
 
-1. Alguien escribe **un saludo** al número de negocio.
-2. Meta hace POST al callback; se ve el evento `inbound` y arranca el hilo del bot.
-3. Dentro de 24 horas, se manda un texto libre desde la página.
-4. Pasadas 24 horas, se usa la plantilla, porque el texto libre ya no llega.
+- el `200` al enviar solo significa "Meta aceptó"; los estados llegan por webhook;
+- la correlación se hace por `wamid`;
+- los eventos del webhook son el registro crudo (sirve para ver reintentos);
+- "huérfano" es un objeto de Meta sin anuncio.
+
+Debajo de ese bloque hay un **filtro libre** ("Filtrar por wamid..."): oculta las
+filas de la pestaña activa que no contengan el texto buscado. Es la forma más
+rápida de seguir un `wamid`: se copia de *Eventos del webhook* o *Destinatarios de
+campañas* y se pega en el filtro.
+
+Al entrar se abre la primera pestaña. La URL admite un ancla (`#estados`,
+`#eventos`, `#chats`, `#destinatarios`, `#campanas`) para enlazar una
+concreta; al pulsar una pestaña la barra de direcciones se actualiza.
+
+#### 2.4 Estados de entrega
+
+Agrupa los eventos de estado de un mismo `wamid` en el orden en que los reportó
+Meta, formando una línea de tiempo: `sent` → `delivered` → `read`, o
+`failed` con su motivo.
+
+Un envío hecho desde la página de prueba queda registrado con su `wamid` real,
+así que esta tabla se llena sola. Si un estado llega `failed`, se muestra el
+código y el texto de error de Meta traducidos a algo accionable (ver §4).
+
+#### 2.5 Eventos del webhook
+
+Todo lo que Meta ha enviado por POST al callback, con su marca de procesamiento.
+La tabla incluye además **los envíos hechos desde la página de prueba** —que se
+guardan en la misma tabla con una clave propia— con su destinatario y el
+contenido enviado. Por eso los mensajes de `error 131047` y compañía quedan
+registrados aunque el webhook nunca los reporte.
+
+El campo "Procesado" distingue dos cosas:
+
+- una hora → el webhook lo procesó;
+- `pendiente` → Meta lo entregó pero el procesamiento no terminó.
+
+También sirve para verificar **idempotencia**: cada evento tiene una
+`event_key` única, así que si Meta reintenta un POST, el segundo intento se
+registra como duplicado y no se procesa dos veces.
+
+#### 2.6 Conversaciones del chatbot
+
+Las conversaciones originadas por WhatsApp, con el último mensaje de la persona
+y la última respuesta del bot.
+
+**Advertencia importante que la página remarca:** el primer mensaje entrante
+**siempre se descarta** y solo devuelve el saludo, sin importar qué haya escrito
+la persona. Es el comportamiento del chatbot (`knowledge/chatbot/whatsapp.py`),
+no un error. Para una conversación completa, el primer mensaje tiene que ser un
+saludo.
+
+#### 2.7 Destinatarios de campañas
+
+Aparece solo si hay destinatarios. Son los registros contra los que Meta aplica
+los estados de las campañas: cuando llega un `status`, se busca el destinatario
+por su `provider_message_id` y se actualiza su estado y su `read_at`.
+
+#### 2.8 Objetos creados en Meta
+
+Los objetos que la integración creó en la **cuenta de anuncios** (Marketing API)
+al publicar avisos en WhatsApp Status: campaña, ad set, creativo y anuncio, con
+el aviso de origen y el estado del intento.
+
+Un intento es **huérfano** cuando falló después de crear la campaña o el ad set
+y nunca llegó a tener anuncio (por ejemplo, un aviso publicado con la app en
+modo Development: crea campaña y ad set, pero el creativo se rechaza con
+`1885183`). Esos objetos quedan sueltos ocupando la cuenta.
+
+Cada fila tiene un botón **Eliminar** que borra el objeto en Meta con
+`DELETE /{id}` y limpia el rastro local. Se elimina la **campaña** cuando existe,
+porque arrastra sus ad sets y anuncios; si no hubiera campaña, borra el ad set,
+el creativo o el anuncio, en ese orden.
 
 ---
 
@@ -176,10 +223,10 @@ Los cuatro pasos, en orden, de la prueba completa. Es el guion de qué hacer:
    la mandamos nosotros a Meta con la API.
 5. Devuelve `200`.
 
-**Qué se ve en la página.** Un evento `inbound` en "Eventos del webhook" y una
-conversación nueva en "Conversaciones del bot". Si no aparece nada, Meta no está
-llegando: el problema está en la configuración del App Dashboard (§5), no en el
-código.
+**Qué se ve en la página de movimientos.** Un evento `inbound` en "Eventos del
+webhook" y una conversación nueva en "Conversaciones del chatbot". Si no aparece
+nada, Meta no está llegando: el problema está en la configuración del App
+Dashboard (§5), no en el código.
 
 > La función `service_window()` busca los mensajes entrantes por
 > `payload__from`, así que solo ve los registrados a partir de la migración
@@ -197,9 +244,10 @@ código.
 3. Si la comprobación falla, responde con **HTTP 400** y `error.code = 131047`.
 4. Si todo está bien, responde con **HTTP 200** y un `wamid`.
 
-**Qué hace nuestra aplicación con la respuesta.** Registra el `wamid` en la
-tabla de envíos de prueba y muestra el resultado. Si vino un error, busca el
-código en la tabla de errores conocidos y lo traduce.
+**Qué hace nuestra aplicación con la respuesta.** Registra el `wamid` como un
+evento del webhook (aparece en la pestaña *Eventos del webhook*, con el
+destinatario y el contenido enviado) y muestra el resultado. Si vino un error,
+busca el código en la tabla de errores conocidos y lo traduce.
 
 ### 3.3 Los estados: el paso que casi nadie mira
 
@@ -252,6 +300,12 @@ Meta, para no inventar un diagnóstico.
 
 La página muestra siempre la explicación **junto al texto crudo de Meta**, para
 poder contrastar los dos.
+
+Fuera de esa tabla hay dos códigos que salen al trabajar con plantillas:
+`131058` (una plantilla de muestra como `hello_world` solo se envía desde el
+número de prueba público) y `2388094` (las plantillas de muestra no se pueden
+editar ni eliminar). PuntoTdeA las marca como **PLANTILLA DE PRUEBA META** en los
+selectores para que el error no sorprenda.
 
 ---
 
@@ -327,7 +381,7 @@ python manage.py reset_whatsapp_test_data           # ensayo: solo informa
 python manage.py reset_whatsapp_test_data --ejecutar
 ```
 
-Borra los eventos del webhook, los envíos de prueba, las campañas de
+Borra los eventos del webhook (incluidos los envíos de prueba), las campañas de
 demostración con sus destinatarios, y las conversaciones del bot que llegaron
 por WhatsApp.
 

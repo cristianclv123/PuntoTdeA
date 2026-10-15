@@ -18,6 +18,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    flex: 1 1 auto;
 }
 
 .outbound-tabs {
@@ -668,6 +669,20 @@
 .template-status--rejected { background: var(--danger-bg); color: var(--danger-text); }
 .template-status--paused { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
 .template-status--draft { background: rgba(96, 165, 250, 0.18); color: #93c5fd; }
+
+/* Marca de las plantillas de muestra de Meta (`hello_world`): se listan, pero
+   solo se envían desde el número de prueba público (131058 desde uno real). */
+.template-sample {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    background: var(--warning-bg);
+    color: var(--warning-text);
+}
 
 .template-category {
     font-size: 0.72rem;

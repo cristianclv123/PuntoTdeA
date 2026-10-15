@@ -1,15 +1,20 @@
 import json
 import hashlib
 import hmac
+from datetime import timedelta
 from unittest.mock import Mock, patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
+from rest_framework.test import APIClient
 
 from cases.models import Conversation as CaseConversation, Message as CaseMessage
 from communications.models import Contact
 from ..models import ChatConversation
-from .whatsapp import handle_message
+from .case_status import get_case_status
+from .whatsapp import close_inactive_whatsapp_conversations, handle_message, process_webhook
 
 
 def _manager(model):
@@ -17,6 +22,77 @@ def _manager(model):
 
 
 class WhatsAppFlowTests(TestCase):
+    @patch('knowledge.chatbot.case_status.requests.get')
+    def test_case_status_uses_session_cookie_and_remote_ticket_id(self, get):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {'id': 42, 'status': 'cerrado'}
+        get.return_value = response
+
+        with patch.dict(
+            'os.environ',
+            {
+                'CASES_API_BASE_URL': 'https://puntotdea-qmcv.onrender.com/',
+                'CASES_API_SESSION_ID': 'test-session-id',
+            },
+        ):
+            status = get_case_status(42)
+
+        self.assertEqual(status, 'cerrado')
+        get.assert_called_once_with(
+            'https://puntotdea-qmcv.onrender.com/api/cases/tickets/42/',
+            headers={'Cookie': 'sessionid=test-session-id'},
+            timeout=10,
+        )
+
+    def test_knowledge_ticket_status_endpoint_proxies_associated_case(self):
+        handle_message('573001112249', 'Hola')
+        handle_message('573001112249', 'Quiero un asesor')
+        handle_message('573001112249', 'Necesito ayuda con matrícula')
+        conversation = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112249',
+        )
+        conversation.case_conversation.status = CaseConversation.Status.CERRADO
+        conversation.case_conversation.save(update_fields=['status'])
+        user = get_user_model().objects.create_user(
+            username='knowledge-ticket-status-test',
+            password='test-password',
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        with patch(
+            'knowledge.api.viewsets.get_case_status',
+            return_value=CaseConversation.Status.PENDIENTE,
+        ) as get_status:
+            response = client.get(
+                f'/api/knowledge/conversations/{conversation.pk}/ticket-status/'
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['conversation_id'], conversation.pk)
+        self.assertEqual(response.data['ticket_id'], conversation.case_conversation_id)
+        self.assertEqual(response.data['status'], CaseConversation.Status.PENDIENTE)
+        get_status.assert_called_once_with(conversation.case_conversation_id)
+        conversation.case_conversation.refresh_from_db()
+        self.assertEqual(
+            conversation.case_conversation.status,
+            CaseConversation.Status.CERRADO,
+        )
+
+    def test_knowledge_ticket_status_endpoint_requires_authentication(self):
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112250',
+        )
+
+        response = APIClient().get(
+            f'/api/knowledge/conversations/{conversation.pk}/ticket-status/'
+        )
+
+        self.assertEqual(response.status_code, 403)
+
     def test_whatsapp_conversation_links_matching_communications_contact(self):
         contact = _manager(Contact).create(
             full_name='Estudiante de prueba',
@@ -43,15 +119,57 @@ class WhatsAppFlowTests(TestCase):
     )
     def test_whatsapp_messages_follow_the_chatbot_states(self):
         self.assertIn('ayudarte', handle_message('573001112233', 'Hola')[0])
-        response = handle_message('573001112233', 'Necesito información de matrícula')[0]
-        self.assertTrue(response)
+        response = handle_message('573001112233', 'Necesito información de matrícula')
+        self.assertTrue(response[0])
         conversation = getattr(ChatConversation, '_default_manager').get(  # pyright: ignore[reportPrivateUsage]
             external_user_id='573001112233'
         )
         self.assertEqual(conversation.flow_state, 'waiting_confirmation')
-        self.assertIn('nueva pregunta', handle_message('573001112233', 'sí')[0])
+        self.assertIn('La respuesta de prueba', response[0])
+        self.assertIn('otra duda', response[1])
+        self.assertIn('asesor', response[1])
+        continuation = handle_message('573001112233', 'sí')[0]
+        self.assertIn('otra pregunta', continuation)
+        self.assertIn('hablar con un asesor', continuation)
         conversation.refresh_from_db()
         self.assertEqual(conversation.flow_state, 'help_options')
+        self.assertIn('transferiremos', handle_message('573001112233', 'Quiero un asesor')[0])
+
+    @patch(
+        'knowledge.chatbot.workflow.generate_response',
+        new=Mock(return_value={
+            'answer': 'La información que solicitas es esta.',
+            'confidence': 0.9,
+            'needs_human_attention': False,
+            'sources': [],
+        }),
+    )
+    def test_user_can_close_chat_after_answering_doubt(self):
+        handle_message('573001112245', 'Hola')
+
+        response = handle_message('573001112245', '¿Cuándo son las matrículas?')
+
+        self.assertIn('La información que solicitas es esta.', response[0])
+        self.assertIn('¿Tienes otra duda', response[1])
+        close_response = handle_message('573001112245', 'no')
+        conversation = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112245',
+        )
+        self.assertIn('finalizado', close_response[0])
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ENDED)
+        self.assertEqual(conversation.flow_state, 'ended')
+
+        restart_response = handle_message('573001112245', 'Necesito otra consulta')
+        conversations = _manager(ChatConversation).filter(
+            channel='whatsapp',
+            external_user_id='573001112245',
+        ).order_by('-created_at')
+        self.assertEqual(conversations.count(), 2)
+        self.assertNotEqual(conversations.first().pk, conversation.pk)
+        self.assertEqual(conversations.first().status, ChatConversation.STATUS_ACTIVE)
+        self.assertIn('La información que solicitas es esta.', restart_response[1])
+        self.assertIn('¿Tienes otra duda', restart_response[2])
 
     def test_user_can_request_advisor_and_get_a_case_ticket(self):
         handle_message('573001112234', 'Hola')
@@ -64,9 +182,77 @@ class WhatsAppFlowTests(TestCase):
         )
         self.assertIn(case_conversation.ticket_number, responses[1])
         self.assertEqual(conversation.case_conversation, case_conversation)
-        self.assertEqual(conversation.status, ChatConversation.STATUS_PENDING)
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertEqual(conversation.flow_state, 'help_options')
+        self.assertTrue(conversation.messages[-1]['awaiting_advisor'])
         case_message = _manager(CaseMessage).get(conversation=case_conversation)
         self.assertEqual(case_message.body, 'Necesito ayuda con mi matrícula')
+        self.assertIsNone(case_conversation.assigned_to_id)
+
+    def test_pending_whatsapp_message_appends_to_case_ticket(self):
+        handle_message('573001112236', 'Hola')
+        handle_message('573001112236', 'Quiero un asesor')
+        handle_message('573001112236', 'Necesito ayuda con mi matrícula')
+        chat = _manager(ChatConversation).get(external_user_id='573001112236')
+        chat.status = ChatConversation.STATUS_PENDING
+        chat.flow_state = 'pending'
+        chat.save(update_fields=['status', 'flow_state'])
+
+        replies = handle_message('573001112236', 'Sigo esperando, es urgente')
+        self.assertEqual(replies, [])
+        case_conversation = _manager(CaseConversation).get(
+            channel__code='whatsapp',
+            external_thread_id='573001112236',
+        )
+        bodies = list(
+            _manager(CaseMessage).filter(conversation=case_conversation).values_list(
+                'body', flat=True
+            )
+        )
+        self.assertIn('Necesito ayuda con mi matrícula', bodies)
+        self.assertIn('Sigo esperando, es urgente', bodies)
+        self.assertIsNone(case_conversation.assigned_to_id)
+        chat.refresh_from_db()
+        self.assertEqual(chat.flow_state, 'pending')
+
+    def test_pending_message_is_forwarded_to_open_advisor_case(self):
+        handle_message('573001112243', 'Hola')
+        handle_message('573001112243', 'Quiero un asesor')
+        handle_message('573001112243', 'Necesito revisar mi solicitud')
+
+        conversation = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112243',
+        )
+        conversation.status = ChatConversation.STATUS_PENDING
+        conversation.flow_state = 'pending'
+        conversation.save(update_fields=['status', 'flow_state'])
+
+        response = handle_message(
+            '573001112243',
+            '¿Dónde consulto el calendario académico?',
+            'wamid.pending.1',
+        )
+
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.status, ChatConversation.STATUS_PENDING)
+        self.assertEqual(conversation.flow_state, 'pending')
+        self.assertEqual(response, [])
+        self.assertEqual(
+            _manager(CaseConversation).filter(
+                channel__code='whatsapp',
+                external_thread_id='573001112243',
+            ).count(),
+            1,
+        )
+        forwarded_message = _manager(CaseMessage).get(
+            conversation=conversation.case_conversation,
+            external_id='wamid.pending.1',
+        )
+        self.assertEqual(
+            forwarded_message.body,
+            '¿Dónde consulto el calendario académico?',
+        )
 
     @patch(
         'knowledge.chatbot.workflow.generate_response',
@@ -77,21 +263,282 @@ class WhatsAppFlowTests(TestCase):
             'sources': [],
         }),
     )
-    def test_low_confidence_answer_creates_case_ticket(self):
+    def test_low_confidence_creates_case_and_keeps_whatsapp_conversation_active(self):
         handle_message('573001112235', 'Hola')
 
-        responses = handle_message('573001112235', 'Pregunta sin respuesta')
+        responses = handle_message(
+            '573001112235',
+            'Pregunta sin respuesta',
+            'wamid.low-confidence.1',
+        )
 
         conversation = _manager(ChatConversation).get(external_user_id='573001112235')
-        case_conversation = _manager(CaseConversation).get(
-            channel__code='whatsapp',
-            external_thread_id='573001112235',
+        self.assertEqual(len(responses), 2)
+        self.assertIn('un asesor te dará respuesta', responses[0].lower())
+        self.assertIn('He creado el ticket', responses[1])
+        self.assertEqual(conversation.flow_state, 'help_options')
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertIsNotNone(conversation.case_conversation)
+        self.assertTrue(conversation.messages[-1]['awaiting_advisor'])
+        case_message = _manager(CaseMessage).get(
+            conversation=conversation.case_conversation,
         )
-        self.assertIn(case_conversation.ticket_number, responses[1])
-        self.assertEqual(conversation.case_conversation, case_conversation)
-        self.assertEqual(conversation.flow_state, 'pending')
-        case_message = _manager(CaseMessage).get(conversation=case_conversation)
         self.assertEqual(case_message.body, 'Pregunta sin respuesta')
+        self.assertEqual(case_message.external_id, 'wamid.low-confidence.1')
+
+    def test_new_message_after_ended_conversation_creates_new_chat(self):
+        previous = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112240',
+            status=ChatConversation.STATUS_ENDED,
+            flow_state='ended',
+            messages=[{'author': 'bot', 'content': 'Conversación finalizada.'}],
+        )
+
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            return_value={
+                'answer': 'Respuesta del nuevo chat.',
+                'confidence': 0.9,
+                'needs_human_attention': False,
+                'sources': [],
+            },
+        ):
+            response = handle_message('573001112240', 'Hola de nuevo')
+
+        user_conversations = _manager(ChatConversation).filter(
+            channel='whatsapp',
+            external_user_id='573001112240',
+        )
+        conversations = user_conversations.filter(
+            status=ChatConversation.STATUS_ACTIVE,
+        ).order_by('-updated_at', '-created_at')
+        self.assertEqual(user_conversations.count(), 2)
+        new_conversation = conversations.first()
+        self.assertNotEqual(new_conversation.pk, previous.pk)
+        self.assertEqual(new_conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertEqual(new_conversation.flow_state, 'waiting_confirmation')
+        self.assertIn('ayudarte', response[0])
+        self.assertIn('Respuesta del nuevo chat.', response[1])
+        handle_message('573001112240', 'sí')
+
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            return_value={
+                'answer': 'La conversación nueva sigue activa.',
+                'confidence': 0.9,
+                'needs_human_attention': False,
+                'sources': [],
+            },
+        ):
+            next_response = handle_message('573001112240', 'Otra pregunta')
+
+        new_conversation.refresh_from_db()
+        self.assertEqual(new_conversation.last_question, 'Otra pregunta')
+        self.assertEqual(
+            _manager(ChatConversation).filter(
+                channel='whatsapp',
+                external_user_id='573001112240',
+            ).count(),
+            2,
+        )
+        self.assertIn('La conversación nueva sigue activa.', next_response[0])
+
+    def test_inconsistent_ended_flow_starts_a_new_chat_instead_of_staying_closed(self):
+        previous = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112246',
+            status=ChatConversation.STATUS_ACTIVE,
+            flow_state='ended',
+            messages=[{'author': 'bot', 'content': 'Conversación finalizada.'}],
+        )
+
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            return_value={
+                'answer': 'La conversación nueva está activa.',
+                'confidence': 0.9,
+                'needs_human_attention': False,
+                'sources': [],
+            },
+        ):
+            response = handle_message('573001112246', 'Tengo otra pregunta')
+
+        previous.refresh_from_db()
+        conversations = _manager(ChatConversation).filter(
+            channel='whatsapp',
+            external_user_id='573001112246',
+        ).order_by('-created_at')
+        self.assertEqual(conversations.count(), 2)
+        self.assertEqual(previous.status, ChatConversation.STATUS_ENDED)
+        self.assertIn('La conversación nueva está activa.', response[1])
+        self.assertIn('¿Tienes otra duda', response[2])
+        self.assertNotIn('Esta conversación ya está cerrada', ' '.join(response))
+
+    def test_whatsapp_webhook_sends_answer_and_follow_up_separately(self):
+        sender = '573001112247'
+        _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id=sender,
+            status=ChatConversation.STATUS_ACTIVE,
+            flow_state='waiting_question',
+            messages=[{'author': 'bot', 'content': '¿En qué puedo ayudarte?'}],
+        )
+        payload = {
+            'entry': [{
+                'changes': [{
+                    'value': {
+                        'messages': [{
+                            'from': sender,
+                            'type': 'text',
+                            'text': {'body': '¿Cuándo son las matrículas?'},
+                        }],
+                    },
+                }],
+            }],
+        }
+
+        with (
+            patch(
+                'knowledge.chatbot.workflow.generate_response',
+                return_value={
+                    'answer': 'Las matrículas son en enero.',
+                    'confidence': 0.9,
+                    'needs_human_attention': False,
+                    'sources': [],
+                },
+            ),
+            patch('knowledge.chatbot.whatsapp.send_text') as send_text,
+        ):
+            processed = process_webhook(payload)
+
+        self.assertEqual(processed, 1)
+        self.assertEqual(send_text.call_count, 2)
+        self.assertEqual(send_text.call_args_list[0].args, (sender, 'Las matrículas son en enero.'))
+        self.assertEqual(
+            send_text.call_args_list[1].args,
+            (sender, '¿Tienes otra duda, necesitas hablar con un asesor o ya quedó '
+             'resuelta tu duda? Responde sí para continuar o no si ya no necesitas ayuda.'),
+        )
+
+    def test_new_message_after_advisor_closes_case_creates_new_chat(self):
+        handle_message('573001112241', 'Hola')
+        handle_message('573001112241', 'Quiero un asesor')
+        handle_message('573001112241', 'Necesito revisar mi solicitud')
+        previous = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112241',
+        )
+        previous_case = previous.case_conversation
+        previous_case.status = CaseConversation.Status.CERRADO
+        previous_case.save(update_fields=['status'])
+
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            return_value={
+                'answer': 'Respuesta en la nueva conversación.',
+                'confidence': 0.9,
+                'needs_human_attention': False,
+                'sources': [],
+            },
+        ), patch(
+            'knowledge.chatbot.whatsapp.get_case_status',
+            return_value=CaseConversation.Status.CERRADO,
+        ):
+            response = handle_message('573001112241', 'Tengo otra pregunta')
+
+        previous.refresh_from_db()
+        conversations = _manager(ChatConversation).filter(
+            channel='whatsapp',
+            external_user_id='573001112241',
+        ).order_by('-updated_at', '-created_at')
+        self.assertEqual(conversations.count(), 2)
+        self.assertEqual(previous.status, ChatConversation.STATUS_ENDED)
+        self.assertEqual(previous.flow_state, 'ended')
+        self.assertNotEqual(conversations.first().pk, previous.pk)
+        self.assertEqual(conversations.first().status, ChatConversation.STATUS_ACTIVE)
+        self.assertIn('ayudarte', response[0])
+        self.assertIn('Respuesta en la nueva conversación.', response[1])
+
+        handle_message('573001112241', 'Quiero un asesor')
+        ticket_responses = handle_message('573001112241', 'Necesito una nueva revisión')
+        new_case = _manager(CaseConversation).get(
+            channel__code='whatsapp',
+            external_thread_id=f'573001112241:chat-{conversations.first().pk}',
+        )
+        self.assertNotEqual(new_case.pk, previous_case.pk)
+        self.assertEqual(new_case.status, CaseConversation.Status.PENDIENTE)
+        self.assertIn(new_case.ticket_number, ticket_responses[1])
+        self.assertEqual(
+            _manager(CaseConversation).filter(channel__code='whatsapp').count(),
+            2,
+        )
+
+    def test_remote_open_case_keeps_whatsapp_conversation_available(self):
+        handle_message('573001112248', 'Hola')
+        handle_message('573001112248', 'Quiero un asesor')
+        handle_message('573001112248', 'Necesito revisar mi solicitud')
+        conversation = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112248',
+        )
+        conversation.case_conversation.status = CaseConversation.Status.CERRADO
+        conversation.case_conversation.save(update_fields=['status'])
+
+        with (
+            patch(
+                'knowledge.chatbot.whatsapp.get_case_status',
+                return_value=CaseConversation.Status.PENDIENTE,
+            ),
+            patch(
+                'knowledge.chatbot.workflow.generate_response',
+                return_value={
+                    'answer': 'El bot sigue disponible.',
+                    'confidence': 0.9,
+                    'needs_human_attention': False,
+                    'sources': [],
+                },
+            ),
+        ):
+            response = handle_message('573001112248', '¿Dónde consulto el calendario?')
+
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
+        self.assertEqual(conversation.last_question, '¿Dónde consulto el calendario?')
+        self.assertIn('El bot sigue disponible.', response[0])
+
+    def test_open_advisor_case_keeps_existing_chat_available(self):
+        handle_message('573001112242', 'Hola')
+        handle_message('573001112242', 'Quiero un asesor')
+        handle_message('573001112242', 'Necesito revisar mi solicitud')
+
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            return_value={
+                'answer': 'Puedes consultar el estado de tu solicitud con un asesor.',
+                'confidence': 0.9,
+                'needs_human_attention': False,
+                'sources': [],
+            },
+        ):
+            response = handle_message('573001112242', '¿Ya revisaron mi solicitud?')
+
+        conversation = _manager(ChatConversation).get(
+            channel='whatsapp',
+            external_user_id='573001112242',
+        )
+        self.assertEqual(
+            _manager(ChatConversation).filter(
+                channel='whatsapp',
+                external_user_id='573001112242',
+            ).count(),
+            1,
+        )
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
+        self.assertEqual(conversation.last_question, '¿Ya revisaron mi solicitud?')
+        self.assertIn('¿tienes otra duda', response[1].lower())
 
     @override_settings(META_VERIFY_TOKEN='test-token')
     def test_webhook_verification(self):
@@ -129,3 +576,155 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['processed'], 1)
         send.assert_called_once()
+
+
+class WhatsAppInactivityTests(TestCase):
+    @patch(
+        'knowledge.chatbot.workflow.generate_response',
+        new=Mock(return_value={
+            'answer': 'Respuesta en el chat reiniciado.',
+            'confidence': 0.9,
+            'needs_human_attention': False,
+            'sources': [],
+        }),
+    )
+    def test_message_after_inactivity_starts_and_uses_new_chat(self):
+        previous = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112244',
+            status=ChatConversation.STATUS_ACTIVE,
+            flow_state='waiting_question',
+            messages=[{'author': 'bot', 'content': '¿En qué puedo ayudarte?'}],
+        )
+        _manager(ChatConversation).filter(pk=previous.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=5)
+        )
+
+        responses = handle_message('573001112244', 'Necesito ayuda con mi matrícula')
+
+        previous.refresh_from_db()
+        conversations = _manager(ChatConversation).filter(
+            channel='whatsapp',
+            external_user_id='573001112244',
+            status=ChatConversation.STATUS_ACTIVE,
+        ).order_by('-updated_at', '-created_at')
+        new_conversation = conversations.first()
+        self.assertEqual(
+            _manager(ChatConversation).filter(
+                channel='whatsapp',
+                external_user_id='573001112244',
+            ).count(),
+            2,
+        )
+        self.assertEqual(previous.status, ChatConversation.STATUS_ENDED)
+        self.assertNotEqual(new_conversation.pk, previous.pk)
+        self.assertEqual(new_conversation.last_question, 'Necesito ayuda con mi matrícula')
+        self.assertEqual(new_conversation.status, ChatConversation.STATUS_ACTIVE)
+        self.assertIn('inactividad', responses[0])
+        self.assertIn('ayudarte', responses[1])
+        self.assertIn('Respuesta en el chat reiniciado.', responses[2])
+
+    @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
+    def test_closes_and_notifies_inactive_whatsapp_conversation(self, send_text):
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112236',
+            status=ChatConversation.STATUS_ACTIVE,
+            flow_state='waiting_question',
+            messages=[{'author': 'bot', 'content': '¿En qué puedo ayudarte?'}],
+        )
+        current_time = timezone.now()
+        _manager(ChatConversation).filter(pk=conversation.pk).update(
+            updated_at=current_time - timedelta(minutes=5)
+        )
+
+        closed_count = close_inactive_whatsapp_conversations(current_time)
+
+        conversation.refresh_from_db()
+        self.assertEqual(closed_count, 1)
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ENDED)
+        self.assertEqual(conversation.flow_state, 'ended')
+        self.assertIn('inactividad', conversation.messages[-1]['content'])
+        send_text.assert_called_once_with(
+            '573001112236',
+            conversation.messages[-1]['content'],
+        )
+
+        response = handle_message('573001112236', 'Quiero hacer otra consulta')
+        user_conversations = _manager(ChatConversation).filter(
+            channel='whatsapp',
+            external_user_id='573001112236',
+        )
+        conversations = user_conversations.filter(
+            status=ChatConversation.STATUS_ACTIVE,
+        ).order_by('-updated_at', '-created_at')
+        self.assertEqual(user_conversations.count(), 2)
+        self.assertNotEqual(conversations.first().pk, conversation.pk)
+        self.assertEqual(conversations.first().status, ChatConversation.STATUS_ACTIVE)
+        self.assertIn('ayudarte', response[0])
+
+    @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
+    def test_keeps_recent_whatsapp_conversation_active(self, send_text):
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112237',
+            status=ChatConversation.STATUS_ACTIVE,
+            messages=[{'author': 'bot', 'content': '¿En qué puedo ayudarte?'}],
+        )
+
+        closed_count = close_inactive_whatsapp_conversations()
+
+        conversation.refresh_from_db()
+        self.assertEqual(closed_count, 0)
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        send_text.assert_not_called()
+
+    @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
+    def test_does_not_close_when_last_message_was_sent_by_user(self, send_text):
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112238',
+            status=ChatConversation.STATUS_ACTIVE,
+            messages=[
+                {'author': 'bot', 'content': '¿En qué puedo ayudarte?'},
+                {'author': 'user', 'content': 'Mi última pregunta'},
+            ],
+        )
+        _manager(ChatConversation).filter(pk=conversation.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=5)
+        )
+
+        closed_count = close_inactive_whatsapp_conversations()
+
+        conversation.refresh_from_db()
+        self.assertEqual(closed_count, 0)
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        send_text.assert_not_called()
+
+    @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
+    def test_does_not_close_while_waiting_for_advisor_answer(self, send_text):
+        conversation = _manager(ChatConversation).create(
+            channel='whatsapp',
+            external_user_id='573001112239',
+            status=ChatConversation.STATUS_ACTIVE,
+            flow_state='help_options',
+            messages=[
+                {
+                    'author': 'bot',
+                    'content': 'Un asesor responderá tu duda.',
+                    'awaiting_advisor': True,
+                },
+                {'author': 'user', 'content': 'Otra duda'},
+                {'author': 'bot', 'content': 'Esta otra respuesta sí está disponible.'},
+            ],
+        )
+        _manager(ChatConversation).filter(pk=conversation.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=5)
+        )
+
+        closed_count = close_inactive_whatsapp_conversations()
+
+        conversation.refresh_from_db()
+        self.assertEqual(closed_count, 0)
+        self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
+        send_text.assert_not_called()

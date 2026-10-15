@@ -212,5 +212,9 @@ class MetaWhatsAppIntegrationTests(TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.json()["processed"], 1)
         self.assertEqual(second.json()["duplicates"], 1)
-        handle_message.assert_called_once_with("573001112233", "Hola")
+        handle_message.assert_called_once_with(
+            "573001112233",
+            "Hola",
+            external_message_id="wamid.inbound.1",
+        )
         send_text.assert_called_once_with("573001112233", "Hola")

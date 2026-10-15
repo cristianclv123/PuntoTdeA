@@ -41,6 +41,44 @@ class MetaTemplateServiceTests(TestCase):
         # Nunca devuelve vacío: Meta exige un nombre válido.
         self.assertEqual(meta_templates.slugify_meta_name("###"), "plantilla")
 
+    def test_is_sample_template_matches_hello_world_only(self):
+        self.assertTrue(meta_templates.is_sample_template("hello_world"))
+        self.assertTrue(meta_templates.is_sample_template(" Hello_World "))
+        self.assertFalse(meta_templates.is_sample_template("recordatorio"))
+        self.assertFalse(meta_templates.is_sample_template(None))
+
+    def test_normalize_marks_sample_templates(self):
+        sample = meta_templates.normalize_meta_template(
+            {"id": "1", "name": "hello_world", "status": "APPROVED"}
+        )
+        real = meta_templates.normalize_meta_template(
+            {"id": "2", "name": "aviso_de_pago", "status": "APPROVED"}
+        )
+
+        self.assertTrue(sample["is_sample"])
+        self.assertFalse(real["is_sample"])
+
+    def test_selectable_templates_hides_samples_when_an_own_template_is_approved(self):
+        templates = [
+            {"name": "hello_world", "status": "APPROVED", "is_sample": True},
+            {"name": "aviso_de_pago", "status": "APPROVED", "is_sample": False},
+            {"name": "en_revision", "status": "PENDING", "is_sample": False},
+        ]
+
+        offered = meta_templates.selectable_templates(templates)
+
+        self.assertEqual([template["name"] for template in offered], ["aviso_de_pago"])
+
+    def test_selectable_templates_offers_samples_when_they_are_the_only_ones(self):
+        templates = [
+            {"name": "hello_world", "status": "APPROVED", "is_sample": True},
+            {"name": "en_revision", "status": "PENDING", "is_sample": False},
+        ]
+
+        offered = meta_templates.selectable_templates(templates)
+
+        self.assertEqual([template["name"] for template in offered], ["hello_world"])
+
     @patch("communications.services.meta_templates.requests.post")
     def test_create_from_draft_sends_components(self, post):
         post.return_value = _response(

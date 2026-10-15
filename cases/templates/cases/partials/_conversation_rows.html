@@ -4,6 +4,9 @@
     class="conversation-row wa-chat-card {% if selected_id == conv.id %}active{% endif %}"
     data-conversation-id="{{ conv.id }}"
     data-assigned-to-id="{{ conv.assigned_to_id|default:'' }}"
+    data-unassigned="{% if conv.unassigned %}1{% else %}0{% endif %}"
+    data-status="{{ conv.status }}"
+    data-last-direction="{{ conv.last_direction|default:'' }}"
     data-search="{{ conv.name }} {{ conv.phone }} {{ conv.last_message }} {{ conv.ticket_number }}"
     href="{% url 'cases:detail' conv.id %}{% if filter_query %}?{{ filter_query }}{% endif %}"
   >

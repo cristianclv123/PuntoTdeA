@@ -45,44 +45,65 @@
       Es la única vía que funciona <strong>fuera</strong> de la ventana de 24 h,
       porque Meta solo permite texto libre cuando el usuario ya escribió primero.
       El nombre y el idioma tienen que coincidir exactamente con una plantilla
-      aprobada en tu cuenta de Meta.
+      aprobada en tu cuenta de Meta. Las que llevan la marca
+      <strong>PLANTILLA DE PRUEBA META</strong> son de muestra y solo se envían
+      desde el número de prueba público.
     </p>
     {% if templates %}
-      <form method="post" action="{% url 'meta-whatsapp-test-send-template' %}">
-        {% csrf_token %}
-        <div class="wa-field">
-          <label class="wa-label" for="wa-template">Plantilla</label>
-          <select class="wa-select" id="wa-template" name="template">
-            {% for t in templates %}
-              <option value="{{ t.meta_id }}" data-params="{{ t.indexes|length }}">
-                {{ t.name }} — {{ t.category }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-        {% for t in templates %}
-          <div class="wa-params" data-template="{{ t.meta_id }}" hidden>
-            {% for index in t.indexes %}
-              <div class="wa-field">
-                <label class="wa-label" for="wa-param-{{ t.meta_id }}-{{ index }}">Parámetro {{ index }}</label>
-                <input class="wa-input" id="wa-param-{{ t.meta_id }}-{{ index }}" name="param_{{ index }}" placeholder="Valor para {_{{ index }}}">
-              </div>
-            {% endfor %}
-            {% if t.needs_header %}
-              <div class="wa-note warn">
-                Esta plantilla tiene encabezado multimedia: el encabezado se toma
-                de la definición en Meta.
-              </div>
-            {% endif %}
-            <p class="wa-note">Cuerpo: {{ t.body }}</p>
+      {{ templates|json_script:"wa-template-data" }}
+      <div class="wa-template-layout">
+        <form method="post" action="{% url 'meta-whatsapp-test-send-template' %}" class="wa-template-form">
+          {% csrf_token %}
+          <div class="wa-field">
+            <label class="wa-label" for="wa-template">Plantilla</label>
+            <select class="wa-select" id="wa-template" name="template">
+              {% for t in templates %}
+                <option value="{{ t.meta_id }}" data-params="{{ t.indexes|length }}">
+                  {{ t.name }} — {{ t.category }}{% if t.is_sample %} · PLANTILLA DE PRUEBA META{% endif %}
+                </option>
+              {% endfor %}
+            </select>
           </div>
-        {% endfor %}
-        <div class="wa-field">
-          <label class="wa-label" for="wa-phone-template">Teléfono</label>
-          <input class="wa-input" id="wa-phone-template" name="phone" placeholder="+573001234567" required>
+          {% for t in templates %}
+            <div class="wa-params" data-template="{{ t.meta_id }}" hidden>
+              {% for index in t.indexes %}
+                <div class="wa-field">
+                  <label class="wa-label" for="wa-param-{{ t.meta_id }}-{{ index }}">Parámetro {{ index }}</label>
+                  <input class="wa-input" id="wa-param-{{ t.meta_id }}-{{ index }}" name="param_{{ index }}" placeholder="Valor para {_{{ index }}}">
+                </div>
+              {% endfor %}
+              {% if t.is_sample %}
+                <div class="wa-note warn">
+                  PLANTILLA DE PRUEBA META: es una plantilla de muestra de Meta y
+                  solo se envía desde el número de prueba público. Desde un número
+                  real Meta la rechaza con <code>131058</code>.
+                </div>
+              {% endif %}
+              {% if t.needs_header %}
+                <div class="wa-note warn">
+                  Esta plantilla tiene encabezado multimedia: el encabezado se toma
+                  de la definición en Meta.
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <div class="wa-field">
+            <label class="wa-label" for="wa-phone-template">Teléfono</label>
+            <input class="wa-input" id="wa-phone-template" name="phone" placeholder="+573001234567" required>
+          </div>
+          <button class="wa-btn" type="submit">Enviar plantilla a Meta</button>
+        </form>
+
+        <div class="wa-preview">
+          <div class="wa-preview-phone">
+            <div class="wa-preview-head">Punto TdeA · WhatsApp</div>
+            <div class="wa-preview-screen">
+              <div class="wa-prev-bubble" id="wa-tpl-preview-body">Elegí una plantilla para ver la previsualización.</div>
+              <div id="wa-tpl-preview-buttons"></div>
+            </div>
+          </div>
         </div>
-        <button class="wa-btn" type="submit">Enviar plantilla a Meta</button>
-      </form>
+      </div>
     {% else %}
       <div class="wa-alert warn" style="margin:0">
         No hay plantillas aprobadas en Meta. Crealas desde
@@ -93,183 +114,6 @@
       </div>
     {% endif %}
   </section>
-
-  <section class="wa-card full">
-    <h2>Estados por mensaje</h2>
-    <p class="hint">
-      Cada fila agrupa los estados de un mismo <code>wamid</code>, en el orden en
-      que los reportó Meta. <strong>Un envío hecho desde esta página queda
-      registrado con su <code>wamid</code></strong>, así que aquí vas a ver
-      <code>sent</code> → <code>delivered</code> → <code>read</code> tal como
-      los reporta Meta.
-    </p>
-    {% if threads %}
-      {% for thread in threads %}
-        <div class="wa-row">
-          <div style="min-width:0">
-            <code style="font-size:.74rem">{{ thread.wamid|truncatechars:58 }}</code>
-            <button type="button" class="wa-copy" data-copy="{{ thread.wamid }}" title="Copiar">copiar</button>
-            <div class="wa-timeline">
-              {% for step in thread.steps %}
-                <span class="wa-chip wa-chip-{{ step.status }}">{{ step.status }}</span>
-                <span class="wa-thread-meta">{{ step.created_at|date:"d/m H:i:s" }}</span>
-                {% for err in step.payload.errors %}
-                  <span class="wa-err">#{{ err.code }} {% if err.title %}{{ err.title }}{% else %}{{ err.message }}{% endif %}</span>
-                {% endfor %}
-              {% endfor %}
-            </div>
-            {% if thread.steps.0.payload.detail %}
-              <div class="wa-note">{{ thread.steps.0.payload.to }} · {{ thread.steps.0.payload.detail }}</div>
-            {% endif %}
-          </div>
-          <div class="wa-thread-meta">{{ thread.steps.0.created_at|date:"d/m/Y H:i" }}</div>
-        </div>
-      {% endfor %}
-    {% else %}
-      <p class="hint" style="margin:0">
-        Todavía no hay estados. Enviá un mensaje o una plantilla desde arriba:
-        Meta devuelve un <code>wamid</code> y después reporta
-        <code>sent</code> y <code>delivered</code> por webhook.
-      </p>
-    {% endif %}
-  </section>
-
-  {% if test_sends %}
-    <section class="wa-card full">
-      <h2>Envíos de prueba con wamid</h2>
-      <p class="hint">
-        Cada envío hecho desde esta página, con el <code>wamid</code> real que
-        devolvió Meta. Copiá uno y buscá esa misma cadena en
-        <strong>Estados por mensaje</strong> para ver cómo avanzó sus estados.
-      </p>
-      <table class="wa-table">
-        <thead>
-          <tr><th>wamid</th><th>Tipo</th><th>Destinatario</th><th>Contenido</th><th>Cuándo</th></tr>
-        </thead>
-        <tbody>
-          {% for send in test_sends %}
-            <tr>
-              <td>
-                <code style="font-size:.72rem">{{ send.provider_message_id|truncatechars:40 }}</code>
-                <button type="button" class="wa-copy" data-copy="{{ send.provider_message_id }}">copiar</button>
-              </td>
-              <td>
-                {% if send.status == "test_template" %}
-                  <span class="wa-chip test_template">plantilla</span>
-                {% else %}
-                  <span class="wa-chip test_text">texto</span>
-                {% endif %}
-              </td>
-              <td>{{ send.payload.to }}</td>
-              <td style="max-width:22rem">{{ send.payload.detail|truncatechars:70 }}</td>
-              <td>{{ send.created_at|date:"d/m H:i" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
-  {% endif %}
-
-  <section class="wa-card full">
-    <h2>Eventos del webhook</h2>
-    <p class="hint">
-      {{ event_count }} evento(s) registrado(s). Sirven para confirmar que Meta sí está llegando
-      y para verificar que los reintentos no se procesen dos veces.
-    </p>
-    {% if recent_events %}
-      <table class="wa-table">
-        <thead>
-          <tr><th>Tipo</th><th>Estado</th><th>provider_message_id</th><th>Procesado</th><th>Recibido</th></tr>
-        </thead>
-        <tbody>
-          {% for event in recent_events %}
-            <tr>
-              <td>
-                {{ event.get_event_type_display }}
-              </td>
-              <td>
-                <span class="wa-chip wa-chip-{{ event.status }}">{{ event.status|default:"—" }}</span>
-                {% for err in event.payload.errors %}
-                  <div class="wa-err">#{{ err.code }} {% if err.title %}{{ err.title }}{% else %}{{ err.message }}{% endif %}</div>
-                {% endfor %}
-              </td>
-              <td><code style="font-size:.75rem">{{ event.provider_message_id }}</code></td>
-              <td>{% if event.processed_at %}{{ event.processed_at|date:"d/m/Y H:i" }}{% else %}pendiente{% endif %}</td>
-              <td>{{ event.created_at|date:"d/m/Y H:i" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="hint" style="margin:0">
-        Aún no hay eventos. Eso significa que Meta todavía no hizo ningún POST al
-        callback: pedile a alguien que escriba al número de negocio y esperá unos
-        segundos.
-      </p>
-    {% endif %}
-  </section>
-
-  <section class="wa-card full">
-    <h2>Conversaciones del bot</h2>
-    <p class="hint">
-      Últimas conversaciones originadas por WhatsApp. Ojo: <strong>el primer
-      mensaje siempre se descarta y solo devuelve el saludo</strong>, sin importar
-      qué escriba la persona. Para una conversación completa, el primer mensaje
-      tiene que ser un saludo.
-    </p>
-    {% if chats %}
-      {% for chat in chats %}
-        <div class="wa-row">
-          <div style="min-width:0;flex:1">
-            <div>
-              <strong>{{ chat.conversation.external_user_id }}</strong>
-              <span class="wa-chip">{{ chat.conversation.get_status_display }}</span>
-              <span class="wa-thread-meta">{{ chat.conversation.flow_state }} · {{ chat.turns }} mensajes</span>
-            </div>
-            {% if chat.last_user %}
-              <div class="wa-who">Escribió</div>
-              <div class="wa-bubble user">{{ chat.last_user.content|truncatechars:180 }}</div>
-            {% endif %}
-            {% if chat.last_bot %}
-              <div class="wa-who" style="margin-top:.35rem">Respondió el bot</div>
-              <div class="wa-bubble bot">{{ chat.last_bot.content|truncatechars:180 }}</div>
-            {% endif %}
-          </div>
-          <a class="wa-btn link" href="/admin/knowledge/chatconversation/?q={{ chat.conversation.external_user_id }}">ver</a>
-        </div>
-      {% endfor %}
-    {% else %}
-      <p class="hint" style="margin:0">
-        Todavía no hay conversaciones. Escribile <strong>un saludo</strong> al
-        número de negocio desde un WhatsApp: ese primer mensaje ya queda registrado
-        arriba.
-      </p>
-    {% endif %}
-  </section>
-
-  {% if recent_recipients %}
-    <section class="wa-card full">
-      <h2>Destinatarios de campaña con wamid</h2>
-      <p class="hint">Los estados de Meta se aplican a estos destinatarios por su <code>provider_message_id</code>.</p>
-      <table class="wa-table">
-        <thead>
-          <tr><th>Campaña</th><th>Contacto</th><th>Teléfono</th><th>Estado</th><th>wamid</th><th>Leído</th></tr>
-        </thead>
-        <tbody>
-          {% for recipient in recent_recipients %}
-            <tr>
-              <td>{{ recipient.campaign.name }}</td>
-              <td>{{ recipient.contact.full_name }}</td>
-              <td>{{ recipient.phone_snapshot }}</td>
-              <td>{{ recipient.get_status_display }}</td>
-              <td><code style="font-size:.72rem">{{ recipient.provider_message_id }}</code></td>
-              <td>{% if recipient.read_at %}{{ recipient.read_at|date:"d/m H:i" }}{% else %}—{% endif %}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
-  {% endif %}
 
   </div>
 
@@ -298,11 +142,12 @@
     </section>
 
     <section class="wa-card">
-      <h2 class="wa-aside-title">Recorrido completo</h2>
-      <div class="wa-step"><b>1</b><div>Que alguien te escriba <strong>un saludo</strong> al número de negocio.</div></div>
-      <div class="wa-step"><b>2</b><div>Meta hace POST al callback. Ves el evento <code>inbound</code> y el hilo del bot acá arriba.</div></div>
-      <div class="wa-step"><b>3</b><div>Dentro de 24 h, mandá un texto libre desde arriba. Debería llegar al celular.</div></div>
-      <div class="wa-step"><b>4</b><div>Pasadas 24 h sin que te escriba, usá la plantilla: el texto libre ya no llega.</div></div>
+      <h2 class="wa-aside-title">Movimientos</h2>
+      <p class="wa-note" style="margin-top:0">
+        Los envíos, los estados por mensaje, los eventos del webhook y las
+        conversaciones del bot están en su propia página.
+      </p>
+      <a class="wa-btn link" href="{% url 'meta-whatsapp-results' %}">Ver movimientos</a>
     </section>
   </aside>
 
@@ -328,9 +173,70 @@
         });
       });
     }
+
+    // Previsualización: arma el cuerpo de la plantilla con los parámetros que
+    // se van escribiendo, para ver el mensaje antes de enviarlo.
+    const previewBody = document.getElementById('wa-tpl-preview-body');
+    const previewButtons = document.getElementById('wa-tpl-preview-buttons');
+    const templateData = document.getElementById('wa-template-data');
+    let previewTemplates = [];
+    try {
+      previewTemplates = JSON.parse(templateData ? templateData.textContent : '[]') || [];
+    } catch (error) {
+      previewTemplates = [];
+    }
+
+    function previewParams(template) {
+      const params = {};
+      const block = document.querySelector('.wa-params[data-template="' + template.meta_id + '"]');
+      if (block) {
+        block.querySelectorAll('input').forEach(function (input) {
+          const match = /^param_(\d+)$/.exec(input.name);
+          if (match) params[match[1]] = input.value;
+        });
+      }
+      return params;
+    }
+
+    function renderPreview() {
+      if (!previewBody || !templateSelect) return;
+      const template = previewTemplates.find(function (item) {
+        return String(item.meta_id) === String(templateSelect.value);
+      });
+      if (!template) {
+        previewBody.textContent = 'Elegí una plantilla para ver la previsualización.';
+        if (previewButtons) previewButtons.innerHTML = '';
+        return;
+      }
+      const params = previewParams(template);
+      previewBody.textContent = String(template.body_text || '').replace(
+        /\{\{(\d+)\}\}/g,
+        function (match, number) {
+          const value = (params[number] || '').trim();
+          return value || '{{' + number + '}}';
+        }
+      );
+      if (previewButtons) {
+        previewButtons.innerHTML = '';
+        (template.buttons || []).forEach(function (button) {
+          const chip = document.createElement('span');
+          chip.className = 'wa-prev-btn';
+          chip.textContent = button.text || '';
+          previewButtons.appendChild(chip);
+        });
+      }
+    }
+
     if (templateSelect) {
-      templateSelect.addEventListener('change', syncParams);
+      templateSelect.addEventListener('change', function () {
+        syncParams();
+        renderPreview();
+      });
+      paramBlocks.forEach(function (block) {
+        block.addEventListener('input', renderPreview);
+      });
       syncParams();
+      renderPreview();
     }
 
     // Consulta la ventana de servicio de 24 h sin recargar la página, para no
@@ -356,29 +262,6 @@
     if (phoneInput) {
       phoneInput.addEventListener('blur', checkWindow);
     }
-
-    // Copiar wamid al portapapeles.
-    document.querySelectorAll('[data-copy]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        const value = button.dataset.copy;
-        const done = function () {
-          const original = button.textContent;
-          button.textContent = 'copiado';
-          setTimeout(function () { button.textContent = original; }, 1200);
-        };
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(value).then(done);
-        } else {
-          const helper = document.createElement('textarea');
-          helper.value = value;
-          document.body.appendChild(helper);
-          helper.select();
-          document.execCommand('copy');
-          document.body.removeChild(helper);
-          done();
-        }
-      });
-    });
   })();
 </script>
 {% endblock %}

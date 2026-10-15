@@ -4,12 +4,42 @@ from django.db import models
 class Announcement(models.Model):
     title = models.CharField(max_length=200, verbose_name="Título")
     content = models.TextField(verbose_name="Contenido")
-    image = models.ImageField(upload_to='announcements/', blank=True, null=True, verbose_name="Imagen")
+    # La imagen se guarda como bytes en la base de datos (no en MEDIA_ROOT):
+    # en produccion (Render plan gratis) no hay disco persistente y las
+    # subidas a media se pierden entre despliegues.
+    image_data = models.BinaryField(
+        blank=True, null=True, editable=False, verbose_name="Imagen (bytes)"
+    )
+    image_name = models.CharField(max_length=255, blank=True, verbose_name="Nombre del archivo")
+    image_content_type = models.CharField(
+        max_length=100, blank=True, verbose_name="Tipo de contenido de la imagen"
+    )
     is_urgent = models.BooleanField(default=False, verbose_name="¿Es urgente?")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
 
     def __str__(self):
         return self.title
+
+    @property
+    def has_image(self) -> bool:
+        """True si el aviso tiene una imagen guardada en la base de datos."""
+        return bool(self.image_data)
+
+    def set_image(self, uploaded_file) -> None:
+        """Guarda un archivo subido (request.FILES) como bytes en la BD."""
+        if uploaded_file is None:
+            return
+        self.image_data = uploaded_file.read()
+        self.image_name = getattr(uploaded_file, "name", "") or "aviso.jpg"
+        self.image_content_type = (
+            getattr(uploaded_file, "content_type", "") or "application/octet-stream"
+        )
+
+    def get_image_bytes(self) -> bytes | None:
+        """Devuelve los bytes de la imagen o None si no hay imagen."""
+        if not self.image_data:
+            return None
+        return bytes(self.image_data)
 
     @property
     def is_published_in_status(self) -> bool:

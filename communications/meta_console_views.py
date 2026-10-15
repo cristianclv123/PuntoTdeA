@@ -14,7 +14,7 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.http import HttpRequest, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -24,12 +24,10 @@ from communications.models import (
     BroadcastRecipient,
     WhatsAppWebhookEvent,
 )
+from communications.services import ads_service
 from communications.services import meta_config, meta_diagnostics, meta_errors
 from communications.services import meta_templates
-from communications.services.test_send_registry import (
-    TEST_SEND_KEY_PREFIX,
-    record_test_send,
-)
+from communications.services.test_send_registry import record_test_send
 
 
 def _staff_required(view):
@@ -111,21 +109,27 @@ def status_threads(limit: int = 8, per_thread: int = 6) -> list[dict]:
 
 
 def approved_templates() -> list[dict]:
-    """Plantillas aprobadas en Meta, con los índices de sus parámetros.
+    """Plantillas que se ofrecen para enviar desde la pagina de prueba.
 
     Meta es la fuente de verdad: la lista se lee en vivo de la cuenta. Si la
-    integración no está configurada o Meta no responde, se devuelve una lista
-    vacía para no romper el resto de la consola.
+    integracion no esta configurada o Meta no responde, se devuelve una lista
+    vacia para no romper el resto de la consola.
+
+    Las plantillas de muestra (`hello_world`) solo se ofrecen cuando son la
+    unica aprobada (cuenta de demostracion): en cuanto hay una plantilla propia
+    aprobada se ocultan, porque Meta solo permite enviarlas desde el numero de
+    prueba publico (desde uno real responde `131058`).
+
+    Cada entrada trae `body_text` (cuerpo completo, para la previsualizacion) y
+    `buttons`, ademas del `body` recortado que usa la pista de la tarjeta.
     """
     result = meta_templates.list_templates()
     if not result.ok:
         return []
 
-    approved = []
-    for template in result.templates:
-        if template.get("status") != "APPROVED":
-            continue
-        approved.append(
+    offered = []
+    for template in meta_templates.selectable_templates(result.templates):
+        offered.append(
             {
                 "meta_id": template.get("meta_id", ""),
                 "name": template.get("name", ""),
@@ -134,9 +138,12 @@ def approved_templates() -> list[dict]:
                 "indexes": template.get("indexes", []),
                 "needs_header": template.get("header_type", "none") != "none",
                 "body": (template.get("body_text") or "").replace("\n", " ")[:160],
+                "body_text": template.get("body_text") or "",
+                "buttons": template.get("buttons") or [],
+                "is_sample": meta_templates.is_sample_template(template.get("name", "")),
             }
         )
-    return approved
+    return offered
 
 
 def recent_chats(limit: int = 5) -> list[dict]:
@@ -169,26 +176,145 @@ def recent_chats(limit: int = 5) -> list[dict]:
 
 @_staff_required
 def index(request: HttpRequest):
-    """Estado de configuración, envío de prueba y estados reales de Meta."""
+    """Envío de prueba: formularios de texto y plantilla y estado de configuración.
+
+    Las tablas de resultados viven aparte, en `results()`: acá solo quedan las
+    acciones que producen datos.
+    """
     context = {
         "config": meta_config.capability_status(),
         "callback_path": meta_config.WEBHOOK_PATH,
-        "recent_events": WhatsAppWebhookEvent.objects.all()[:20],
-        "event_count": WhatsAppWebhookEvent.objects.count(),
+        "templates": approved_templates(),
+        "active_nav": "whatsapp-test",
+    }
+    return render(request, "communications/whatsapp_test.html", context)
+
+
+@_staff_required
+def results(request: HttpRequest):
+    """Movimientos de la integracion: lo que Meta reporta de vuelta.
+
+    Reúne en una sola página los estados por `wamid`, los eventos del webhook,
+    las conversaciones del bot, los destinatarios de campaña y los objetos que
+    la integración creó en la cuenta de anuncios. Se separó de la página de
+    prueba para no amontonar cinco tablas distintas debajo de los formularios;
+    la plantilla las organiza por pestañas.
+    """
+    context = {
         "threads": status_threads(),
-        "test_sends": WhatsAppWebhookEvent.objects.filter(
-            event_key__startswith=TEST_SEND_KEY_PREFIX
-        ).order_by("-created_at")[:10],
+        "event_count": WhatsAppWebhookEvent.objects.count(),
+        "recent_events": WhatsAppWebhookEvent.objects.all()[:20],
         "recent_recipients": (
             BroadcastRecipient.objects.exclude(provider_message_id="")
             .select_related("campaign", "contact")
             .order_by("-id")[:10]
         ),
-        "templates": approved_templates(),
         "chats": recent_chats(),
-        "active_nav": "whatsapp-test",
+        "meta_ads": meta_ad_rows(),
+        "active_nav": "whatsapp-results",
     }
-    return render(request, "communications/whatsapp_test.html", context)
+    return render(request, "communications/whatsapp_results.html", context)
+
+
+def _deletable_target(status_ad) -> tuple[str, str, str]:
+    """Primer objeto de Meta que existe en el rastro: (campo, id, etiqueta).
+
+    Se prefiere la campaña porque borrarla arrastra sus ad sets y anuncios.
+    """
+    for attr, label in (
+        ("campaign_id", "campaña"),
+        ("ad_set_id", "ad set"),
+        ("creative_id", "creativo"),
+        ("ad_id", "anuncio"),
+    ):
+        value = str(getattr(status_ad, attr, "") or "").strip()
+        if value:
+            return attr, value, label
+    return "", "", ""
+
+
+def meta_ad_rows(limit: int = 40) -> list[dict]:
+    """Objetos creados en la cuenta de anuncios, listos para la tabla.
+
+    Un intento es **huérfano** cuando falló después de crear la campaña o el ad
+    set y nunca llegó a tener anuncio: quedan objetos sueltos ocupando la
+    cuenta. El import es local porque `announcements` ya importa `communications`
+    (importarlo arriba cerraría el ciclo al cargar URLs).
+    """
+    from django.db.models import Q
+
+    from announcements.models import StatusAd
+
+    queryset = (
+        StatusAd.objects.select_related("announcement")
+        .filter(
+            Q(campaign_id__gt="")
+            | Q(ad_set_id__gt="")
+            | Q(creative_id__gt="")
+            | Q(ad_id__gt="")
+        )
+        .order_by("-created_at")[:limit]
+    )
+    rows = []
+    for status_ad in queryset:
+        attr, object_id, label = _deletable_target(status_ad)
+        rows.append(
+            {
+                "status_ad": status_ad,
+                "orphan": not status_ad.ad_id and status_ad.state == StatusAd.State.ERROR,
+                "delete_attr": attr,
+                "delete_id": object_id,
+                "delete_label": label,
+            }
+        )
+    return rows
+
+
+@_staff_required
+@require_POST
+def delete_meta_ad(request: HttpRequest):
+    """Elimina en Meta la campaña (u objeto) de un intento y limpia su rastro.
+
+    Sirve para borrar los objetos huérfanos que dejan los intentos fallidos.
+    Borrar la campaña arrastra sus ad sets y anuncios.
+    """
+    from announcements.models import StatusAd
+
+    status_ad = get_object_or_404(StatusAd, pk=request.POST.get("status_ad"))
+    attr, object_id, label = _deletable_target(status_ad)
+    if not object_id:
+        messages.error(request, "Ese intento no tiene objetos creados en Meta.")
+        return redirect("meta-whatsapp-results")
+
+    result = ads_service.delete_object(object_id)
+    if not result.ok:
+        messages.error(
+            request,
+            f"No se pudo eliminar la {label} {object_id} en Meta: "
+            f"{result.error or result.summary}",
+        )
+        return redirect("meta-whatsapp-results")
+
+    status_ad.campaign_id = ""
+    status_ad.ad_set_id = ""
+    status_ad.creative_id = ""
+    status_ad.ad_id = ""
+    status_ad.state = StatusAd.State.DRAFT
+    note = f"[{timezone.now():%Y-%m-%d %H:%M}] Se eliminó {label} {object_id} en Meta."
+    status_ad.error = f"{status_ad.error} {note}".strip() if status_ad.error else note
+    status_ad.save(
+        update_fields=[
+            "campaign_id",
+            "ad_set_id",
+            "creative_id",
+            "ad_id",
+            "state",
+            "error",
+            "updated_at",
+        ]
+    )
+    messages.success(request, f"Se eliminó la {label} {object_id} en Meta.")
+    return redirect("meta-whatsapp-results")
 
 
 @_staff_required
