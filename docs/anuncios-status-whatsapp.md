@@ -30,7 +30,14 @@ de usuario con `ads_management`.
 1. **Pagina vinculada a la cuenta de WhatsApp.** Sin esto el ad set falla con
    `code 100, subcode 2446886`.
 2. **App de Meta en modo Live (publico).** En modo desarrollo, crear el creativo
-   falla con `code 100, subcode 1885183`.
+   falla con `code 100, subcode 1885183` ("la publicacion se creo con una app
+   que se encuentra en modo de desarrollo; debe estar en modo publico").
+
+   Para pasarla a Live: App Dashboard -> **Publish** -> **Go live** (apps de
+   caso de uso) o el interruptor **App Mode** de la barra superior (apps
+   clasicas). Antes de publicar Meta pide URL de politica de privacidad, icono
+   y categoria. La App Review solo hace falta para usuarios sin rol en la app;
+   el administrador puede crear anuncios sin ella.
 3. **Negocio verificado** (`verification_status: verified`) para usar un numero
    de Cloud API en anuncios.
 4. **Metodo de pago** en la cuenta de anuncios (sin el, no hay entrega).
