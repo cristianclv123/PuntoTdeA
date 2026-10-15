@@ -5,6 +5,7 @@ import json
 from unittest.mock import Mock, patch
 
 import requests
+from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 
 from communications.models import AudienceSegment, Contact, SegmentMembership
@@ -144,6 +145,36 @@ class AdsServiceApiTests(TestCase):
                 [hashlib.sha256(b"573004445566").hexdigest()],
             ],
         )
+
+    @patch("communications.services.ads_service.requests.request")
+    def test_upload_ad_image_keeps_extension_though_label_has_none(self, request):
+        # create_status_ad pasa el nombre del anuncio como `name`; el nombre de
+        # archivo debe salir del propio archivo (Meta rechaza nombres sin
+        # extension con code 100, subcode 1487411).
+        request.return_value = _ok_response({"images": {"aviso.jpg": {"hash": "abc"}}})
+        image = ContentFile(b"fake-jpeg", name="aviso.jpg")
+
+        result = ads_service.upload_ad_image(image, name="Aviso: promo de matricula")
+
+        self.assertTrue(result.ok)
+        _args, kwargs = request.call_args
+        filename, _file, mime = kwargs["files"]["filename"]
+        self.assertEqual(filename, "aviso.jpg")
+        self.assertEqual(mime, "image/jpeg")
+
+    @patch("communications.services.ads_service.requests.request")
+    def test_upload_ad_image_adds_extension_when_missing(self, request):
+        request.return_value = _ok_response({"images": {"foto.png": {"hash": "abc"}}})
+        image = ContentFile(b"fake-png", name="foto")
+        image.content_type = "image/png"
+
+        result = ads_service.upload_ad_image(image)
+
+        self.assertTrue(result.ok)
+        _args, kwargs = request.call_args
+        filename, _file, mime = kwargs["files"]["filename"]
+        self.assertEqual(filename, "foto.png")
+        self.assertEqual(mime, "image/png")
 
     @patch("communications.services.ads_service.requests.request")
     def test_create_status_ad_stops_on_first_error_and_reports_trace(self, request):
