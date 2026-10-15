@@ -25,15 +25,15 @@
   <input id="wamid-filter" placeholder="Filtrar por wamid..." class="wa-input" style="max-width:26rem;margin:0 0 .75rem">
 
   <div class="wa-tabs" role="tablist">
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="estados">Estados de entrega (por wamid)</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="eventos">Eventos del webhook (crudos)</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="chats">Conversaciones del chatbot (WhatsApp)</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="destinatarios">Destinatarios de campañas (con wamid)</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="campanas">Objetos creados en Meta (campañas/ad sets/creativos/anuncios)</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="estados">Estados de entrega</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="eventos">Eventos del webhook</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="chats">Conversaciones del chatbot</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="destinatarios">Destinatarios de campañas</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="campanas">Objetos creados en Meta</button>
   </div>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="estados">
-    <h2>Estados de entrega (por wamid)</h2>
+    <h2>Estados de entrega</h2>
     <p class="hint">
       Cada fila agrupa los estados de un mismo <code>wamid</code>, en el orden en
       que los reportó Meta. <strong>Un 200 solo confirma que Meta aceptó el mensaje. La entrega es asíncrona</strong>: los estados llegan por POST al webhook. Buscá el <code>wamid</code> en <em>Eventos del webhook</em> o <em>Destinatarios de campañas</em> para correlacionar.
@@ -71,7 +71,7 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="eventos">
-    <h2>Eventos del webhook (crudos)</h2>
+    <h2>Eventos del webhook</h2>
     <p class="hint">
       {{ event_count }} evento(s) registrado(s). POSTs reales a <code>/api/whatsapp/webhook/</code>, más los envíos hechos desde <a href="{% url 'meta-whatsapp-test' %}">Prueba de integración</a> (con su destinatario y contenido). Cada evento tiene una <code>event_key</code> única (los reintentos de Meta no duplican el procesamiento). Si <strong>Procesado</strong> aparece como <em>pendiente</em>, Meta envió el evento pero su procesamiento no terminó.
     </p>
@@ -123,7 +123,7 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="chats">
-    <h2>Conversaciones del chatbot (WhatsApp)</h2>
+    <h2>Conversaciones del chatbot</h2>
     <p class="hint">
       Últimas conversaciones originadas por WhatsApp. <strong>El primer mensaje siempre se descarta y solo devuelve el saludo</strong>, sin importar qué escriba la persona. Para una conversación completa, el primer mensaje tiene que ser un saludo.
     </p>
@@ -158,8 +158,8 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="destinatarios">
-    <h2>Destinatarios de campañas (con wamid)</h2>
-    <p class="hint">Los estados de Meta se aplican a estos destinatarios por su <code>provider_message_id</code> (wamid). Copiá el wamid para buscarlo en <strong>Estados de entrega (por wamid)</strong>.</p>
+    <h2>Destinatarios de campañas</h2>
+    <p class="hint">Los estados de Meta se aplican a estos destinatarios por su <code>provider_message_id</code> (wamid). Copiá el wamid para buscarlo en <strong>Estados de entrega</strong>.</p>
     {% if recent_recipients %}
       <table class="wa-table">
         <thead>
@@ -188,7 +188,7 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="campanas">
-    <h2>Objetos creados en Meta (campañas/ad sets/creativos/anuncios)</h2>
+    <h2>Objetos creados en Meta</h2>
     <p class="hint">
       Objetos que la integración creó en la cuenta de anuncios (Marketing API) al publicar avisos en WhatsApp Status. Un intento es <strong>huérfano</strong> cuando falló después de crear la campaña o el ad set y nunca llegó a crear el anuncio (p.ej. app en modo Development → crea campaña/ad set pero rechaza el creativo). Borrar borra la <strong>campaña completa</strong> en Meta (arrastra ad sets y anuncios) y limpia el rastro local.
     </p>

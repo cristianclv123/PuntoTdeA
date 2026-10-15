@@ -275,14 +275,14 @@ class MetaResultsPageTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         for label in (
-            "Estados de entrega (por wamid)",
-            "Eventos del webhook (crudos)",
-            "Conversaciones del chatbot (WhatsApp)",
-            "Destinatarios de campañas (con wamid)",
-            "Objetos creados en Meta (campañas/ad sets/creativos/anuncios)",
+            "Estados de entrega",
+            "Eventos del webhook",
+            "Conversaciones del chatbot",
+            "Destinatarios de campañas",
+            "Objetos creados en Meta",
         ):
             self.assertContains(response, label)
-        self.assertNotContains(response, "Envíos de prueba (con wamid)")
+        self.assertNotContains(response, "Envíos de prueba")
 
     def test_events_tab_shows_the_test_send_recipient_and_content(self):
         WhatsAppWebhookEvent.objects.create(
@@ -342,7 +342,7 @@ class MetaAdsCleanupTests(TestCase):
     def test_tab_lists_the_campaign_and_flags_the_orphan(self):
         self.client.force_login(self.staff)
         response = self.client.get(self.url)
-        self.assertContains(response, "Objetos creados en Meta (campañas/ad sets/creativos/anuncios)")
+        self.assertContains(response, "Objetos creados en Meta")
         self.assertContains(response, "111")
         self.assertContains(response, "huérfano")
 

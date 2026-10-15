@@ -126,7 +126,7 @@ Al entrar se abre la primera pestaña. La URL admite un ancla (`#estados`,
 `#eventos`, `#chats`, `#destinatarios`, `#campanas`) para enlazar una
 concreta; al pulsar una pestaña la barra de direcciones se actualiza.
 
-#### 2.4 Estados de entrega (por wamid)
+#### 2.4 Estados de entrega
 
 Agrupa los eventos de estado de un mismo `wamid` en el orden en que los reportó
 Meta, formando una línea de tiempo: `sent` → `delivered` → `read`, o
@@ -136,7 +136,7 @@ Un envío hecho desde la página de prueba queda registrado con su `wamid` real,
 así que esta tabla se llena sola. Si un estado llega `failed`, se muestra el
 código y el texto de error de Meta traducidos a algo accionable (ver §4).
 
-#### 2.5 Eventos del webhook (crudos)
+#### 2.5 Eventos del webhook
 
 Todo lo que Meta ha enviado por POST al callback, con su marca de procesamiento.
 La tabla incluye además **los envíos hechos desde la página de prueba** —que se
@@ -153,7 +153,7 @@ También sirve para verificar **idempotencia**: cada evento tiene una
 `event_key` única, así que si Meta reintenta un POST, el segundo intento se
 registra como duplicado y no se procesa dos veces.
 
-#### 2.6 Conversaciones del chatbot (WhatsApp)
+#### 2.6 Conversaciones del chatbot
 
 Las conversaciones originadas por WhatsApp, con el último mensaje de la persona
 y la última respuesta del bot.
@@ -164,13 +164,13 @@ la persona. Es el comportamiento del chatbot (`knowledge/chatbot/whatsapp.py`),
 no un error. Para una conversación completa, el primer mensaje tiene que ser un
 saludo.
 
-#### 2.7 Destinatarios de campañas (con wamid)
+#### 2.7 Destinatarios de campañas
 
 Aparece solo si hay destinatarios. Son los registros contra los que Meta aplica
 los estados de las campañas: cuando llega un `status`, se busca el destinatario
 por su `provider_message_id` y se actualiza su estado y su `read_at`.
 
-#### 2.8 Objetos creados en Meta (campañas/ad sets/creativos/anuncios)
+#### 2.8 Objetos creados en Meta
 
 Los objetos que la integración creó en la **cuenta de anuncios** (Marketing API)
 al publicar avisos en WhatsApp Status: campaña, ad set, creativo y anuncio, con
