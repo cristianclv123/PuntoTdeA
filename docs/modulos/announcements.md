@@ -34,6 +34,12 @@ Estados de `StatusAd`: `draft`, `paused` (default de prueba, no gasta), `active`
 
 `GET /avisos/` (`announcements:index`): listado y acciones de publicación según `views.py` + `status_ad_service`.
 
+La columna derecha es una **vista previa** del aviso como estado de WhatsApp
+(imagen + título + contenido). Con **Crear aviso** abierto refleja lo que se
+escribe; con el listado visible muestra el aviso sobre el que se pasa el mouse.
+La imagen queda tapada por un recuadro («Vista previa de la imagen del aviso»)
+que se abre al hacer clic.
+
 Alias `/announcements/` redirige aquí.
 
 ## Relación con otros módulos

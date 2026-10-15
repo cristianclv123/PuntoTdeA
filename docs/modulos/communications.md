@@ -101,7 +101,7 @@ Permiso `IsInternalService`: sesión autenticada o `X-Internal-Token`. Con `DEBU
 | Ruta | Uso |
 | --- | --- |
 | `/whatsapp-prueba/` | Enviar texto/plantilla de prueba, ventana 24 h |
-| `/whatsapp-prueba/resultados/` | Tablas de resultados por pestañas (estados, envíos, eventos, chats, destinatarios) |
+| `/whatsapp-prueba/resultados/` | Movimientos por pestañas (estados, eventos, chats, destinatarios, campañas en Meta) |
 | `/whatsapp-configuracion/` | Estado de variables |
 
 Ver [pagina-pruebas-whatsapp.md](../pagina-pruebas-whatsapp.md).

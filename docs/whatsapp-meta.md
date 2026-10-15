@@ -130,9 +130,11 @@ otra vez en revisión.
 La lista de Meta se consulta con `GET /campanas/api/templates/meta/`. Las
 campañas y los avisos seleccionan de esa lista solo las plantillas
 `APPROVED` y guardan un *snapshot* en la campaña; no hay llave foránea local.
-Las **plantillas de muestra** (`hello_world`) se listan marcadas como
-**PLANTILLA DE PRUEBA META**, con edición y borrado deshabilitados: Meta no las
-deja enviar desde un número real (`131058`) ni editar ni eliminar (`2388094`).
+Las **plantillas de muestra** (`hello_world`) se ocultan en esos selectores
+salvo que sean la única plantilla aprobada (cuenta de demostración): Meta no las
+deja enviar desde un número real (`131058`). En la página de plantillas sí se
+listan, marcadas como **PLANTILLA DE PRUEBA META**, con edición y borrado
+deshabilitados (Meta no las deja editar ni eliminar: `2388094`).
 
 > Requiere `WHATSAPP_BUSINESS_ACCOUNT_ID` (el ID de la WABA) además del
 > `META_ACCESS_TOKEN`. Sin eso, la página avisa "Falta configurar".
@@ -197,7 +199,7 @@ sesión de personal `staff`. El grupo no se renderiza para usuarios sin `is_staf
 | --- | --- | --- |
 | Configuración | `/whatsapp-configuracion/` | Estado de las variables, capacidades, callback a registrar en Meta y los comandos para aplicar los cambios. **Solo lectura.** |
 | Prueba de integración | `/whatsapp-prueba/` | Envío de mensajes y plantillas reales, más el estado de las variables. No muestra tablas: solo produce datos. Ver [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md). |
-| Resultados | `/whatsapp-prueba/resultados/` | Todo lo que Meta reporta de vuelta, organizado por pestañas: estados, envíos, eventos, conversaciones y destinatarios. Ver [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md). |
+| Movimientos | `/whatsapp-prueba/resultados/` | Todo lo que Meta reporta de vuelta, organizado por pestañas: estados, eventos, conversaciones, destinatarios y las campañas creadas en Meta. Ver [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md). |
 
 La página de configuración es deliberadamente de solo lectura: no hay ningún
 campo que escriba credenciales. Los secretos no travels por el navegador ni por
@@ -208,7 +210,7 @@ de un `docker compose up --force-recreate` que el navegador no puede lanzar.
 Las tres páginas comparten `communications/templates/communications/whatsapp_base.html`,
 que concentra los estilos, para que se vean igual.
 
-La consola **no simula nada**: todo lo que aparece en las tablas de resultados
+La consola **no simula nada**: todo lo que aparece en las tablas de movimientos
 viene de Meta de verdad, para que un problema real no se confunda con uno de
 demostración. La referencia completa está en
 [`pagina-pruebas-whatsapp.md`](pagina-pruebas-whatsapp.md).
@@ -216,7 +218,7 @@ demostración. La referencia completa está en
 Para probarla a mano, el recorrido es:
 
 1. Escribile **un saludo** al número de negocio desde un WhatsApp.
-2. Esperá unos segundos y recargá la página de **Resultados**
+2. Esperá unos segundos y recargá la página de **Movimientos**
    (`/whatsapp-prueba/resultados/`): tiene que aparecer un evento `inbound` y una
    conversación del bot.
 3. Dentro de las 24 horas siguientes, mandá un texto libre desde la página de
@@ -289,7 +291,7 @@ Notas:
 
 ## Validación
 
-La página de prueba (`/whatsapp-prueba/`) y la de resultados
+La página de prueba (`/whatsapp-prueba/`) y la de movimientos
 (`/whatsapp-prueba/resultados/`) son el lugar donde se comprueba la
 cadena completa. Antes de nada, revisá los dos puntos que más veces hacen creer
 que todo está bien cuando no llega nada, porque **no se pueden comprobar por
@@ -310,8 +312,8 @@ El recorrido que reproduce un envío de verdad:
 1. Pedile a alguien que escriba **un saludo** al número de negocio. El primer
    mensaje siempre se descarta y solo devuelve el saludo del bot, así que una
    conversación completa arranca con un saludo.
-2. Recargá la página de **Resultados**: el evento `inbound` aparece en
-   *Eventos del webhook* y el hilo del bot en *Conversaciones del bot*.
+2. Recargá la página de **Movimientos**: el evento `inbound` aparece en
+   *Eventos del webhook* y el hilo del bot en *Conversaciones del chatbot*.
 3. Mandá un texto libre desde el primer formulario. Dentro de las 24 horas
    debería llegar al celular. El indicador de ventana te dice si esas 24 horas
    siguen abiertas antes de mandarlo.
@@ -319,7 +321,7 @@ El recorrido que reproduce un envío de verdad:
    segundo formulario, que envía una plantilla aprobada.
 5. Cada envío queda registrado con su `wamid` real en la pestaña *Envíos de
    prueba*. Los estados que Meta reporte después aparecen agrupados por `wamid`
-   en *Estados por mensaje*, como `sent` → `delivered` → `read`.
+   en *Estados de entrega*, como `sent` → `delivered` → `read`.
 
 Un `POST /messages` puede devolver HTTP 200 con `wamid` y aun así no entregar:
 el fallo llega después como un estado `failed` con su `errors[]`. Por eso la

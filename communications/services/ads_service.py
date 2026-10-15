@@ -292,6 +292,24 @@ def get_business(fields: str = "id,name,verification_status") -> AdsResult:
     return AdsResult(True, "Portafolio leido.", {"business": body})
 
 
+def delete_object(object_id: str) -> AdsResult:
+    """Elimina en Meta una campana, un ad set, un creativo o un anuncio por id.
+
+    Borrar la campana arrastra sus ad sets y anuncios. Se usa para limpiar los
+    objetos huerfanos que dejan los intentos que fallan a mitad de camino. Las
+    imagenes subidas a `adimages` no se pueden borrar por id.
+    """
+    object_id = str(object_id or "").strip()
+    if not object_id:
+        return AdsResult(False, "Falta el id del objeto a eliminar.", error="configuracion")
+    ok, body, error = _call("DELETE", object_id)
+    if not ok:
+        return AdsResult(False, "No se pudo eliminar el objeto en Meta.", error=error)
+    if not bool(body.get("success", True)):
+        return AdsResult(False, "Meta no confirmo la eliminacion.", error="sin confirmacion")
+    return AdsResult(True, f"Objeto {object_id} eliminado.", {"id": object_id})
+
+
 # --------------------------------------------------------------------------- #
 # Audiencias personalizadas
 # --------------------------------------------------------------------------- #
@@ -440,26 +458,47 @@ def create_status_ad_set(
 
 
 def upload_ad_image(image: Any, *, name: str = "", content_type: str = "") -> AdsResult:
-    """Sube una imagen (ruta en disco o archivo abierto) y devuelve su hash."""
+    """Sube una imagen (ruta en disco o archivo abierto) y devuelve su hash.
+
+    `name` es solo la etiqueta del objeto en Meta; el nombre de archivo del
+    multipart sale del propio archivo (o de la ruta), nunca de `name`. Meta
+    decide el tipo por la **extension** del nombre y rechaza los nombres sin
+    extension con "Tipo de archivo no admitido" (code 100, subcode 1487411),
+    por muy correcto que sea el Content-Type.
+    """
     close_after = not hasattr(image, "read")
     file_obj = image
-    filename = name or "aviso.jpg"
+    filename = ""
     try:
         if close_after:
             file_obj = open(str(image), "rb")
-            filename = name or os.path.basename(str(image))
+            filename = os.path.basename(str(image))
         else:
-            filename = name or getattr(image, "name", "aviso.jpg") or "aviso.jpg"
+            filename = os.path.basename(str(getattr(image, "name", "") or ""))
+        if not filename:
+            filename = "aviso.jpg"
 
+        # MIME: parametro > extension del archivo > content_type del propio archivo.
         inferred_type = ""
-        if filename:
-            guessed, _ = mimetypes.guess_type(filename)
-            inferred_type = guessed or ""
+        guessed, _ = mimetypes.guess_type(filename)
+        if guessed:
+            inferred_type = guessed
         if not inferred_type and hasattr(file_obj, "content_type"):
-            inferred_type = str(getattr(file_obj, "content_type") or "")
+            obj_type = str(getattr(file_obj, "content_type") or "")
+            # Django marca text/plain cuando el navegador no envia tipo; no sirve.
+            if obj_type and obj_type != "text/plain":
+                inferred_type = obj_type
+        passed_type = (content_type or "").strip()
+        if passed_type.lower() in {"", "text/plain", "application/octet-stream"}:
+            passed_type = ""
+        mime_type = (passed_type or inferred_type or "image/jpeg").strip() or "image/jpeg"
 
-        mime_type = (content_type or inferred_type or "image/jpeg").strip() or "image/jpeg"
-        data = {"name": filename}
+        # Sin extension Meta no reconoce el archivo: se la agregamos segun el MIME.
+        if not os.path.splitext(filename)[1]:
+            ext = mimetypes.guess_extension(mime_type.split(";")[0].strip()) or ".jpg"
+            filename += ext
+
+        data = {"name": (name or filename)}
         ok, body, error = _call(
             "POST",
             f"{ad_account_id()}/adimages",

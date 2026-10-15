@@ -18,6 +18,7 @@ from drf_spectacular.views import (
 
 from communications import views as communications_views
 from communications.meta_console_views import config as meta_console_config
+from communications.meta_console_views import delete_meta_ad as meta_console_delete_ad
 from communications.meta_console_views import health as meta_console_health
 from communications.meta_console_views import index as meta_console_index
 from communications.meta_console_views import results as meta_console_results
@@ -47,6 +48,11 @@ urlpatterns = [
         'whatsapp-prueba/resultados/',
         meta_console_results,
         name='meta-whatsapp-results',
+    ),
+    path(
+        'whatsapp-prueba/resultados/eliminar/',
+        meta_console_delete_ad,
+        name='meta-whatsapp-results-delete',
     ),
     path('whatsapp-prueba/enviar/', meta_console_send, name='meta-whatsapp-test-send'),
     path(

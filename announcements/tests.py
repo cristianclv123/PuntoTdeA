@@ -80,6 +80,12 @@ class AnnouncementViewsTests(TestCase):
         self.assertContains(response, 'value="create"')
         self.assertContains(response, 'value="publish_status_create"')
         self.assertContains(response, "Sin publicar")
+        # Vista previa tipo estado de WhatsApp, actualizada por JS.
+        self.assertContains(response, 'id="aviso-preview"')
+        self.assertContains(response, 'id="status-preview-media"')
+        self.assertContains(response, 'id="status-preview-image"')
+        self.assertContains(response, 'id="status-preview-cover"')
+        self.assertContains(response, 'id="status-preview-title"')
 
     def test_create_button_only_saves(self):
         segment = self._segment_with_contact()
