@@ -147,6 +147,24 @@ class AdsServiceApiTests(TestCase):
         )
 
     @patch("communications.services.ads_service.requests.request")
+    def test_delete_object_calls_delete_and_reports_success(self, request):
+        request.return_value = _ok_response({"success": True})
+
+        result = ads_service.delete_object("52600610368322")
+
+        self.assertTrue(result.ok)
+        args, _kwargs = request.call_args
+        self.assertEqual(args[0], "DELETE")
+        self.assertTrue(args[1].endswith("/52600610368322"))
+
+    @patch("communications.services.ads_service.requests.request")
+    def test_delete_object_without_id_never_calls_meta(self, request):
+        result = ads_service.delete_object("")
+
+        self.assertFalse(result.ok)
+        request.assert_not_called()
+
+    @patch("communications.services.ads_service.requests.request")
     def test_upload_ad_image_keeps_extension_though_label_has_none(self, request):
         # create_status_ad pasa el nombre del anuncio como `name`; el nombre de
         # archivo debe salir del propio archivo (Meta rechaza nombres sin

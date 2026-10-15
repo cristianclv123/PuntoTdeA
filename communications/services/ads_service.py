@@ -292,6 +292,24 @@ def get_business(fields: str = "id,name,verification_status") -> AdsResult:
     return AdsResult(True, "Portafolio leido.", {"business": body})
 
 
+def delete_object(object_id: str) -> AdsResult:
+    """Elimina en Meta una campana, un ad set, un creativo o un anuncio por id.
+
+    Borrar la campana arrastra sus ad sets y anuncios. Se usa para limpiar los
+    objetos huerfanos que dejan los intentos que fallan a mitad de camino. Las
+    imagenes subidas a `adimages` no se pueden borrar por id.
+    """
+    object_id = str(object_id or "").strip()
+    if not object_id:
+        return AdsResult(False, "Falta el id del objeto a eliminar.", error="configuracion")
+    ok, body, error = _call("DELETE", object_id)
+    if not ok:
+        return AdsResult(False, "No se pudo eliminar el objeto en Meta.", error=error)
+    if not bool(body.get("success", True)):
+        return AdsResult(False, "Meta no confirmo la eliminacion.", error="sin confirmacion")
+    return AdsResult(True, f"Objeto {object_id} eliminado.", {"id": object_id})
+
+
 # --------------------------------------------------------------------------- #
 # Audiencias personalizadas
 # --------------------------------------------------------------------------- #

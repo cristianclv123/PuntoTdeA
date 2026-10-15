@@ -1,7 +1,7 @@
 {% extends "communications/whatsapp_base.html" %}
 
-{% block title %}Resultados WhatsApp (Meta) — Punto TdeA{% endblock %}
-{% block page_title %}Resultados de la integración{% endblock %}
+{% block title %}Movimientos WhatsApp (Meta) — Punto TdeA{% endblock %}
+{% block page_title %}Movimientos de la integración{% endblock %}
 {% block page_subtitle %}Lo que Meta reporta de vuelta, por pestañas{% endblock %}
 
 {% block wa_content %}
@@ -18,6 +18,7 @@
     <button type="button" class="wa-tab" role="tab" data-wa-tab="eventos">Eventos del webhook</button>
     <button type="button" class="wa-tab" role="tab" data-wa-tab="chats">Conversaciones del bot</button>
     <button type="button" class="wa-tab" role="tab" data-wa-tab="destinatarios">Destinatarios de campaña</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="campanas">Campañas en Meta</button>
   </div>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="estados">
@@ -206,6 +207,61 @@
         Todavía no hay destinatarios de campaña con <code>wamid</code>. Aparecen
         cuando se envía una campaña y Meta devuelve el identificador de cada
         mensaje.
+      </p>
+    {% endif %}
+  </section>
+
+  <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="campanas">
+    <h2>Campañas en Meta</h2>
+    <p class="hint">
+      Objetos que la integración creó en la cuenta de anuncios (Marketing API).
+      Un intento es <strong>huérfano</strong> cuando falló después de crear la
+      campaña o el ad set y nunca llegó a tener anuncio: deja objetos sueltos
+      ocupando la cuenta. «Eliminar» borra la <strong>campaña completa</strong>
+      en Meta (arrastra sus ad sets y anuncios) y limpia el rastro local.
+    </p>
+    {% if meta_ads %}
+      <table class="wa-table">
+        <thead>
+          <tr>
+            <th>Aviso</th><th>Estado</th><th>Campaña</th><th>Ad set</th>
+            <th>Creado</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in meta_ads %}
+            <tr>
+              <td style="max-width:15rem">
+                {{ row.status_ad.announcement.title|truncatechars:32 }}
+                {% if row.orphan %}<span class="wa-tag warn">huérfano</span>{% endif %}
+                {% if row.orphan and row.status_ad.error %}
+                  <div class="wa-err">{{ row.status_ad.error|truncatechars:130 }}</div>
+                {% endif %}
+              </td>
+              <td><span class="wa-chip">{{ row.status_ad.get_state_display }}</span></td>
+              <td><code style="font-size:.72rem">{{ row.status_ad.campaign_id|default:"—" }}</code></td>
+              <td><code style="font-size:.72rem">{{ row.status_ad.ad_set_id|default:"—" }}</code></td>
+              <td class="wa-thread-meta">{{ row.status_ad.created_at|date:"d/m H:i" }}</td>
+              <td>
+                {% if row.delete_id %}
+                  <form method="post" action="{% url 'meta-whatsapp-results-delete' %}"
+                        onsubmit="return confirm('¿Eliminar la {{ row.delete_label }} {{ row.delete_id }} en Meta? No se puede deshacer.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="status_ad" value="{{ row.status_ad.id }}">
+                    <button type="submit" class="wa-btn alt" style="padding:.3rem .7rem;font-size:.75rem">Eliminar</button>
+                  </form>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="hint" style="margin:0">
+        Todavía no hay campañas creadas por la integración. Aparecen al publicar
+        un aviso en WhatsApp Status desde <a href="{% url 'announcements:index' %}">/avisos/</a>.
       </p>
     {% endif %}
   </section>

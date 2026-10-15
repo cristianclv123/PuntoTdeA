@@ -8,6 +8,9 @@ from unittest.mock import patch
 
 from communications import meta_console_views
 from communications.services import meta_config, meta_templates
+from communications.services.ads_service import AdsResult
+
+from announcements.models import Announcement, StatusAd
 
 
 class MetaConfigStatusTests(TestCase):
@@ -276,8 +279,14 @@ class MetaResultsPageTests(TestCase):
             "Eventos del webhook",
             "Conversaciones del bot",
             "Destinatarios de campaña",
+            "Campañas en Meta",
         ):
             self.assertContains(response, label)
+
+    def test_the_page_is_named_movimientos(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "Movimientos de la integración")
 
     def test_the_form_page_links_to_the_results_page(self):
         self.client.force_login(self.staff)
@@ -290,6 +299,76 @@ class MetaResultsPageTests(TestCase):
         response = self.client.get(reverse("meta-whatsapp-test"))
         self.assertNotContains(response, "Recorrido completo")
         self.assertNotContains(response, "Estados por mensaje")
+
+
+class MetaAdsCleanupTests(TestCase):
+    """La pestaña «Campañas en Meta» lista los objetos y permite borrarlos."""
+
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-results")
+        self.delete_url = reverse("meta-whatsapp-results-delete")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+        self.regular = get_user_model().objects.create_user(
+            username="asesor", password="x"
+        )
+        self.announcement = Announcement.objects.create(
+            title="Aviso de prueba", content="Hola"
+        )
+        # Intento fallido: creó campaña y ad set, pero nunca llegó al anuncio.
+        self.status_ad = StatusAd.objects.create(
+            announcement=self.announcement,
+            campaign_id="111",
+            ad_set_id="222",
+            state=StatusAd.State.ERROR,
+            error="app en modo desarrollo",
+        )
+
+    def test_tab_lists_the_campaign_and_flags_the_orphan(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "Campañas en Meta")
+        self.assertContains(response, "111")
+        self.assertContains(response, "huérfano")
+
+    def test_the_delete_action_requires_staff(self):
+        self.client.force_login(self.regular)
+        response = self.client.post(self.delete_url, {"status_ad": self.status_ad.id})
+        self.assertEqual(response.status_code, 302)
+        self.status_ad.refresh_from_db()
+        self.assertEqual(self.status_ad.campaign_id, "111")
+
+    def test_the_delete_action_requires_post(self):
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(self.delete_url).status_code, 405)
+
+    @patch("communications.services.ads_service.delete_object")
+    def test_delete_calls_meta_and_clears_the_trace(self, delete_object):
+        delete_object.return_value = AdsResult(True, "ok", {"id": "111"})
+        self.client.force_login(self.staff)
+
+        response = self.client.post(self.delete_url, {"status_ad": self.status_ad.id})
+
+        self.assertEqual(response.status_code, 302)
+        delete_object.assert_called_once_with("111")
+        self.status_ad.refresh_from_db()
+        self.assertEqual(self.status_ad.campaign_id, "")
+        self.assertEqual(self.status_ad.ad_set_id, "")
+        self.assertEqual(self.status_ad.state, StatusAd.State.DRAFT)
+
+    @patch("communications.services.ads_service.delete_object")
+    def test_delete_reports_the_meta_error_and_keeps_the_trace(self, delete_object):
+        delete_object.return_value = AdsResult(False, "no", error="boom")
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            self.delete_url, {"status_ad": self.status_ad.id}, follow=True
+        )
+
+        self.assertContains(response, "No se pudo eliminar")
+        self.status_ad.refresh_from_db()
+        self.assertEqual(self.status_ad.campaign_id, "111")
 
 
 class SampleTemplateLabelTests(TestCase):

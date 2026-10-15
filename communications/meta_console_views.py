@@ -14,7 +14,7 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.http import HttpRequest, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -24,6 +24,7 @@ from communications.models import (
     BroadcastRecipient,
     WhatsAppWebhookEvent,
 )
+from communications.services import ads_service
 from communications.services import meta_config, meta_diagnostics, meta_errors
 from communications.services import meta_templates
 from communications.services.test_send_registry import (
@@ -191,12 +192,13 @@ def index(request: HttpRequest):
 
 @_staff_required
 def results(request: HttpRequest):
-    """Tablas de resultados: lo que Meta reporta de vuelta por webhook.
+    """Movimientos de la integracion: lo que Meta reporta de vuelta.
 
     Reúne en una sola página los estados por `wamid`, los envíos de prueba, los
-    eventos del webhook, las conversaciones del bot y los destinatarios de
-    campaña. Se separó de la página de prueba para no amontonar cinco tablas
-    distintas debajo de los formularios; la plantilla las organiza por pestañas.
+    eventos del webhook, las conversaciones del bot, los destinatarios de
+    campaña y los objetos que la integración creó en la cuenta de anuncios. Se
+    separó de la página de prueba para no amontonar seis tablas distintas
+    debajo de los formularios; la plantilla las organiza por pestañas.
     """
     context = {
         "threads": status_threads(),
@@ -211,9 +213,111 @@ def results(request: HttpRequest):
             .order_by("-id")[:10]
         ),
         "chats": recent_chats(),
+        "meta_ads": meta_ad_rows(),
         "active_nav": "whatsapp-results",
     }
     return render(request, "communications/whatsapp_results.html", context)
+
+
+def _deletable_target(status_ad) -> tuple[str, str, str]:
+    """Primer objeto de Meta que existe en el rastro: (campo, id, etiqueta).
+
+    Se prefiere la campaña porque borrarla arrastra sus ad sets y anuncios.
+    """
+    for attr, label in (
+        ("campaign_id", "campaña"),
+        ("ad_set_id", "ad set"),
+        ("creative_id", "creativo"),
+        ("ad_id", "anuncio"),
+    ):
+        value = str(getattr(status_ad, attr, "") or "").strip()
+        if value:
+            return attr, value, label
+    return "", "", ""
+
+
+def meta_ad_rows(limit: int = 40) -> list[dict]:
+    """Objetos creados en la cuenta de anuncios, listos para la tabla.
+
+    Un intento es **huérfano** cuando falló después de crear la campaña o el ad
+    set y nunca llegó a tener anuncio: quedan objetos sueltos ocupando la
+    cuenta. El import es local porque `announcements` ya importa `communications`
+    (importarlo arriba cerraría el ciclo al cargar URLs).
+    """
+    from django.db.models import Q
+
+    from announcements.models import StatusAd
+
+    queryset = (
+        StatusAd.objects.select_related("announcement")
+        .filter(
+            Q(campaign_id__gt="")
+            | Q(ad_set_id__gt="")
+            | Q(creative_id__gt="")
+            | Q(ad_id__gt="")
+        )
+        .order_by("-created_at")[:limit]
+    )
+    rows = []
+    for status_ad in queryset:
+        attr, object_id, label = _deletable_target(status_ad)
+        rows.append(
+            {
+                "status_ad": status_ad,
+                "orphan": not status_ad.ad_id and status_ad.state == StatusAd.State.ERROR,
+                "delete_attr": attr,
+                "delete_id": object_id,
+                "delete_label": label,
+            }
+        )
+    return rows
+
+
+@_staff_required
+@require_POST
+def delete_meta_ad(request: HttpRequest):
+    """Elimina en Meta la campaña (u objeto) de un intento y limpia su rastro.
+
+    Sirve para borrar los objetos huérfanos que dejan los intentos fallidos.
+    Borrar la campaña arrastra sus ad sets y anuncios.
+    """
+    from announcements.models import StatusAd
+
+    status_ad = get_object_or_404(StatusAd, pk=request.POST.get("status_ad"))
+    attr, object_id, label = _deletable_target(status_ad)
+    if not object_id:
+        messages.error(request, "Ese intento no tiene objetos creados en Meta.")
+        return redirect("meta-whatsapp-results")
+
+    result = ads_service.delete_object(object_id)
+    if not result.ok:
+        messages.error(
+            request,
+            f"No se pudo eliminar la {label} {object_id} en Meta: "
+            f"{result.error or result.summary}",
+        )
+        return redirect("meta-whatsapp-results")
+
+    status_ad.campaign_id = ""
+    status_ad.ad_set_id = ""
+    status_ad.creative_id = ""
+    status_ad.ad_id = ""
+    status_ad.state = StatusAd.State.DRAFT
+    note = f"[{timezone.now():%Y-%m-%d %H:%M}] Se eliminó {label} {object_id} en Meta."
+    status_ad.error = f"{status_ad.error} {note}".strip() if status_ad.error else note
+    status_ad.save(
+        update_fields=[
+            "campaign_id",
+            "ad_set_id",
+            "creative_id",
+            "ad_id",
+            "state",
+            "error",
+            "updated_at",
+        ]
+    )
+    messages.success(request, f"Se eliminó la {label} {object_id} en Meta.")
+    return redirect("meta-whatsapp-results")
 
 
 @_staff_required

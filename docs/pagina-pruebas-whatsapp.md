@@ -1,4 +1,4 @@
-# La consola de WhatsApp: pruebas (`/whatsapp-prueba/`) y resultados (`/whatsapp-prueba/resultados/`)
+# La consola de WhatsApp: pruebas (`/whatsapp-prueba/`) y movimientos (`/whatsapp-prueba/resultados/`)
 
 Documento de referencia de la consola interna que verifica la integración con
 Meta WhatsApp Cloud API. Explica qué hace cada sección, qué ocurre en cada lado
@@ -6,7 +6,7 @@ Meta WhatsApp Cloud API. Explica qué hace cada sección, qué ocurre en cada la
 Dashboard para que todo funcione.
 
 La consola son **dos páginas**: la de **prueba**, donde se envían mensajes y
-plantillas reales, y la de **resultados**, donde se lee lo que Meta reporta de
+plantillas reales, y la de **movimientos**, donde se lee lo que Meta reporta de
 vuelta.
 
 **No es parte del producto.** No la ven los estudiantes ni los coordinadores.
@@ -37,10 +37,11 @@ interpretación genérica. Eso obliga a que cada paso sea verificable por fuera.
 Dos columnas: a la izquierda, los formularios que producen datos (envío de texto
 y de plantilla); a la derecha, el estado de la configuración. No tiene tablas.
 
-### Página de resultados (`/whatsapp-prueba/resultados/`)
+### Página de movimientos (`/whatsapp-prueba/resultados/`)
 
-Cinco pestañas con lo que Meta reporta de vuelta: estados por mensaje, envíos de
-prueba, eventos del webhook, conversaciones del bot y destinatarios de campaña.
+Seis pestañas con lo que Meta reporta de vuelta: estados por mensaje, envíos de
+prueba, eventos del webhook, conversaciones del bot, destinatarios de campaña y
+campañas creadas en Meta.
 
 Se separaron a propósito: los formularios y las tablas se usan en momentos
 distintos y, juntos, obligaban a recorrer media página para llegar a lo de abajo.
@@ -106,10 +107,11 @@ Graph API"**, que sí hace la consulta real:
 La diferencia es importante: una variable puede estar perfectamente escrita y el
 token llevar meses revocado. Solo la segunda consulta lo detecta.
 
-### Página de resultados: las cinco pestañas
+### Página de movimientos: las seis pestañas
 
 Al entrar se abre la primera pestaña. La URL admite un ancla (`#estados`,
-`#envios`, `#eventos`, `#chats`, `#destinatarios`) para enlazar una concreta.
+`#envios`, `#eventos`, `#chats`, `#destinatarios`, `#campanas`) para enlazar una
+concreta.
 
 #### 2.4 Estados por mensaje
 
@@ -161,6 +163,22 @@ Aparece solo si hay destinatarios. Son los registros contra los que Meta aplica
 los estados de las campañas: cuando llega un `status`, se busca el destinatario
 por su `provider_message_id` y se actualiza su estado y su `read_at`.
 
+#### 2.9 Campañas en Meta
+
+Los objetos que la integración creó en la **cuenta de anuncios** (Marketing API)
+al publicar avisos en WhatsApp Status: campaña, ad set, creativo y anuncio, con
+el aviso de origen y el estado del intento.
+
+Un intento es **huérfano** cuando falló después de crear la campaña o el ad set
+y nunca llegó a tener anuncio (por ejemplo, un aviso publicado con la app en
+modo Development: crea campaña y ad set, pero el creativo se rechaza con
+`1885183`). Esos objetos quedan sueltos ocupando la cuenta.
+
+Cada fila tiene un botón **Eliminar** que borra el objeto en Meta con
+`DELETE /{id}` y limpia el rastro local. Se elimina la **campaña** cuando existe,
+porque arrastra sus ad sets y anuncios; si no hubiera campaña, borra el ad set,
+el creativo o el anuncio, en ese orden.
+
 ---
 
 ## 3. Los tres flujos, paso a paso
@@ -190,7 +208,7 @@ por su `provider_message_id` y se actualiza su estado y su `read_at`.
    la mandamos nosotros a Meta con la API.
 5. Devuelve `200`.
 
-**Qué se ve en la página de resultados.** Un evento `inbound` en "Eventos del
+**Qué se ve en la página de movimientos.** Un evento `inbound` en "Eventos del
 webhook" y una conversación nueva en "Conversaciones del bot". Si no aparece
 nada, Meta no está llegando: el problema está en la configuración del App
 Dashboard (§5), no en el código.
