@@ -311,7 +311,7 @@ El recorrido que reproduce un envío de verdad:
    mensaje siempre se descarta y solo devuelve el saludo del bot, así que una
    conversación completa arranca con un saludo.
 2. Recargá la página de **Movimientos**: el evento `inbound` aparece en
-   *Eventos del webhook* y el hilo del bot en *Conversaciones del bot*.
+   *Eventos del webhook* y el hilo del bot en *Conversaciones del chatbot*.
 3. Mandá un texto libre desde el primer formulario. Dentro de las 24 horas
    debería llegar al celular. El indicador de ventana te dice si esas 24 horas
    siguen abiertas antes de mandarlo.
@@ -319,7 +319,7 @@ El recorrido que reproduce un envío de verdad:
    segundo formulario, que envía una plantilla aprobada.
 5. Cada envío queda registrado con su `wamid` real en la pestaña *Envíos de
    prueba*. Los estados que Meta reporte después aparecen agrupados por `wamid`
-   en *Estados por mensaje*, como `sent` → `delivered` → `read`.
+   en *Estados de entrega*, como `sent` → `delivered` → `read`.
 
 Un `POST /messages` puede devolver HTTP 200 con `wamid` y aun así no entregar:
 el fallo llega después como un estado `failed` con su `errors[]`. Por eso la

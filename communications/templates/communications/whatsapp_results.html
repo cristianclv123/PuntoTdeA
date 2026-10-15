@@ -2,7 +2,7 @@
 
 {% block title %}Movimientos WhatsApp (Meta) — Punto TdeA{% endblock %}
 {% block page_title %}Movimientos de la integración{% endblock %}
-{% block page_subtitle %}Lo que Meta reporta de vuelta, por pestañas{% endblock %}
+{% block page_subtitle %}Registro de lo que Meta reporta al webhook y de lo que crea la integración{% endblock %}
 
 {% block wa_content %}
 
@@ -12,23 +12,32 @@
     <a href="{% url 'meta-whatsapp-test' %}">Prueba de integración</a>.
   </p>
 
+  <details class="wa-note" style="margin:0 0 .75rem; border:1px solid var(--border); border-radius:10px; padding:.5rem .7rem">
+    <summary style="cursor:pointer; color:var(--text)">¿Cómo leer Movimientos?</summary>
+    <div style="margin-top:.4rem; line-height:1.5">
+      • <strong>Asíncrono</strong>: un POST al enviar devuelve <code>wamid</code> (Meta aceptó), los estados (<code>sent</code> → <code>delivered</code> → <code>read</code> o <code>failed</code>) llegan por POST al webhook.
+      • <strong>Correlación por wamid</strong>: copiá el <code>wamid</code> de <em>Envíos de prueba</em> o <em>Destinatarios de campañas</em> y buscalo en <em>Estados de entrega</em>.
+      • <strong>Webhook crudo</strong>: <em>Eventos del webhook</em> muestra lo recibido (útil para detectar duplicados/reintentos).
+      • <strong>Huérfanos</strong>: en <em>Objetos creados en Meta</em>, "huérfano" = campaña/ad set creados pero sin anuncio (falló el creativo, p.ej. app en modo Development).
+    </div>
+  </details>
+
+  <input id="wamid-filter" placeholder="Filtrar por wamid..." class="wa-input" style="max-width:26rem;margin:0 0 .75rem">
+
   <div class="wa-tabs" role="tablist">
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="estados">Estados por mensaje</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="envios">Envíos de prueba</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="eventos">Eventos del webhook</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="chats">Conversaciones del bot</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="destinatarios">Destinatarios de campaña</button>
-    <button type="button" class="wa-tab" role="tab" data-wa-tab="campanas">Campañas en Meta</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="estados">Estados de entrega (por wamid)</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="envios">Envíos de prueba (con wamid)</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="eventos">Eventos del webhook (crudos)</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="chats">Conversaciones del chatbot (WhatsApp)</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="destinatarios">Destinatarios de campañas (con wamid)</button>
+    <button type="button" class="wa-tab" role="tab" data-wa-tab="campanas">Objetos creados en Meta (campañas/ad sets/creativos/anuncios)</button>
   </div>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="estados">
-    <h2>Estados por mensaje</h2>
+    <h2>Estados de entrega (por wamid)</h2>
     <p class="hint">
       Cada fila agrupa los estados de un mismo <code>wamid</code>, en el orden en
-      que los reportó Meta. <strong>Un envío hecho desde la página de pruebas
-      queda registrado con su <code>wamid</code></strong>, así que aquí vas a ver
-      <code>sent</code> → <code>delivered</code> → <code>read</code> tal como
-      los reporta Meta.
+      que los reportó Meta. <strong>Un 200 solo confirma que Meta aceptó el mensaje. La entrega es asíncrona</strong>: los estados llegan por POST al webhook. Buscá el <code>wamid</code> en <em>Envíos de prueba</em> o <em>Destinatarios de campañas</em> para correlacionar.
     </p>
     {% if threads %}
       {% for thread in threads %}
@@ -63,11 +72,11 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="envios">
-    <h2>Envíos de prueba con wamid</h2>
+    <h2>Envíos de prueba (con wamid)</h2>
     <p class="hint">
       Cada envío hecho desde la página de pruebas, con el <code>wamid</code> real
-      que devolvió Meta. Copiá uno y buscá esa misma cadena en
-      <strong>Estados por mensaje</strong> para ver cómo avanzó sus estados.
+      que devolvió Meta. Copiá uno y usalo para buscarlo en
+      <strong>Estados de entrega (por wamid)</strong>.
     </p>
     {% if test_sends %}
       <table class="wa-table">
@@ -105,10 +114,9 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="eventos">
-    <h2>Eventos del webhook</h2>
+    <h2>Eventos del webhook (crudos)</h2>
     <p class="hint">
-      {{ event_count }} evento(s) registrado(s). Sirven para confirmar que Meta sí está llegando
-      y para verificar que los reintentos no se procesen dos veces.
+      {{ event_count }} evento(s) registrado(s). POSTs reales a <code>/api/whatsapp/webhook/</code>. Cada evento tiene una <code>event_key</code> única (los reintentos de Meta no duplican el procesamiento). Si <strong>Procesado</strong> aparece como <em>pendiente</em>, Meta envió el evento pero su procesamiento no terminó.
     </p>
     {% if recent_events %}
       <table class="wa-table">
@@ -144,12 +152,9 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="chats">
-    <h2>Conversaciones del bot</h2>
+    <h2>Conversaciones del chatbot (WhatsApp)</h2>
     <p class="hint">
-      Últimas conversaciones originadas por WhatsApp. Ojo: <strong>el primer
-      mensaje siempre se descarta y solo devuelve el saludo</strong>, sin importar
-      qué escriba la persona. Para una conversación completa, el primer mensaje
-      tiene que ser un saludo.
+      Últimas conversaciones originadas por WhatsApp. <strong>El primer mensaje siempre se descarta y solo devuelve el saludo</strong>, sin importar qué escriba la persona. Para una conversación completa, el primer mensaje tiene que ser un saludo.
     </p>
     {% if chats %}
       {% for chat in chats %}
@@ -182,8 +187,8 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="destinatarios">
-    <h2>Destinatarios de campaña con wamid</h2>
-    <p class="hint">Los estados de Meta se aplican a estos destinatarios por su <code>provider_message_id</code>.</p>
+    <h2>Destinatarios de campañas (con wamid)</h2>
+    <p class="hint">Los estados de Meta se aplican a estos destinatarios por su <code>provider_message_id</code> (wamid). Copiá el wamid para buscarlo en <strong>Estados de entrega (por wamid)</strong>.</p>
     {% if recent_recipients %}
       <table class="wa-table">
         <thead>
@@ -212,13 +217,9 @@
   </section>
 
   <section class="wa-card wa-panel" role="tabpanel" data-wa-panel="campanas">
-    <h2>Campañas en Meta</h2>
+    <h2>Objetos creados en Meta (campañas/ad sets/creativos/anuncios)</h2>
     <p class="hint">
-      Objetos que la integración creó en la cuenta de anuncios (Marketing API).
-      Un intento es <strong>huérfano</strong> cuando falló después de crear la
-      campaña o el ad set y nunca llegó a tener anuncio: deja objetos sueltos
-      ocupando la cuenta. «Eliminar» borra la <strong>campaña completa</strong>
-      en Meta (arrastra sus ad sets y anuncios) y limpia el rastro local.
+      Objetos que la integración creó en la cuenta de anuncios (Marketing API) al publicar avisos en WhatsApp Status. Un intento es <strong>huérfano</strong> cuando falló después de crear la campaña o el ad set y nunca llegó a crear el anuncio (p.ej. app en modo Development → crea campaña/ad set pero rechaza el creativo). Borrar borra la <strong>campaña completa</strong> en Meta (arrastra ad sets y anuncios) y limpia el rastro local.
     </p>
     {% if meta_ads %}
       <table class="wa-table">
@@ -285,14 +286,32 @@
       });
     }
     tabs.forEach(function (tab) {
-      tab.addEventListener('click', function () { activate(tab.dataset.waTab); });
+      tab.addEventListener('click', function () {
+        activate(tab.dataset.waTab);
+        try { history.replaceState(null, '', '#' + tab.dataset.waTab); } catch (e) {}
+      });
     });
+
     // Si la URL trae un ancla (#eventos), se abre esa pestaña directamente.
     const hash = (window.location.hash || '').replace('#', '');
     const known = Array.prototype.some.call(tabs, function (tab) {
       return tab.dataset.waTab === hash;
     });
     if (tabs.length) activate(known ? hash : tabs[0].dataset.waTab);
+
+    // Filtro libre: oculta las filas de la pestaña activa que no coincidan.
+    const filter = document.getElementById('wamid-filter');
+    if (filter) {
+      filter.addEventListener('input', function () {
+        const query = filter.value.toLowerCase().trim();
+        document
+          .querySelectorAll('.wa-panel.active .wa-row, .wa-panel.active tbody tr')
+          .forEach(function (row) {
+            const text = (row.textContent || '').toLowerCase();
+            row.style.display = query && text.indexOf(query) === -1 ? 'none' : '';
+          });
+      });
+    }
 
     // Copiar wamid al portapapeles.
     document.querySelectorAll('[data-copy]').forEach(function (button) {

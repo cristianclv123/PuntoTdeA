@@ -109,11 +109,24 @@ token llevar meses revocado. Solo la segunda consulta lo detecta.
 
 ### Página de movimientos: las seis pestañas
 
+Arriba hay un bloque plegable **"¿Cómo leer Movimientos?"** con las cuatro ideas
+que cuesta recordar de una integración asíncrona:
+
+- el `200` al enviar solo significa "Meta aceptó"; los estados llegan por webhook;
+- la correlación se hace por `wamid`;
+- los eventos del webhook son el registro crudo (sirve para ver reintentos);
+- "huérfano" es un objeto de Meta sin anuncio.
+
+Debajo de ese bloque hay un **filtro libre** ("Filtrar por wamid..."): oculta las
+filas de la pestaña activa que no contengan el texto buscado. Es la forma más
+rápida de seguir un `wamid`: se copia de *Envíos de prueba* o *Destinatarios de
+campañas* y se pega en el filtro.
+
 Al entrar se abre la primera pestaña. La URL admite un ancla (`#estados`,
 `#envios`, `#eventos`, `#chats`, `#destinatarios`, `#campanas`) para enlazar una
-concreta.
+concreta; al pulsar una pestaña la barra de direcciones se actualiza.
 
-#### 2.4 Estados por mensaje
+#### 2.4 Estados de entrega (por wamid)
 
 Agrupa los eventos de estado de un mismo `wamid` en el orden en que los reportó
 Meta, formando una línea de tiempo: `sent` → `delivered` → `read`, o
@@ -123,17 +136,18 @@ Un envío hecho desde la página de prueba queda registrado con su `wamid` real,
 así que esta tabla se llena sola. Si un estado llega `failed`, se muestra el
 código y el texto de error de Meta traducidos a algo accionable (ver §4).
 
-#### 2.5 Envíos de prueba con wamid
+#### 2.5 Envíos de prueba (con wamid)
 
 Cada envío hecho desde la página de prueba, con el `wamid` que devolvió Meta y un
-botón para copiarlo. Sirve para correlacionar: copiá un `wamid` y buscá esa
-misma cadena en "Estados por mensaje" para ver cómo avanzó.
+botón para copiarlo. Sirve para correlacionar: copiá un `wamid` y usalo en el
+filtro o buscá esa misma cadena en "Estados de entrega (por wamid)" para ver cómo
+avanzó.
 
 Estos registros se guardan en la misma tabla que los eventos del webhook, con
 una clave que los distingue. Por eso los mensajes de `error 131047` y compañía
 quedan guardados aunque el webhook nunca los reporte.
 
-#### 2.6 Eventos del webhook
+#### 2.6 Eventos del webhook (crudos)
 
 Todo lo que Meta ha enviado por POST al callback, con su marca de procesamiento.
 
@@ -146,7 +160,7 @@ También sirve para verificar **idempotencia**: cada evento tiene una
 `event_key` única, así que si Meta reintenta un POST, el segundo intento se
 registra como duplicado y no se procesa dos veces.
 
-#### 2.7 Conversaciones del bot
+#### 2.7 Conversaciones del chatbot (WhatsApp)
 
 Las conversaciones originadas por WhatsApp, con el último mensaje de la persona
 y la última respuesta del bot.
@@ -157,13 +171,13 @@ la persona. Es el comportamiento del chatbot (`knowledge/chatbot/whatsapp.py`),
 no un error. Para una conversación completa, el primer mensaje tiene que ser un
 saludo.
 
-#### 2.8 Destinatarios de campaña con wamid
+#### 2.8 Destinatarios de campañas (con wamid)
 
 Aparece solo si hay destinatarios. Son los registros contra los que Meta aplica
 los estados de las campañas: cuando llega un `status`, se busca el destinatario
 por su `provider_message_id` y se actualiza su estado y su `read_at`.
 
-#### 2.9 Campañas en Meta
+#### 2.9 Objetos creados en Meta (campañas/ad sets/creativos/anuncios)
 
 Los objetos que la integración creó en la **cuenta de anuncios** (Marketing API)
 al publicar avisos en WhatsApp Status: campaña, ad set, creativo y anuncio, con
@@ -209,7 +223,7 @@ el creativo o el anuncio, en ese orden.
 5. Devuelve `200`.
 
 **Qué se ve en la página de movimientos.** Un evento `inbound` en "Eventos del
-webhook" y una conversación nueva en "Conversaciones del bot". Si no aparece
+webhook" y una conversación nueva en "Conversaciones del chatbot". Si no aparece
 nada, Meta no está llegando: el problema está en la configuración del App
 Dashboard (§5), no en el código.
 

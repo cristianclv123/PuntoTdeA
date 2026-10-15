@@ -266,7 +266,7 @@ payload, la firma ni la capa HTTP.
 
 Hace falta un WhatsApp de verdad. Escribile **un saludo** al número de negocio y
 recargá la página **WhatsApp (Meta) → Movimientos**: el evento `inbound` aparece
-en *Eventos del webhook* y el hilo en *Conversaciones del bot*.
+en *Eventos del webhook* y el hilo en *Conversaciones del chatbot*.
 Mandá el segundo turno desde un WhatsApp cualquiera (no hace falta el de la
 persona) y seguí la conversación. Como el bot responde al número que escribió,
 el intercambio se ve en la página pero la otra persona no ve nada: es lo

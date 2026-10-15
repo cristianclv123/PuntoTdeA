@@ -274,12 +274,12 @@ class MetaResultsPageTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         for label in (
-            "Estados por mensaje",
-            "Envíos de prueba",
-            "Eventos del webhook",
-            "Conversaciones del bot",
-            "Destinatarios de campaña",
-            "Campañas en Meta",
+            "Estados de entrega (por wamid)",
+            "Envíos de prueba (con wamid)",
+            "Eventos del webhook (crudos)",
+            "Conversaciones del chatbot (WhatsApp)",
+            "Destinatarios de campañas (con wamid)",
+            "Objetos creados en Meta (campañas/ad sets/creativos/anuncios)",
         ):
             self.assertContains(response, label)
 
@@ -302,7 +302,7 @@ class MetaResultsPageTests(TestCase):
 
 
 class MetaAdsCleanupTests(TestCase):
-    """La pestaña «Campañas en Meta» lista los objetos y permite borrarlos."""
+    """La pestaña «Objetos creados en Meta» lista los objetos y permite borrarlos."""
 
     def setUp(self):
         self.url = reverse("meta-whatsapp-results")
@@ -328,7 +328,7 @@ class MetaAdsCleanupTests(TestCase):
     def test_tab_lists_the_campaign_and_flags_the_orphan(self):
         self.client.force_login(self.staff)
         response = self.client.get(self.url)
-        self.assertContains(response, "Campañas en Meta")
+        self.assertContains(response, "Objetos creados en Meta (campañas/ad sets/creativos/anuncios)")
         self.assertContains(response, "111")
         self.assertContains(response, "huérfano")
 
