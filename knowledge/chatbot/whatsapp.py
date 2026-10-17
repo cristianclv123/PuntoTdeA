@@ -183,25 +183,34 @@ def _ticket_confirmation(conversation: ChatConversation, ticket: CaseConversatio
 def _submit_question(
     conversation: ChatConversation,
     workflow: ChatbotWorkflow,
-    sender: str,
     question: str,
-    external_message_id: str = '',
 ) -> list[str]:
     result = workflow.submit_question(question)
     if result.get('valid') and result.get('needs_human_attention'):
-        reason = 'El chatbot no encontró una respuesta con suficiente confianza.'
-        ticket = _create_case_ticket(
-            conversation,
-            sender,
-            question,
-            reason,
-            external_message_id,
+        answer = result.get('answer', result['answer_message'])
+        follow_up = (
+            'Si deseas contactar a un asesor, responde sí. '
+            'Si quieres intentarlo con otra pregunta, escríbela.'
         )
-        return [result['answer_message'], _ticket_confirmation(conversation, ticket)]
+        conversation.flow_state = 'waiting_low_confidence_choice'
+        conversation.messages[-1]['content'] = f'{answer}\n\n{follow_up}'
+        conversation.messages[-1].pop('awaiting_advisor', None)
+        conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
+        return [answer, follow_up]
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
         return [result['answer_message'], result['follow_up_message']]
     return [result['message']]
 
+
+def _create_low_confidence_ticket(conversation: ChatConversation, sender: str) -> str:
+    reason = 'El chatbot no encontró una respuesta con suficiente confianza.'
+    ticket = _create_case_ticket(
+        conversation,
+        sender,
+        conversation.last_question,
+        reason,
+    )
+    return _ticket_confirmation(conversation, ticket)
 
 def _case_ticket_status(conversation: ChatConversation) -> str | None:
     if conversation.case_conversation_id is None:
@@ -314,18 +323,16 @@ def handle_message(
         if _requests_advisor(text):
             replies = [workflow.escalate('El usuario solicitó atención humana.')['message']]
         else:
-            replies = _submit_question(
-                conversation,
-                workflow,
-                sender,
-                text,
-                external_message_id,
-            )
+            replies = _submit_question(conversation, workflow, text)
         if new_conversation and greeting:
             replies.insert(0, greeting)
         if inactivity_result is not None:
             replies.insert(0, inactivity_result['message'])
         return replies
+    if state == 'waiting_low_confidence_choice':
+        if _is_yes(text) or _requests_advisor(text):
+            return [_create_low_confidence_ticket(conversation, sender)]
+        return _submit_question(conversation, workflow, text)
     if state == 'waiting_confirmation':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
@@ -337,13 +344,7 @@ def handle_message(
     if state == 'help_options':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
-        return _submit_question(
-            conversation,
-            workflow,
-            sender,
-            text,
-            external_message_id,
-        )
+        return _submit_question(conversation, workflow, text)
     if state == 'waiting_advisor_question':
         result = workflow.submit_advisor_question(text)
         if result.get('valid'):
@@ -356,13 +357,7 @@ def handle_message(
     if state == 'ended':
         return ['Esta conversación ya está cerrada. Envía un nuevo mensaje para iniciar otra conversación.']
     workflow.start()
-    return _submit_question(
-        conversation,
-        workflow,
-        sender,
-        text,
-        external_message_id,
-    )
+    return _submit_question(conversation, workflow, text)
 
 
 def send_text(recipient: str, text: str) -> bool:
