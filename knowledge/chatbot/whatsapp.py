@@ -187,16 +187,16 @@ def _submit_question(
 ) -> list[str]:
     result = workflow.submit_question(question)
     if result.get('valid') and result.get('needs_human_attention'):
-        answer = result.get('answer', result['answer_message'])
         follow_up = (
-            'Si deseas contactar a un asesor, responde sí. '
-            'Si quieres intentarlo con otra pregunta, escríbela.'
+            'No encontré una respuesta confiable a tu pregunta. '
+            '¿Deseas comunicarte con un asesor? Responde sí para crear un ticket '
+            'o no para escribir una nueva pregunta.'
         )
         conversation.flow_state = 'waiting_low_confidence_choice'
-        conversation.messages[-1]['content'] = f'{answer}\n\n{follow_up}'
+        conversation.messages[-1]['content'] = follow_up
         conversation.messages[-1].pop('awaiting_advisor', None)
         conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
-        return [answer, follow_up]
+        return [follow_up]
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
         return [result['answer_message'], result['follow_up_message']]
     return [result['message']]
@@ -211,6 +211,7 @@ def _create_low_confidence_ticket(conversation: ChatConversation, sender: str) -
         reason,
     )
     return _ticket_confirmation(conversation, ticket)
+
 
 def _case_ticket_status(conversation: ChatConversation) -> str | None:
     if conversation.case_conversation_id is None:
@@ -332,6 +333,16 @@ def handle_message(
     if state == 'waiting_low_confidence_choice':
         if _is_yes(text) or _requests_advisor(text):
             return [_create_low_confidence_ticket(conversation, sender)]
+        if _is_no(text):
+            message = 'De acuerdo. Escribe tu nueva pregunta y la buscaré en la base de conocimiento.'
+            conversation.flow_state = 'waiting_question'
+            conversation.messages.append({
+                'author': 'bot',
+                'content': message,
+                'created_at': timezone.now().isoformat(),
+            })
+            conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
+            return [message]
         return _submit_question(conversation, workflow, text)
     if state == 'waiting_confirmation':
         if _requests_advisor(text):

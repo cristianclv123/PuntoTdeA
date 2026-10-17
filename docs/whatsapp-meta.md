@@ -236,8 +236,10 @@ lógica se ejecuta y se guarda, pero la respuesta no te llega al celular.
 Dos detalles del entorno que confunden al probar:
 
 - La respuesta a la pregunta sale de la base de conocimiento. Si está vacía el
-  bot contesta «No encontré información suficiente…» y eso **es el
-  comportamiento correcto**. Carga contenido con
+  bot informa que no encontró una respuesta confiable y pregunta si deseas
+  comunicarte con un asesor. Responde **sí** para crear un ticket con la pregunta
+  original o **no** para escribir una pregunta nueva. No se crea el ticket antes
+  de confirmar. Carga contenido con
   `docker compose exec -T web python manage.py seed_knowledge`.
 - El cierre por escalado cambia según el horario de atención configurado: fuera
   de horario el bot dice que la solicitud queda pendiente.

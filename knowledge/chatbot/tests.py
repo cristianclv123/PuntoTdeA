@@ -278,10 +278,10 @@ class WhatsAppFlowTests(TestCase):
         )
 
         conversation = _manager(ChatConversation).get(external_user_id='573001112235')
-        self.assertEqual(len(responses), 2)
-        self.assertIn('No encontré información suficiente.', responses[0])
-        self.assertIn('responde sí', responses[1].lower())
-        self.assertIn('escríbela', responses[1].lower())
+        self.assertEqual(len(responses), 1)
+        self.assertIn('No encontré una respuesta confiable', responses[0])
+        self.assertIn('responde sí', responses[0].lower())
+        self.assertIn('o no para escribir una nueva pregunta', responses[0].lower())
         self.assertEqual(conversation.flow_state, 'waiting_low_confidence_choice')
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
         self.assertIsNone(conversation.case_conversation)
@@ -301,6 +301,42 @@ class WhatsAppFlowTests(TestCase):
             conversation=conversation.case_conversation,
         )
         self.assertEqual(case_message.body, 'Pregunta sin respuesta')
+
+    def test_low_confidence_no_choice_returns_to_question_entry(self):
+        handle_message('573001112250', 'Hola')
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            side_effect=[
+                {
+                    'answer': 'No encontré información suficiente.',
+                    'confidence': 0.0,
+                    'needs_human_attention': True,
+                    'sources': [],
+                },
+                {
+                    'answer': 'Encontré la respuesta a tu nueva pregunta.',
+                    'confidence': 0.9,
+                    'needs_human_attention': False,
+                    'sources': [],
+                },
+            ],
+        ) as generate_response:
+            first_response = handle_message('573001112250', 'Primera pregunta sin respuesta')
+            no_response = handle_message('573001112250', 'no')
+            responses = handle_message('573001112250', '¿Cuál es el horario de atención?')
+
+        conversation = _manager(ChatConversation).get(external_user_id='573001112250')
+        self.assertEqual(generate_response.call_count, 2)
+        self.assertEqual(len(first_response), 1)
+        self.assertIn('¿Deseas comunicarte con un asesor?', first_response[0])
+        self.assertEqual(
+            no_response,
+            ['De acuerdo. Escribe tu nueva pregunta y la buscaré en la base de conocimiento.'],
+        )
+        self.assertEqual(conversation.last_question, '¿Cuál es el horario de atención?')
+        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
+        self.assertIsNone(conversation.case_conversation)
+        self.assertIn('Encontré la respuesta a tu nueva pregunta.', responses[0])
 
     def test_low_confidence_allows_retrying_with_a_new_question(self):
         handle_message('573001112249', 'Hola')
