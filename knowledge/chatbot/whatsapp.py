@@ -235,7 +235,6 @@ def handle_message(
         conversation = conversations.order_by('-updated_at', '-created_at').first()
 
     start_new_conversation = conversation is None
-    had_previous_conversation = conversation is not None
     inactivity_result = None
     ticket_status = _case_ticket_status(conversation) if conversation else None
 
@@ -299,7 +298,7 @@ def handle_message(
     greeting = None
     if new_conversation:
         greeting = workflow.start()['message']
-        if not had_previous_conversation:
+        if inactivity_result is None:
             return [greeting]
 
     state = conversation.flow_state
