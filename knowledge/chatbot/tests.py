@@ -506,11 +506,19 @@ class WhatsAppFlowTests(TestCase):
 
         self.assertEqual(processed, 1)
         self.assertEqual(send_text.call_count, 2)
-        self.assertEqual(send_text.call_args_list[0].args, (sender, 'Las matrículas son en enero.'))
+        inactivity_notice = (
+            'Si no recibimos respuesta, el chat se cerrará automáticamente '
+            'después de 5 minutos de inactividad.'
+        )
+        self.assertEqual(
+            send_text.call_args_list[0].args,
+            (sender, f'Las matrículas son en enero.\n\n{inactivity_notice}'),
+        )
         self.assertEqual(
             send_text.call_args_list[1].args,
-            (sender, '¿Tienes otra duda, necesitas hablar con un asesor o ya quedó '
-             'resuelta tu duda? Responde sí para continuar o no si ya no necesitas ayuda.'),
+            (sender, '¿Tienes otra duda, necesitas hablar con un asesor? '
+             'Responde sí para continuar o no si ya no necesitas ayuda.'
+             f'\n\n{inactivity_notice}'),
         )
 
     def test_new_message_after_advisor_closes_case_creates_new_chat(self):

@@ -243,6 +243,8 @@ Dos detalles del entorno que confunden al probar:
   `docker compose exec -T web python manage.py seed_knowledge`.
 - El cierre por escalado cambia según el horario de atención configurado: fuera
   de horario el bot dice que la solicitud queda pendiente.
+- Cada respuesta del bot informa que el chat se cerrará automáticamente después
+  de 5 minutos si no recibe una nueva respuesta del usuario.
 
 ### Resumen en JSON
 

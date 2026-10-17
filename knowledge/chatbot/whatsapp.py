@@ -23,6 +23,11 @@ from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
 
 logger = logging.getLogger(__name__)
 
+INACTIVITY_NOTICE = (
+    'Si no recibimos respuesta, el chat se cerrará automáticamente '
+    'después de 5 minutos de inactividad.'
+)
+
 
 def _manager(model):
     return getattr(model, '_default_manager')
@@ -390,7 +395,7 @@ def process_webhook(payload: dict[str, Any]) -> int:
             text,
             external_message_id=external_message_id,
         ):
-            send_text(sender, reply)
+            send_text(sender, f'{reply}\n\n{INACTIVITY_NOTICE}')
         processed += 1
     return processed
 
