@@ -233,9 +233,7 @@ def handle_message(
     ).order_by('-updated_at', '-created_at').first()
     if conversation is None:
         conversation = conversations.order_by('-updated_at', '-created_at').first()
-
     start_new_conversation = conversation is None
-    had_previous_conversation = conversation is not None
     inactivity_result = None
     ticket_status = _case_ticket_status(conversation) if conversation else None
 
@@ -299,8 +297,9 @@ def handle_message(
     greeting = None
     if new_conversation:
         greeting = workflow.start()['message']
-        if not had_previous_conversation:
-            return [greeting]
+        if inactivity_result is not None:
+            return [inactivity_result['message'], greeting]
+        return [greeting]
 
     state = conversation.flow_state
     if state == 'pending' and conversation.case_conversation_id is not None:
