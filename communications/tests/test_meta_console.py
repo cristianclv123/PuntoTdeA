@@ -4,8 +4,14 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from io import StringIO
+from unittest.mock import patch
 
-from communications.services import meta_config
+from communications import meta_console_views
+from communications.models import WhatsAppWebhookEvent
+from communications.services import meta_config, meta_templates
+from communications.services.ads_service import AdsResult
+
+from announcements.models import Announcement, StatusAd
 
 
 class MetaConfigStatusTests(TestCase):
@@ -206,11 +212,13 @@ class SidebarMenuTests(TestCase):
         body = self._sidebar()
         self.assertIn(reverse("meta-whatsapp-config"), body)
         self.assertIn(reverse("meta-whatsapp-test"), body)
+        self.assertIn(reverse("meta-whatsapp-results"), body)
 
     def test_regular_user_does_not_see_it(self):
         self.client.force_login(self.regular)
         body = self._sidebar()
         self.assertNotIn(reverse("meta-whatsapp-config"), body)
+        self.assertNotIn(reverse("meta-whatsapp-results"), body)
 
     def test_the_group_follows_the_same_markup_as_knowledge(self):
         self.client.force_login(self.staff)
@@ -234,6 +242,245 @@ class MetaConfigPageActiveNavTests(TestCase):
         self.assertEqual(
             self.client.get(reverse("meta-whatsapp-test")).context["active_nav"],
             "whatsapp-test",
+        )
+        self.assertEqual(
+            self.client.get(reverse("meta-whatsapp-results")).context["active_nav"],
+            "whatsapp-results",
+        )
+
+
+class MetaResultsPageTests(TestCase):
+    """La página de resultados reúne las tablas y solo la ve el staff."""
+
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-results")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+        self.regular = get_user_model().objects.create_user(
+            username="asesor", password="x"
+        )
+
+    def test_anonymous_is_redirected_to_login(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+    def test_non_staff_cannot_open_the_page(self):
+        self.client.force_login(self.regular)
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+
+    def test_staff_sees_every_tab(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        for label in (
+            "Estados de entrega",
+            "Eventos del webhook",
+            "Conversaciones del chatbot",
+            "Destinatarios de campañas",
+            "Objetos creados en Meta",
+        ):
+            self.assertContains(response, label)
+        self.assertNotContains(response, "Envíos de prueba")
+
+    def test_events_tab_shows_the_test_send_recipient_and_content(self):
+        WhatsAppWebhookEvent.objects.create(
+            event_key="test-send:wamid-prueba",
+            provider_message_id="wamid-prueba",
+            event_type=WhatsAppWebhookEvent.Type.STATUS,
+            status="test_text",
+            payload={"to": "573001112233", "detail": "Hola desde Prueba"},
+        )
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "573001112233")
+        self.assertContains(response, "Hola desde Prueba")
+
+    def test_the_page_is_named_movimientos(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "Movimientos de la integración")
+
+    def test_the_form_page_links_to_the_results_page(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("meta-whatsapp-test"))
+        self.assertContains(response, reverse("meta-whatsapp-results"))
+
+    def test_the_form_page_no_longer_holds_the_result_tables(self):
+        """Las tablas se movieron: en la página de pruebas no deben quedar."""
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse("meta-whatsapp-test"))
+        self.assertNotContains(response, "Recorrido completo")
+        self.assertNotContains(response, "Estados por mensaje")
+
+
+class MetaAdsCleanupTests(TestCase):
+    """La pestaña «Objetos creados en Meta» lista los objetos y permite borrarlos."""
+
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-results")
+        self.delete_url = reverse("meta-whatsapp-results-delete")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+        self.regular = get_user_model().objects.create_user(
+            username="asesor", password="x"
+        )
+        self.announcement = Announcement.objects.create(
+            title="Aviso de prueba", content="Hola"
+        )
+        # Intento fallido: creó campaña y ad set, pero nunca llegó al anuncio.
+        self.status_ad = StatusAd.objects.create(
+            announcement=self.announcement,
+            campaign_id="111",
+            ad_set_id="222",
+            state=StatusAd.State.ERROR,
+            error="app en modo desarrollo",
+        )
+
+    def test_tab_lists_the_campaign_and_flags_the_orphan(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(self.url)
+        self.assertContains(response, "Objetos creados en Meta")
+        self.assertContains(response, "111")
+        self.assertContains(response, "huérfano")
+
+    def test_the_delete_action_requires_staff(self):
+        self.client.force_login(self.regular)
+        response = self.client.post(self.delete_url, {"status_ad": self.status_ad.id})
+        self.assertEqual(response.status_code, 302)
+        self.status_ad.refresh_from_db()
+        self.assertEqual(self.status_ad.campaign_id, "111")
+
+    def test_the_delete_action_requires_post(self):
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(self.delete_url).status_code, 405)
+
+    @patch("communications.services.ads_service.delete_object")
+    def test_delete_calls_meta_and_clears_the_trace(self, delete_object):
+        delete_object.return_value = AdsResult(True, "ok", {"id": "111"})
+        self.client.force_login(self.staff)
+
+        response = self.client.post(self.delete_url, {"status_ad": self.status_ad.id})
+
+        self.assertEqual(response.status_code, 302)
+        delete_object.assert_called_once_with("111")
+        self.status_ad.refresh_from_db()
+        self.assertEqual(self.status_ad.campaign_id, "")
+        self.assertEqual(self.status_ad.ad_set_id, "")
+        self.assertEqual(self.status_ad.state, StatusAd.State.DRAFT)
+
+    @patch("communications.services.ads_service.delete_object")
+    def test_delete_reports_the_meta_error_and_keeps_the_trace(self, delete_object):
+        delete_object.return_value = AdsResult(False, "no", error="boom")
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            self.delete_url, {"status_ad": self.status_ad.id}, follow=True
+        )
+
+        self.assertContains(response, "No se pudo eliminar")
+        self.status_ad.refresh_from_db()
+        self.assertEqual(self.status_ad.campaign_id, "111")
+
+
+class SampleTemplateLabelTests(TestCase):
+    """`hello_world` es de muestra: se oculta salvo que sea la única aprobada."""
+
+    def setUp(self):
+        self.url = reverse("meta-whatsapp-test")
+        self.staff = get_user_model().objects.create_user(
+            username="staff", password="x", is_staff=True
+        )
+
+    @staticmethod
+    def _template(name, status="APPROVED"):
+        return {
+            "meta_id": f"id-{name}",
+            "name": name,
+            "status": status,
+            "category": "utility",
+            "language": "es_CO",
+            "is_sample": meta_templates.is_sample_template(name),
+        }
+
+    def test_approved_templates_hides_the_sample_when_there_is_an_own_template(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[
+                self._template("hello_world"),
+                self._template("aviso_de_pago"),
+                self._template("en_revision", status="PENDING"),
+            ],
+        )
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            offered = meta_console_views.approved_templates()
+
+        self.assertEqual([template["name"] for template in offered], ["aviso_de_pago"])
+
+    def test_approved_templates_offers_the_sample_when_it_is_the_only_approved(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[
+                self._template("hello_world"),
+                self._template("en_revision", status="PENDING"),
+            ],
+        )
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            offered = meta_console_views.approved_templates()
+
+        self.assertEqual(
+            [(template["name"], template["is_sample"]) for template in offered],
+            [("hello_world", True)],
+        )
+
+    def test_approved_templates_includes_body_and_buttons_for_the_preview(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[
+                {
+                    **self._template("aviso_de_pago"),
+                    "body_text": "Hola {{1}}",
+                    "indexes": [1],
+                    "header_type": "none",
+                    "buttons": [{"text": "Ver", "url": "https://x.co"}],
+                }
+            ],
+        )
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            offered = meta_console_views.approved_templates()
+
+        self.assertEqual(offered[0]["body_text"], "Hola {{1}}")
+        self.assertEqual(offered[0]["buttons"], [{"text": "Ver", "url": "https://x.co"}])
+
+    def test_the_form_hides_the_sample_when_there_is_an_own_template(self):
+        result = meta_templates.TemplateListResult(
+            ok=True,
+            templates=[self._template("hello_world"), self._template("aviso_de_pago")],
+        )
+        self.client.force_login(self.staff)
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertNotIn("hello_world", content)
+        self.assertIn("aviso_de_pago — utility", content)
+
+    def test_the_form_offers_the_sample_with_its_mark_when_it_is_the_only_one(self):
+        result = meta_templates.TemplateListResult(
+            ok=True, templates=[self._template("hello_world")]
+        )
+        self.client.force_login(self.staff)
+        with patch.object(meta_templates, "list_templates", return_value=result):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        # La plantilla de muestra se ofrece, pero con la marca pegada al nombre.
+        self.assertIn(
+            "hello_world — utility · PLANTILLA DE PRUEBA META",
+            response.content.decode(),
         )
 
 

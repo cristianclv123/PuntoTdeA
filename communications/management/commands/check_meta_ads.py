@@ -101,6 +101,8 @@ class Command(BaseCommand):
 
         self.stdout.write("")
         self.stdout.write(self.style.WARNING("Pasos manuales que la API no cubre:"))
+        self.stdout.write("  - La app de Meta debe estar en modo Live (publico); en modo")
+        self.stdout.write("    desarrollo el anuncio falla con code 100, subcode 1885183.")
         self.stdout.write("  - La Pagina debe estar vinculada a la cuenta de WhatsApp.")
         self.stdout.write("  - El negocio debe estar verificado para usar el numero de Cloud API.")
         self.stdout.write("  - Debe existir un metodo de pago en la cuenta de anuncios.")
