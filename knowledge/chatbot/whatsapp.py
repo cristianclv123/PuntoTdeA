@@ -23,6 +23,11 @@ from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
 
 logger = logging.getLogger(__name__)
 
+INACTIVITY_NOTICE = (
+    'Si no recibimos respuesta, el chat se cerrará automáticamente '
+    'después de 5 minutos de inactividad.'
+)
+
 
 def _manager(model):
     return getattr(model, '_default_manager')
@@ -183,24 +188,34 @@ def _ticket_confirmation(conversation: ChatConversation, ticket: CaseConversatio
 def _submit_question(
     conversation: ChatConversation,
     workflow: ChatbotWorkflow,
-    sender: str,
     question: str,
-    external_message_id: str = '',
 ) -> list[str]:
     result = workflow.submit_question(question)
     if result.get('valid') and result.get('needs_human_attention'):
-        reason = 'El chatbot no encontró una respuesta con suficiente confianza.'
-        ticket = _create_case_ticket(
-            conversation,
-            sender,
-            question,
-            reason,
-            external_message_id,
+        follow_up = (
+            'No encontré una respuesta confiable a tu pregunta. '
+            '¿Deseas comunicarte con un asesor? Responde sí para crear un ticket '
+            'o no para escribir una nueva pregunta.'
         )
-        return [result['answer_message'], _ticket_confirmation(conversation, ticket)]
+        conversation.flow_state = 'waiting_low_confidence_choice'
+        conversation.messages[-1]['content'] = follow_up
+        conversation.messages[-1].pop('awaiting_advisor', None)
+        conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
+        return [follow_up]
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
         return [result['answer_message'], result['follow_up_message']]
     return [result['message']]
+
+
+def _create_low_confidence_ticket(conversation: ChatConversation, sender: str) -> str:
+    reason = 'El chatbot no encontró una respuesta con suficiente confianza.'
+    ticket = _create_case_ticket(
+        conversation,
+        sender,
+        conversation.last_question,
+        reason,
+    )
+    return _ticket_confirmation(conversation, ticket)
 
 
 def _case_ticket_status(conversation: ChatConversation) -> str | None:
@@ -233,9 +248,7 @@ def handle_message(
     ).order_by('-updated_at', '-created_at').first()
     if conversation is None:
         conversation = conversations.order_by('-updated_at', '-created_at').first()
-
     start_new_conversation = conversation is None
-    had_previous_conversation = conversation is not None
     inactivity_result = None
     ticket_status = _case_ticket_status(conversation) if conversation else None
 
@@ -299,8 +312,9 @@ def handle_message(
     greeting = None
     if new_conversation:
         greeting = workflow.start()['message']
-        if not had_previous_conversation:
-            return [greeting]
+        if inactivity_result is not None:
+            return [inactivity_result['message'], greeting]
+        return [greeting]
 
     state = conversation.flow_state
     if state == 'pending' and conversation.case_conversation_id is not None:
@@ -315,18 +329,26 @@ def handle_message(
         if _requests_advisor(text):
             replies = [workflow.escalate('El usuario solicitó atención humana.')['message']]
         else:
-            replies = _submit_question(
-                conversation,
-                workflow,
-                sender,
-                text,
-                external_message_id,
-            )
+            replies = _submit_question(conversation, workflow, text)
         if new_conversation and greeting:
             replies.insert(0, greeting)
         if inactivity_result is not None:
             replies.insert(0, inactivity_result['message'])
         return replies
+    if state == 'waiting_low_confidence_choice':
+        if _is_yes(text) or _requests_advisor(text):
+            return [_create_low_confidence_ticket(conversation, sender)]
+        if _is_no(text):
+            message = 'De acuerdo. Escribe tu nueva pregunta y la buscaré en la base de conocimiento.'
+            conversation.flow_state = 'waiting_question'
+            conversation.messages.append({
+                'author': 'bot',
+                'content': message,
+                'created_at': timezone.now().isoformat(),
+            })
+            conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
+            return [message]
+        return _submit_question(conversation, workflow, text)
     if state == 'waiting_confirmation':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
@@ -338,13 +360,7 @@ def handle_message(
     if state == 'help_options':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
-        return _submit_question(
-            conversation,
-            workflow,
-            sender,
-            text,
-            external_message_id,
-        )
+        return _submit_question(conversation, workflow, text)
     if state == 'waiting_advisor_question':
         result = workflow.submit_advisor_question(text)
         if result.get('valid'):
@@ -357,13 +373,7 @@ def handle_message(
     if state == 'ended':
         return ['Esta conversación ya está cerrada. Envía un nuevo mensaje para iniciar otra conversación.']
     workflow.start()
-    return _submit_question(
-        conversation,
-        workflow,
-        sender,
-        text,
-        external_message_id,
-    )
+    return _submit_question(conversation, workflow, text)
 
 
 def send_text(recipient: str, text: str) -> bool:
@@ -385,7 +395,7 @@ def process_webhook(payload: dict[str, Any]) -> int:
             text,
             external_message_id=external_message_id,
         ):
-            send_text(sender, reply)
+            send_text(sender, f'{reply}\n\n{INACTIVITY_NOTICE}')
         processed += 1
     return processed
 
