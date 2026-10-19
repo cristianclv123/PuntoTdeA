@@ -64,6 +64,10 @@ class TemplateBuildError(ValueError):
     """La plantilla local no se puede traducir al formato de Meta."""
 
 
+class TemplateVerificationError(ValueError):
+    """La plantilla de una campaña no coincide con la versión aprobada en Meta."""
+
+
 @dataclass
 class TemplateResult:
     """Resultado de una operación sobre una sola plantilla de Meta."""
@@ -122,8 +126,13 @@ def _headers() -> dict[str, str]:
 
 def _error_detail(response: requests.Response) -> str:
     try:
-        error = response.json().get("error", {})
+        data = response.json()
     except (TypeError, ValueError):
+        return f"Meta respondió HTTP {response.status_code}."
+    if not isinstance(data, dict):
+        return f"Meta respondió HTTP {response.status_code}."
+    error = data.get("error", {})
+    if not isinstance(error, dict):
         return f"Meta respondió HTTP {response.status_code}."
     message = error.get("message") or "Error sin detalle."
     code = error.get("code")
@@ -232,6 +241,79 @@ SAMPLE_TEMPLATE_NAMES = frozenset({"hello_world"})
 def is_sample_template(name: Any) -> bool:
     """True si ``name`` es una plantilla de muestra de Meta (``hello_world``)."""
     return str(name or "").strip().lower() in SAMPLE_TEMPLATE_NAMES
+
+
+def verify_campaign_template(
+    meta_id: Any,
+    name: Any,
+    language: Any,
+    snapshot: Any,
+) -> dict[str, Any]:
+    """Devuelve la copia canónica de una plantilla propia aprobada por Meta."""
+    received_id = str(meta_id or "")
+    requested_id = received_id.strip()
+    if not requested_id:
+        raise TemplateVerificationError("Selecciona una plantilla aprobada de Meta.")
+    if received_id != requested_id:
+        raise TemplateVerificationError(
+            "El identificador de la plantilla no tiene un formato válido."
+        )
+    if not isinstance(snapshot, dict):
+        raise TemplateVerificationError("La copia de la plantilla debe ser un objeto JSON.")
+
+    result = get_template(requested_id)
+    if not result.ok or not result.template:
+        detail = result.message or "Meta no devolvió la plantilla solicitada."
+        raise TemplateVerificationError(
+            f"No fue posible verificar la plantilla en Meta: {detail}"
+        )
+
+    template = result.template
+    if str(template.get("meta_id", "")) != requested_id:
+        raise TemplateVerificationError(
+            "Meta devolvió una plantilla distinta al identificador solicitado."
+        )
+    if str(template.get("status", "")).upper() != "APPROVED":
+        raise TemplateVerificationError(
+            "La plantilla seleccionada no está aprobada por Meta."
+        )
+    actual_name = str(template.get("name", "") or "")
+    if template.get("is_sample") or is_sample_template(actual_name):
+        raise TemplateVerificationError(
+            "Las plantillas de muestra de Meta no se pueden usar en campañas."
+        )
+    if str(name or "") != actual_name:
+        raise TemplateVerificationError(
+            "El nombre de la plantilla no coincide con el registrado en Meta."
+        )
+    if str(language or "") != str(template.get("language", "") or META_LANGUAGE):
+        raise TemplateVerificationError(
+            "El idioma de la plantilla no coincide con el registrado en Meta."
+        )
+
+    canonical_snapshot = {
+        "name": actual_name,
+        "language": str(template.get("language", "") or META_LANGUAGE),
+        "category": str(template.get("category", "") or "").lower(),
+        "body_text": str(template.get("body_text", "") or ""),
+        "header_type": str(template.get("header_type", "") or "none"),
+        "header_text": str(template.get("header_text", "") or ""),
+        "buttons": template.get("buttons") if isinstance(template.get("buttons"), list) else [],
+    }
+    supplied_snapshot = {
+        "name": str(snapshot.get("name", "") or ""),
+        "language": str(snapshot.get("language", "") or ""),
+        "category": str(snapshot.get("category", "") or "").lower(),
+        "body_text": str(snapshot.get("body_text", "") or ""),
+        "header_type": str(snapshot.get("header_type", "") or "none"),
+        "header_text": str(snapshot.get("header_text", "") or ""),
+        "buttons": snapshot.get("buttons") if isinstance(snapshot.get("buttons"), list) else [],
+    }
+    if supplied_snapshot != canonical_snapshot:
+        raise TemplateVerificationError(
+            "El contenido de la plantilla no coincide con la versión aprobada en Meta."
+        )
+    return canonical_snapshot
 
 
 def selectable_templates(templates: Any) -> list[dict[str, Any]]:
@@ -385,6 +467,10 @@ def get_template(meta_id: str) -> TemplateResult:
     try:
         data = response.json() or {}
     except ValueError:
+        return TemplateResult(
+            ok=False, message="Meta devolvió una respuesta ilegible.", kind=KIND_META
+        )
+    if not isinstance(data, dict):
         return TemplateResult(
             ok=False, message="Meta devolvió una respuesta ilegible.", kind=KIND_META
         )

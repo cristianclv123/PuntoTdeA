@@ -507,15 +507,22 @@ const OutboundUI = (() => {
 
     function previewHtml(channel, tpl, vars = {}) {
         if (!tpl) return '<p class="small text-muted">Sin plantilla.</p>';
-        let body = tpl.body;
-        Object.entries(vars).forEach(([k, v]) => {
-            body = body.replaceAll(`{{${k}}}`, v || `{{${k}}}`);
+        const body = escapeHtml(tpl.body || '').replace(/\{\{(\d+)\}\}/g, (placeholder, index) => {
+            const value = vars[index];
+            return value === undefined || value === null || value === ''
+                ? placeholder
+                : escapeHtml(value);
         });
-        const buttons = (tpl.buttons || []).map((b) => `<span>${escapeHtml((b && b.text) ? b.text : b)}</span>`).join('');
+        const header = tpl.header_type === 'text' && tpl.header_text
+            ? `<div class="wa-header fw-semibold mb-2">${escapeHtml(tpl.header_text)}</div>`
+            : '';
+        const buttons = (tpl.buttons || [])
+            .map((button) => `<span>${escapeHtml((button && button.text) ? button.text : button)}</span>`)
+            .join('');
         if (channel === 'whatsapp') {
-            return `<div class="wa-bubble">${body}<span class="wa-meta">TdeA · ahora</span></div>${buttons ? `<div class="wa-buttons">${buttons}</div>` : ''}`;
+            return `<div class="wa-bubble">${header}${body}<span class="wa-meta">TdeA · ahora</span></div>${buttons ? `<div class="wa-buttons">${buttons}</div>` : ''}`;
         }
-        return `<div class="wa-bubble" style="background:#fff">${body}</div>`;
+        return `<div class="wa-bubble" style="background:#fff">${header}${body}</div>`;
     }
 
     function extractVars(body) {
@@ -540,7 +547,37 @@ const OutboundUI = (() => {
             segment: null,
             templateId: '',
             vars: {},
+            pendingAudienceFile: null,
+            audienceFile: null,
+            audienceFileIsOriginal: false,
+            personalizationColumns: [],
+            personalizationValidation: null,
+            personalizationReportOffsets: { valid: 0, rejected: 0 },
+            templateLoadError: '',
         };
+
+        document.addEventListener('change', (event) => {
+            const input = event.target;
+            if (
+                input instanceof HTMLInputElement
+                && input.type === 'file'
+                && input.name === 'file'
+                && input.closest('dialog[data-ap-dialog="create"]')
+            ) {
+                state.pendingAudienceFile = input.files && input.files[0]
+                    ? input.files[0]
+                    : null;
+            }
+        }, true);
+
+        document.addEventListener('close', (event) => {
+            if (
+                event.target instanceof HTMLDialogElement
+                && event.target.matches('dialog[data-ap-dialog="create"]')
+            ) {
+                state.pendingAudienceFile = null;
+            }
+        }, true);
 
         // Selector de audiencia compartido (crear nueva / escoger existente).
         // Reemplaza la antigua carga de archivo "inline" y los chips de segmentos.
@@ -558,6 +595,20 @@ const OutboundUI = (() => {
                             contact_count: segment.contact_count,
                         }
                         : null;
+                    if (state.pendingAudienceFile) {
+                        state.audienceFile = state.pendingAudienceFile;
+                        state.audienceFileIsOriginal = true;
+                        state.pendingAudienceFile = null;
+                    } else {
+                        state.audienceFile = null;
+                        state.audienceFileIsOriginal = false;
+                        document.getElementById('personalizationFile').value = '';
+                    }
+                    updatePersonalizationFileSource();
+                    resetPersonalizationValidation();
+                    state.personalizationColumns = [];
+                    document.getElementById('personalizationMapping').classList.add('d-none');
+                    if (state.audienceFile) inspectPersonalizationFile();
                 },
             });
         }
@@ -755,13 +806,19 @@ const OutboundUI = (() => {
 
         function renderTemplates() {
             const grid = document.getElementById('templateGrid');
-            const list = templates;
-            grid.innerHTML = list.map((t) => `
-                <button type="button" class="template-card ${String(t.id) === state.templateId ? 'is-selected' : ''}" data-tpl="${t.id}">
-                    <div class="small text-muted mb-1">${t.type}</div>
-                    <div class="fw-semibold">${t.name}</div>
+            if (!templates.length) {
+                const message = state.templateLoadError
+                    ? 'No fue posible cargar las plantillas de Meta. Intenta nuevamente más tarde.'
+                    : 'No hay plantillas aprobadas';
+                grid.innerHTML = `<div class="alert ${state.templateLoadError ? 'alert-danger' : 'alert-info'} mb-0">${escapeHtml(message)}</div>`;
+                return;
+            }
+            grid.innerHTML = templates.map((t) => `
+                <button type="button" class="template-card ${String(t.id) === state.templateId ? 'is-selected' : ''}" data-tpl="${escapeHtml(t.id)}">
+                    <div class="small text-muted mb-1">${escapeHtml(t.type)}</div>
+                    <div class="fw-semibold">${escapeHtml(t.name)}</div>
                     ${t.isSample ? '<span class="template-sample">PLANTILLA DE PRUEBA META</span>' : ''}
-                    <p class="small mb-0 mt-2 text-muted">${t.body}</p>
+                    <p class="small mb-0 mt-2 text-muted">${escapeHtml(t.body)}</p>
                 </button>
             `).join('');
         }
@@ -776,18 +833,16 @@ const OutboundUI = (() => {
                 if (!response.ok || data.success === false) {
                     throw new Error(data.message || `No se pudieron cargar las plantillas (${response.status}).`);
                 }
+                state.templateLoadError = '';
                 const results = Array.isArray(data.templates) ? data.templates : [];
                 const approved = results.filter(
-                    (template) => String(template.status || '').toUpperCase() === 'APPROVED'
+                    (template) => (
+                        String(template.status || '').toUpperCase() === 'APPROVED'
+                        && !template.is_sample
+                        && String(template.name || '').trim().toLowerCase() !== 'hello_world'
+                    )
                 );
-                // Las plantillas de muestra (`hello_world`) solo se ofrecen si
-                // son la única aprobada: Meta solo las deja enviar desde el
-                // número de prueba público (131058), así que se ocultan en
-                // cuanto hay una plantilla propia.
-                const offerable = approved.some((template) => !template.is_sample)
-                    ? approved.filter((template) => !template.is_sample)
-                    : approved;
-                templates = offerable
+                templates = approved
                     .map((template) => ({
                         id: String(template.meta_id || ''),
                         name: template.name || '',
@@ -802,6 +857,7 @@ const OutboundUI = (() => {
                     }));
                 renderTemplates();
             } catch (error) {
+                state.templateLoadError = error.message || 'Error de conexión.';
                 templates = [];
                 renderTemplates();
                 console.error('Error al cargar plantillas:', error);
@@ -817,6 +873,10 @@ const OutboundUI = (() => {
             const tpl = templates.find((template) => String(template.id) === card.dataset.tpl);
             if (!tpl) return;
             state.templateId = String(tpl.id);
+            resetPersonalizationValidation();
+            if (state.personalizationColumns.length) {
+                renderPersonalizationColumns(state.personalizationColumns);
+            }
             document.querySelectorAll('.template-card').forEach((el) => el.classList.toggle('is-selected', el === card));
             const vars = extractVars(tpl.body);
             const editor = document.getElementById('variableEditor');
@@ -838,6 +898,7 @@ const OutboundUI = (() => {
         document.getElementById('variableFields').addEventListener('input', (e) => {
             if (!e.target.classList.contains('var-input')) return;
             state.vars[e.target.dataset.var] = e.target.value;
+            resetPersonalizationValidation();
             updatePreview();
         });
 
@@ -850,7 +911,29 @@ const OutboundUI = (() => {
         }
 
         function updatePreview() {
-            document.getElementById('messagePreview').innerHTML = previewHtml(state.channel, currentTpl(), state.vars);
+            const previewVars = { ...state.vars };
+            const template = currentTpl();
+            if (template && state.personalizationColumns.length) {
+                for (const variable of new Set(extractVars(template.body).map((item) => String(Number(item))))) {
+                    const mode = document.querySelector(`[data-variable-mode="${variable}"]`);
+                    if (!mode) continue;
+                    if (mode.value === 'column') {
+                        const columnIndex = document.querySelector(`[data-variable-column="${variable}"]`)?.value;
+                        const column = state.personalizationColumns.find(
+                            (item) => String(item.index) === String(columnIndex),
+                        );
+                        if (column) previewVars[variable] = `{{${column.label}}}`;
+                    } else {
+                        const fixedValue = document.querySelector(`[data-variable-fixed="${variable}"]`)?.value;
+                        previewVars[variable] = fixedValue || `{{${variable}}}`;
+                    }
+                }
+            }
+            document.getElementById('messagePreview').innerHTML = previewHtml(
+                state.channel,
+                template,
+                previewVars,
+            );
         }
 
         function showStep(n) {
@@ -891,7 +974,20 @@ const OutboundUI = (() => {
                 `;
 
             document.getElementById('costEstimate').textContent =
-                `Audiencia estimada: ${size.toLocaleString('es-CO')} destinatarios.`;
+                state.personalizationValidation
+                    ? `Excel validado: ${state.personalizationValidation.valid_count} destinatarios válidos de ${size.toLocaleString('es-CO')} en la audiencia.`
+                    : `Audiencia estimada: ${size.toLocaleString('es-CO')} destinatarios.`;
+
+            const validation = state.personalizationValidation;
+            const confirmationPanel = document.getElementById('partialConfirmationPanel');
+            confirmationPanel.classList.toggle(
+                'd-none',
+                !validation || !validation.rejected_count || !validation.valid_count,
+            );
+            document.getElementById('partialConfirmationText').textContent = validation && validation.rejected_count
+                ? `${validation.rejected_count} filas se excluirán. La API volverá a comprobar la validación antes de crear destinatarios.`
+                : '';
+            document.getElementById('confirmPartialSend').checked = false;
         }
 
         function getCookie(name) {
@@ -908,6 +1004,337 @@ const OutboundUI = (() => {
             return '';
         }
 
+        function selectedTemplateSnapshot(template) {
+            return {
+                name: template.name || '',
+                language: template.language || 'es_CO',
+                category: template.category || '',
+                body_text: template.body || '',
+                header_type: template.header_type || 'none',
+                header_text: template.header_text || '',
+                buttons: Array.isArray(template.buttons) ? template.buttons : [],
+            };
+        }
+
+        function resetPersonalizationValidation() {
+            state.personalizationValidation = null;
+            state.personalizationReportOffsets = { valid: 0, rejected: 0 };
+            const report = document.getElementById('personalizationReport');
+            if (report) report.replaceChildren();
+            const confirmation = document.getElementById('partialConfirmationPanel');
+            if (confirmation) confirmation.classList.add('d-none');
+            const confirmationCheckbox = document.getElementById('confirmPartialSend');
+            if (confirmationCheckbox) confirmationCheckbox.checked = false;
+        }
+
+        function getPersonalizationFile() {
+            return state.audienceFile || document.getElementById('personalizationFile').files[0] || null;
+        }
+
+        function updatePersonalizationFileSource() {
+            const source = document.getElementById('personalizationFileSource');
+            const uploadField = document.getElementById('personalizationUploadField');
+            const file = getPersonalizationFile();
+            const hasOriginal = Boolean(file && state.audienceFileIsOriginal);
+            source.classList.toggle('d-none', !hasOriginal);
+            source.textContent = hasOriginal
+                ? `Se reutilizará el archivo original de la audiencia: ${file.name}`
+                : '';
+            uploadField.classList.toggle('d-none', hasOriginal || !state.segment);
+        }
+
+        function renderPersonalizationColumns(columns) {
+            state.personalizationColumns = columns;
+            const mapping = document.getElementById('personalizationMapping');
+            const documentColumn = document.getElementById('personalizationDocumentColumn');
+            const variableMappings = document.getElementById('personalizationVariableMappings');
+            mapping.classList.remove('d-none');
+            documentColumn.replaceChildren();
+            variableMappings.replaceChildren();
+
+            columns.forEach((column) => {
+                const option = document.createElement('option');
+                option.value = String(column.index);
+                option.textContent = column.label;
+                documentColumn.append(option);
+            });
+
+            const template = currentTpl();
+            const variables = template ? [...new Set(extractVars(template.body).map((item) => String(Number(item))))] : [];
+            variables.forEach((variable) => {
+                const group = document.createElement('div');
+                group.className = 'row g-2 align-items-end mb-2';
+
+                const labelColumn = document.createElement('div');
+                labelColumn.className = 'col-md-3';
+                const label = document.createElement('label');
+                label.className = 'form-label small mb-1';
+                label.textContent = `Variable {{${variable}}}`;
+                labelColumn.append(label);
+                const assignedColumn = document.createElement('span');
+                assignedColumn.className = 'form-text d-block';
+                assignedColumn.dataset.variablePreview = variable;
+                labelColumn.append(assignedColumn);
+
+                const sourceColumn = document.createElement('div');
+                sourceColumn.className = 'col-md-3';
+                const source = document.createElement('select');
+                source.className = 'form-select form-select-sm';
+                source.dataset.variableMode = variable;
+                source.setAttribute('aria-label', `Origen de la variable ${variable}`);
+                source.innerHTML = '<option value="column">Columna Excel</option><option value="fixed">Valor fijo</option>';
+                sourceColumn.append(source);
+
+                const valueColumn = document.createElement('div');
+                valueColumn.className = 'col-md-6';
+                const columnSelect = document.createElement('select');
+                columnSelect.className = 'form-select form-select-sm';
+                columnSelect.dataset.variableColumn = variable;
+                columns.forEach((column) => {
+                    const option = document.createElement('option');
+                    option.value = String(column.index);
+                    option.textContent = column.label;
+                    columnSelect.append(option);
+                });
+                const fixedInput = document.createElement('input');
+                fixedInput.className = 'form-control form-control-sm d-none';
+                fixedInput.type = 'text';
+                fixedInput.dataset.variableFixed = variable;
+                fixedInput.setAttribute('aria-label', `Valor fijo para la variable ${variable}`);
+                fixedInput.placeholder = `Valor fijo para {{${variable}}}`;
+                valueColumn.append(columnSelect, fixedInput);
+
+                source.addEventListener('change', () => {
+                    const isFixed = source.value === 'fixed';
+                    columnSelect.classList.toggle('d-none', isFixed);
+                    fixedInput.classList.toggle('d-none', !isFixed);
+                    resetPersonalizationValidation();
+                    updatePersonalizationPreviewLabel(variable);
+                    updatePreview();
+                });
+                columnSelect.addEventListener('change', () => {
+                    resetPersonalizationValidation();
+                    updatePersonalizationPreviewLabel(variable);
+                    updatePreview();
+                });
+                fixedInput.addEventListener('input', () => {
+                    resetPersonalizationValidation();
+                    updatePersonalizationPreviewLabel(variable);
+                    updatePreview();
+                });
+
+                group.append(labelColumn, sourceColumn, valueColumn);
+                variableMappings.append(group);
+                updatePersonalizationPreviewLabel(variable);
+            });
+            updatePreview();
+        }
+
+        function updatePersonalizationPreviewLabel(variable) {
+            const previewLabel = document.querySelector(`[data-variable-preview="${variable}"]`);
+            const mode = document.querySelector(`[data-variable-mode="${variable}"]`);
+            if (!previewLabel || !mode) return;
+            if (mode.value === 'fixed') {
+                const value = document.querySelector(`[data-variable-fixed="${variable}"]`).value.trim();
+                previewLabel.textContent = value ? `Vista previa: ${value}` : 'Vista previa: valor fijo pendiente';
+                return;
+            }
+            const selectedColumn = document.querySelector(`[data-variable-column="${variable}"]`);
+            const column = state.personalizationColumns.find(
+                (item) => String(item.index) === String(selectedColumn.value),
+            );
+            previewLabel.textContent = column
+                ? `Vista previa: {{${column.label}}}`
+                : 'Vista previa: selecciona una columna';
+        }
+
+        function renderPersonalizationReport(report) {
+            const container = document.getElementById('personalizationReport');
+            container.replaceChildren();
+            const summary = document.createElement('p');
+            summary.className = 'small fw-semibold mb-2';
+            summary.textContent = `Filas válidas: ${report.valid_count}. Filas rechazadas: ${report.rejected_count}.`;
+            container.append(summary);
+
+            const pageSize = 100;
+            [
+                ['valid', 'Filas válidas', report.valid_rows || []],
+                ['rejected', 'Filas rechazadas', report.rejected_rows || []],
+            ].forEach(([kind, heading, rows]) => {
+                if (!rows.length) return;
+                const section = document.createElement('section');
+                section.className = 'mb-3';
+                const title = document.createElement('h4');
+                title.className = 'small fw-bold';
+                title.textContent = heading;
+                section.append(title);
+
+                const tableWrap = document.createElement('div');
+                tableWrap.className = 'table-responsive';
+                const table = document.createElement('table');
+                table.className = 'table table-sm align-middle';
+                const head = document.createElement('thead');
+                const headRow = document.createElement('tr');
+                const headers = kind === 'valid'
+                    ? ['Fila', 'Documento', 'Contacto', 'Vista previa']
+                    : ['Fila', 'Documento', 'Motivo'];
+                headers.forEach((text) => {
+                    const cell = document.createElement('th');
+                    cell.scope = 'col';
+                    cell.textContent = text;
+                    headRow.append(cell);
+                });
+                head.append(headRow);
+                const body = document.createElement('tbody');
+                const start = state.personalizationReportOffsets[kind];
+                const page = rows.slice(start, start + pageSize);
+                page.forEach((item) => {
+                    const row = document.createElement('tr');
+                    const values = kind === 'valid'
+                        ? [item.row, item.document_number, item.contact_name, item.message]
+                        : [item.row, item.document_number || '—', item.reason];
+                    values.forEach((value) => {
+                        const cell = document.createElement('td');
+                        cell.textContent = value == null ? '' : String(value);
+                        row.append(cell);
+                    });
+                    body.append(row);
+                });
+                table.append(head, body);
+                tableWrap.append(table);
+                section.append(tableWrap);
+
+                if (start + pageSize < rows.length) {
+                    const more = document.createElement('button');
+                    more.type = 'button';
+                    more.className = 'btn btn-outline-secondary btn-sm';
+                    more.textContent = `Mostrar más (${rows.length - start - pageSize} restantes)`;
+                    more.addEventListener('click', () => {
+                        state.personalizationReportOffsets[kind] += pageSize;
+                        renderPersonalizationReport(report);
+                    });
+                    section.append(more);
+                }
+                container.append(section);
+            });
+        }
+
+        document.getElementById('personalizationFile').addEventListener('change', () => {
+            const input = document.getElementById('personalizationFile');
+            state.audienceFile = input.files[0] || null;
+            state.audienceFileIsOriginal = false;
+            updatePersonalizationFileSource();
+            resetPersonalizationValidation();
+            state.personalizationColumns = [];
+            document.getElementById('personalizationMapping').classList.add('d-none');
+            updatePreview();
+        });
+
+        async function inspectPersonalizationFile(showToast = true) {
+            const file = getPersonalizationFile();
+            if (!file) {
+                if (showToast) toast('Selecciona un archivo .xlsx.');
+                return;
+            }
+            const button = document.getElementById('inspectPersonalizationFile');
+            button.disabled = true;
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                const response = await fetch('/campanas/api/campaigns/personalization/inspect/', {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                    body: form,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || Object.values(data).flat().join(' ') || 'No se pudieron leer las columnas.');
+                }
+                renderPersonalizationColumns(data.columns || []);
+                if (showToast) toast('Columnas del Excel cargadas.');
+            } catch (error) {
+                console.error('Error al inspeccionar Excel:', error);
+                if (showToast) toast(error.message || 'No se pudo leer el archivo Excel.');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        document.getElementById('inspectPersonalizationFile').addEventListener('click', () => {
+            inspectPersonalizationFile();
+        });
+
+        document.getElementById('personalizationDocumentColumn').addEventListener('change', resetPersonalizationValidation);
+
+        document.getElementById('validatePersonalization').addEventListener('click', async (event) => {
+            const file = getPersonalizationFile();
+            const template = currentTpl();
+            if (!file || !template || !state.segment) {
+                return toast('Selecciona el Excel, la audiencia y una plantilla antes de validar.');
+            }
+            if (!state.personalizationColumns.length) {
+                return toast('Lee primero las columnas del archivo.');
+            }
+
+            const variables = [...new Set(extractVars(template.body).map((item) => String(Number(item))))];
+            const mappings = {};
+            for (const variable of variables) {
+                const mode = document.querySelector(`[data-variable-mode="${variable}"]`);
+                if (!mode) return toast(`Configura el origen de la variable {{${variable}}}.`);
+                mappings[variable] = mode.value === 'column'
+                    ? {
+                        source: 'column',
+                        column: Number(document.querySelector(`[data-variable-column="${variable}"]`).value),
+                    }
+                    : {
+                        source: 'fixed',
+                        value: document.querySelector(`[data-variable-fixed="${variable}"]`).value,
+                    };
+            }
+
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                form.append('segment', String(state.segment.id));
+                form.append('template', state.templateId);
+                form.append('template_name', template.name || '');
+                form.append('template_language', template.language || 'es_CO');
+                form.append('template_snapshot', JSON.stringify(selectedTemplateSnapshot(template)));
+                form.append('default_params', JSON.stringify(state.vars));
+                form.append('document_column', document.getElementById('personalizationDocumentColumn').value);
+                form.append('variable_mappings', JSON.stringify(mappings));
+
+                const response = await fetch('/campanas/api/campaigns/personalization/validate/', {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                    body: form,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || Object.values(data).flat().join(' ') || 'No se pudo validar el archivo.');
+                }
+                state.personalizationValidation = data;
+                renderPersonalizationReport(data);
+                fillReview();
+                toast('Validación del Excel completada.');
+            } catch (error) {
+                console.error('Error al validar personalización:', error);
+                toast(error.message || 'No se pudo validar el archivo.');
+            } finally {
+                button.disabled = false;
+            }
+        });
+
         document.getElementById('wizardBack').addEventListener('click', () => showStep(Math.max(1, state.step - 1)));
         document.getElementById('wizardNext').addEventListener('click', async () => {
             if (state.step === 1) {
@@ -923,6 +1350,12 @@ const OutboundUI = (() => {
             }
             if (state.step === 2) {
                 if (!state.templateId) return toast('Selecciona una plantilla.');
+                if (getPersonalizationFile() && !state.personalizationValidation) {
+                    return toast('Valida el Excel o quita el archivo antes de continuar.');
+                }
+                if (state.personalizationValidation && !state.personalizationValidation.valid_count) {
+                    return toast('El archivo no tiene filas válidas para la campaña.');
+                }
                 return showStep(3);
             }
             launch();
@@ -990,6 +1423,12 @@ const OutboundUI = (() => {
                 toast('La plantilla seleccionada ya no está disponible en Meta.');
                 return;
             }
+            const personalization = state.personalizationValidation;
+            const confirmPartial = document.getElementById('confirmPartialSend').checked;
+            if (personalization && personalization.rejected_count && !confirmPartial) {
+                toast('Confirma expresamente que continuarás solo con las filas válidas.');
+                return;
+            }
 
             try {
                 const payload = {
@@ -997,18 +1436,15 @@ const OutboundUI = (() => {
                     template: state.templateId,
                     template_name: selectedTemplate.name || '',
                     template_language: selectedTemplate.language || 'es_CO',
-                    template_snapshot: {
-                        name: selectedTemplate.name || '',
-                        language: selectedTemplate.language || 'es_CO',
-                        category: selectedTemplate.category || '',
-                        body_text: selectedTemplate.body || '',
-                        header_type: selectedTemplate.header_type || 'none',
-                        header_text: selectedTemplate.header_text || '',
-                        buttons: Array.isArray(selectedTemplate.buttons) ? selectedTemplate.buttons : [],
-                    },
+                    template_snapshot: selectedTemplateSnapshot(selectedTemplate),
                     segment: state.segment.id,
                     default_params: state.vars,
                 };
+
+                if (personalization) {
+                    payload.personalization_validation_id = personalization.validation_id;
+                    payload.confirm_partial = confirmPartial;
+                }
 
                 if (sendMode === 'later' && scheduleAt) {
                     payload.scheduled_at = scheduleAt;
@@ -1027,7 +1463,7 @@ const OutboundUI = (() => {
                 if (!response.ok) {
                     const error = await response.json();
                     console.error('Error al crear campaña:', error);
-                    toast('No se pudo crear la campaña en el backend.');
+                    toast(error.detail || Object.values(error).flat().join(' ') || 'No se pudo crear la campaña en el backend.');
                     return;
                 }
 

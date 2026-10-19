@@ -47,6 +47,132 @@ class MetaTemplateServiceTests(TestCase):
         self.assertFalse(meta_templates.is_sample_template("recordatorio"))
         self.assertFalse(meta_templates.is_sample_template(None))
 
+    @patch("communications.services.meta_templates.get_template")
+    def test_verify_campaign_template_accepts_matching_approved_own_template(self, get_template):
+        template = {
+            "meta_id": "999",
+            "name": "recordatorio",
+            "status": "APPROVED",
+            "category": "utility",
+            "language": "es_CO",
+            "body_text": "Hola {{1}}",
+            "header_type": "none",
+            "header_text": "",
+            "buttons": [],
+            "is_sample": False,
+        }
+        get_template.return_value = meta_templates.TemplateResult(
+            ok=True, meta_id="999", meta_status="APPROVED", template=template
+        )
+
+        snapshot = meta_templates.verify_campaign_template(
+            "999",
+            "recordatorio",
+            "es_CO",
+            {
+                "name": "recordatorio",
+                "language": "es_CO",
+                "category": "UTILITY",
+                "body_text": "Hola {{1}}",
+                "header_type": "none",
+                "header_text": "",
+                "buttons": [],
+            },
+        )
+
+        self.assertEqual(snapshot["body_text"], "Hola {{1}}")
+        get_template.assert_called_once_with("999")
+
+    @patch("communications.services.meta_templates.get_template")
+    def test_verify_campaign_template_rejects_meta_samples(self, get_template):
+        template = {
+            "meta_id": "999",
+            "name": "hello_world",
+            "status": "APPROVED",
+            "is_sample": True,
+        }
+        get_template.return_value = meta_templates.TemplateResult(
+            ok=True, meta_id="999", meta_status="APPROVED", template=template
+        )
+
+        with self.assertRaisesRegex(
+            meta_templates.TemplateVerificationError,
+            "plantillas de muestra",
+        ):
+            meta_templates.verify_campaign_template(
+                "999", "hello_world", "en_US", {"name": "hello_world"}
+            )
+
+    @patch("communications.services.meta_templates.get_template")
+    def test_verify_campaign_template_rejects_unapproved_templates(self, get_template):
+        get_template.return_value = meta_templates.TemplateResult(
+            ok=True,
+            meta_id="999",
+            meta_status="PENDING",
+            template={"meta_id": "999", "name": "recordatorio", "status": "PENDING"},
+        )
+
+        with self.assertRaisesRegex(
+            meta_templates.TemplateVerificationError,
+            "no está aprobada",
+        ):
+            meta_templates.verify_campaign_template(
+                "999", "recordatorio", "es_CO", {}
+            )
+
+    @patch("communications.services.meta_templates.get_template")
+    def test_verify_campaign_template_rejects_meta_lookup_failure(self, get_template):
+        get_template.return_value = meta_templates.TemplateResult(
+            ok=False, message="Meta no está disponible."
+        )
+
+        with self.assertRaisesRegex(
+            meta_templates.TemplateVerificationError,
+            "Meta no está disponible",
+        ):
+            meta_templates.verify_campaign_template(
+                "999", "recordatorio", "es_CO", {}
+            )
+
+    @patch("communications.services.meta_templates.get_template")
+    def test_verify_campaign_template_rejects_modified_identity_or_content(self, get_template):
+        template = {
+            "meta_id": "999",
+            "name": "recordatorio",
+            "status": "APPROVED",
+            "category": "utility",
+            "language": "es_CO",
+            "body_text": "Hola {{1}}",
+            "header_type": "none",
+            "header_text": "",
+            "buttons": [],
+            "is_sample": False,
+        }
+        get_template.return_value = meta_templates.TemplateResult(
+            ok=True, meta_id="999", meta_status="APPROVED", template=template
+        )
+        snapshot = {
+            "name": "recordatorio",
+            "language": "es_CO",
+            "category": "utility",
+            "body_text": "Hola {{1}}",
+            "header_type": "none",
+            "header_text": "",
+            "buttons": [],
+        }
+
+        for name, language, body in (
+            ("alterado", "es_CO", "Hola {{1}}"),
+            ("recordatorio", "en_US", "Hola {{1}}"),
+            ("recordatorio", "es_CO", "Texto manipulado"),
+        ):
+            with self.subTest(name=name, language=language, body=body):
+                submitted = {**snapshot, "body_text": body}
+                with self.assertRaises(meta_templates.TemplateVerificationError):
+                    meta_templates.verify_campaign_template(
+                        "999", name, language, submitted
+                    )
+
     def test_normalize_marks_sample_templates(self):
         sample = meta_templates.normalize_meta_template(
             {"id": "1", "name": "hello_world", "status": "APPROVED"}
@@ -263,6 +389,16 @@ class MetaTemplateServiceTests(TestCase):
 
         self.assertFalse(result.ok)
         self.assertEqual(result.kind, meta_templates.KIND_META)
+
+    @patch("communications.services.meta_templates.requests.get")
+    def test_get_template_rejects_unexpected_meta_payload_shape(self, get):
+        get.return_value = _response(["unexpected"])
+
+        result = meta_templates.get_template("999")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("respuesta ilegible", result.message)
 
     @patch("communications.services.meta_templates.requests.post")
     def test_edit_template_posts_components_to_meta(self, post):

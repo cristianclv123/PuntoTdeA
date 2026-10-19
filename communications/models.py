@@ -350,6 +350,29 @@ class BroadcastRecipient(models.Model):
         return f"{self.campaign_id} → {self.phone_snapshot} ({self.status})"
 
 
+class CampaignPersonalization(models.Model):
+    """Resultado temporal de la validación Excel y autorización de una campaña."""
+
+    validation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    campaign = models.OneToOneField(
+        Campaign,
+        on_delete=models.CASCADE,
+        related_name="personalization",
+        null=True,
+        blank=True,
+    )
+    segment = models.ForeignKey(AudienceSegment, on_delete=models.PROTECT)
+    template_fingerprint = models.CharField(max_length=64)
+    valid_rows = models.JSONField(default=list, blank=True)
+    authorized_contact_ids = models.JSONField(default=list, blank=True)
+    authorized_param_fingerprints = models.JSONField(default=dict, blank=True)
+    valid_count = models.PositiveIntegerField(default=0)
+    rejected_count = models.PositiveIntegerField(default=0)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class WhatsAppWebhookEvent(models.Model):
     """Evento recibido desde WhatsApp Cloud API, conservado para trazabilidad.
 
