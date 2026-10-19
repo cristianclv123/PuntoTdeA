@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import mixins, permissions, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from knowledge.chatbot.case_status import CaseStatusAPIError, get_case_status
@@ -101,6 +101,8 @@ class FAQViewSet(viewsets.ModelViewSet):
     queryset = _model_manager(FAQ).select_related("category", "intent").all()
     serializer_class = FAQSerializer
     permission_classes = [permissions.IsAuthenticated]
+    # Acepta JSON (gestion web sin imagen) y multipart (con imagen).
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
         qs = super().get_queryset()

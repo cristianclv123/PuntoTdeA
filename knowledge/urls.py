@@ -10,4 +10,5 @@ urlpatterns = [
     path('gestion/', views.manage, name='manage'),
     path('chatbot/', views.chatbot, name='chatbot'),
     path('chatbot/whatsapp/', views.whatsapp_webhook, name='whatsapp-webhook'),
+    path('faqs/<int:pk>/imagen/', views.faq_image, name='faq-image'),
 ]
