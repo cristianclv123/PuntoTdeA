@@ -1,4 +1,7 @@
+from django import forms
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
 
 from .models import Category, ChatConversation, FAQ, Intent, KnowledgeArticle
 
@@ -25,11 +28,53 @@ class KnowledgeArticleAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('title',)}
 
 
+class FAQAdminForm(forms.ModelForm):
+    """Formulario del admin: recibe la imagen como archivo y la guarda como
+    bytes en la BD con `set_image` (no en MEDIA_ROOT)."""
+
+    image_upload = forms.FileField(
+        required=False,
+        label='Imagen',
+        widget=forms.FileInput(attrs={'accept': 'image/*'}),
+    )
+
+    class Meta:
+        model = FAQ
+        fields = [
+            'question', 'answer', 'category', 'intent', 'is_active',
+            'order', 'valid_from', 'valid_until', 'image_upload',
+        ]
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        uploaded = self.cleaned_data.get('image_upload')
+        if uploaded is not None:
+            instance.set_image(uploaded)
+        if commit:
+            instance.save()
+        return instance
+
+
 @admin.register(FAQ)
 class FAQAdmin(admin.ModelAdmin):
-    list_display = ('question', 'category', 'is_active', 'order')
+    form = FAQAdminForm
+    list_display = ('question', 'category', 'is_active', 'order', 'has_image')
     search_fields = ('question', 'answer')
     list_filter = ('is_active', 'category')
+    readonly_fields = ('image_preview',)
+
+    @admin.display(boolean=True, description='Imagen')
+    def has_image(self, obj):
+        return obj.has_image
+
+    @admin.display(description='Imagen actual')
+    def image_preview(self, obj):
+        if not obj.has_image:
+            return '—'
+        url = reverse('knowledge:faq-image', args=[obj.pk])
+        return format_html(
+            '<img src="{}" style="max-height:140px; border-radius:6px;">', url
+        )
 
 
 @admin.register(ChatConversation)

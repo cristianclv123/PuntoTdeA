@@ -2,8 +2,8 @@ import json
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import JsonResponse
-from django.shortcuts import render
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
 
 from communications.webhooks.meta_webhook import whatsapp_webhook as meta_whatsapp_webhook
@@ -86,3 +86,19 @@ def chatbot(request):
 def whatsapp_webhook(request):
     """Alias temporal del webhook central para no romper URLs ya publicadas."""
     return meta_whatsapp_webhook(request)
+
+
+@login_required
+def faq_image(request, pk):
+    """Sirve el binario de la imagen de la FAQ guardado en la base de datos."""
+    faq = get_object_or_404(FAQ, pk=pk)
+    data = faq.get_image_bytes()
+    if not data:
+        return HttpResponse(status=404)
+    response = HttpResponse(
+        data, content_type=faq.image_content_type or 'application/octet-stream'
+    )
+    response['Cache-Control'] = 'private, max-age=86400'
+    if faq.image_name:
+        response['Content-Disposition'] = f'inline; filename="{faq.image_name}"'
+    return response

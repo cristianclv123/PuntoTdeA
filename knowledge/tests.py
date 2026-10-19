@@ -1,10 +1,17 @@
+import os
+import shutil
+import tempfile
 from datetime import datetime, time, timezone as datetime_timezone
 
-from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from rest_framework.test import APIClient
 
 from .chatbot.schedule import BusinessSchedule
 from .chatbot.workflow import ChatbotWorkflow
-from .models import Category, ChatConversation, KnowledgeArticle
+from .models import Category, ChatConversation, FAQ, KnowledgeArticle
 from .services.rag_service import answer_query, search_knowledge
 
 
@@ -112,3 +119,108 @@ class ChatbotWorkflowTests(TestCase):
         )
         self.assertFalse(result['within_business_hours'])
         self.assertIn('fuera del horario', result['message'])
+
+
+def _faq_image(name='faq.png'):
+    return SimpleUploadedFile(name, b'fake-faq-image-bytes', content_type='image/png')
+
+
+def _faq_with_image(**kwargs):
+    category = Category.objects.create(name='Matrículas')
+    faq = FAQ(category=category, **kwargs)
+    faq.set_image(_faq_image())
+    faq.save()
+    return faq
+
+
+class FAQImageTests(TestCase):
+    def setUp(self):
+        self._media = tempfile.mkdtemp()
+        self._override = override_settings(MEDIA_ROOT=self._media)
+        self._override.enable()
+        self.addCleanup(self._override.disable)
+        self.addCleanup(shutil.rmtree, self._media, True)
+        self.user = get_user_model().objects.create_superuser(username='tester', password='clave-segura')
+        self.api = APIClient()
+
+    def test_faq_stores_image_bytes_in_database_not_media(self):
+        faq = _faq_with_image(question='¿Qué es?', answer='Es algo.')
+        faq.refresh_from_db()
+        self.assertEqual(bytes(faq.image_data), b'fake-faq-image-bytes')
+        self.assertEqual(faq.image_name, 'faq.png')
+        self.assertEqual(faq.image_content_type, 'image/png')
+        self.assertTrue(faq.has_image)
+        self.assertEqual(os.listdir(self._media), [])
+
+    def test_image_endpoint_serves_stored_bytes(self):
+        faq = _faq_with_image(question='¿Qué es?', answer='Es algo.')
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('knowledge:faq-image', args=[faq.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/png')
+        self.assertEqual(response.content, b'fake-faq-image-bytes')
+
+    def test_image_endpoint_returns_404_without_image(self):
+        category = Category.objects.create(name='General')
+        faq = FAQ.objects.create(question='Sin imagen', answer='Sin imagen.', category=category)
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('knowledge:faq-image', args=[faq.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_api_stores_image_bytes_with_multipart(self):
+        self.api.force_login(self.user)
+        category = Category.objects.create(name='Pagos')
+        response = self.api.post(
+            reverse('faq-list'),
+            {
+                'question': '¿Cómo pago?',
+                'answer': 'Por la plataforma.',
+                'category': str(category.id),
+                'is_active': 'true',
+                'image': _faq_image('pago.png'),
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 201)
+        faq = FAQ.objects.get()
+        self.assertEqual(bytes(faq.image_data), b'fake-faq-image-bytes')
+        self.assertEqual(faq.image_name, 'pago.png')
+        self.assertEqual(faq.image_content_type, 'image/png')
+        self.assertTrue(response.json()['image_url'])
+
+    def test_api_update_replaces_image(self):
+        self.api.force_login(self.user)
+        faq = _faq_with_image(question='¿Qué es?', answer='Es algo.')
+        response = self.api.patch(
+            reverse('faq-detail', args=[faq.pk]),
+            {'image': _faq_image('nueva.png')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 200)
+        faq.refresh_from_db()
+        self.assertEqual(faq.image_name, 'nueva.png')
+
+    def test_admin_form_stores_image_bytes(self):
+        self.client.force_login(self.user)
+        category = Category.objects.create(name='Admin')
+        response = self.client.post(
+            reverse('admin:knowledge_faq_add'),
+            {
+                'question': 'Desde admin',
+                'answer': 'Respuesta',
+                'category': str(category.id),
+                'is_active': 'on',
+                'order': '0',
+                'image_upload': _faq_image('admin.png'),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        faq = FAQ.objects.get()
+        self.assertEqual(bytes(faq.image_data), b'fake-faq-image-bytes')
+        self.assertEqual(faq.image_name, 'admin.png')
+
+    def test_manage_page_renders_with_image_field(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('knowledge:manage'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="faq_image"')
