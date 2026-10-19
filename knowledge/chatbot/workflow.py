@@ -12,8 +12,8 @@ from .validation import validate_question
 
 
 FOLLOW_UP_MESSAGE = (
-    '¿Tienes otra duda, necesitas hablar con un asesor o ya quedó '
-    'resuelta tu duda? Responde sí para continuar o no si ya no necesitas ayuda.'
+    '¿Tienes otra duda, necesitas hablar con un asesor? '
+    'Responde sí para continuar o no si ya no necesitas ayuda.'
 )
 
 
