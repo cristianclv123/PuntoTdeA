@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib import messages
 
 from .models import (
     AudienceSegment,
@@ -70,7 +71,15 @@ class CampaignAdmin(admin.ModelAdmin):
                     level="warning",
                 )
                 continue
-            campaign_service.send_campaign(campaign)
+            try:
+                campaign_service.send_campaign(campaign)
+            except campaign_service.CampaignSendError as exc:
+                self.message_user(
+                    request,
+                    f"'{campaign.name}' no se envió: {exc}",
+                    level=messages.ERROR,
+                )
+                continue
             enviadas += 1
         if enviadas:
             self.message_user(request, f"{enviadas} campaña(s) enviada(s) correctamente.")

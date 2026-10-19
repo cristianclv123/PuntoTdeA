@@ -9,7 +9,7 @@ const OutboundUI = (() => {
         return null;
     }
 
-    const { CHANNELS, SEGMENTS, TEMPLATES, SEED_LOGS, loadCampaigns, saveCampaigns } = window.OutboundDemo;
+    const { CHANNELS, TEMPLATES, loadCampaigns, saveCampaigns } = window.OutboundDemo;
 
     function toast(message) {
         const el = document.getElementById('outboundToast');
@@ -26,11 +26,12 @@ const OutboundUI = (() => {
 
     function channelBadge(channel) {
         const meta = CHANNELS[channel] || { label: channel, icon: 'bi-broadcast' };
-        return `<span class="channel-chip"><span class="channel-icon ${channel}"><i class="bi ${meta.icon}"></i></span>${meta.label}</span>`;
+        return `<span class="channel-chip"><span class="channel-icon ${escapeHtml(channel)}"><i class="bi ${escapeHtml(meta.icon)}"></i></span>${escapeHtml(meta.label)}</span>`;
     }
 
-    function statusPill(status) {
-        return `<span class="status-pill status-${status}">${status}</span>`;
+    function statusPill(status, label = status) {
+        const statusClass = CAMPAIGN_STATUS_CLASSES[status] || status;
+        return `<span class="status-pill status-${escapeHtml(statusClass)}">${escapeHtml(label)}</span>`;
     }
 
     const CAMPAIGN_STATUS_LABELS = {
@@ -61,15 +62,47 @@ const OutboundUI = (() => {
     }
 
     async function fetchCampaigns() {
-        const response = await fetch('/campanas/api/campaigns/', {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        });
-        if (!response.ok) {
-            throw new Error(`No se pudieron cargar las campañas (${response.status}).`);
+        const campaigns = [];
+        const visitedUrls = new Set();
+        const apiPath = '/campanas/api/campaigns/';
+        let nextUrl = '/campanas/api/campaigns/';
+        let requestBase = new URL(nextUrl, window.location.origin);
+
+        while (nextUrl) {
+            const requestUrl = new URL(nextUrl, requestBase);
+            if (requestUrl.origin !== window.location.origin || requestUrl.pathname !== apiPath) {
+                throw new Error('La paginación de campañas devolvió una URL fuera de la API.');
+            }
+            requestUrl.hash = '';
+            if (visitedUrls.has(requestUrl.href)) {
+                throw new Error('La paginación de campañas contiene un ciclo.');
+            }
+            visitedUrls.add(requestUrl.href);
+
+            const response = await fetch(requestUrl, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) {
+                throw new Error(`No se pudieron cargar las campañas (${response.status}).`);
+            }
+            const payload = await response.json();
+            if (Array.isArray(payload)) {
+                campaigns.push(...payload);
+                nextUrl = null;
+            } else if (payload && Array.isArray(payload.results)) {
+                campaigns.push(...payload.results);
+                nextUrl = payload.next || null;
+                if (nextUrl && typeof nextUrl !== 'string') {
+                    throw new Error('La paginación de campañas devolvió un enlace inválido.');
+                }
+                requestBase = requestUrl;
+            } else {
+                throw new Error('La API devolvió una respuesta de campañas inválida.');
+            }
         }
-        const payload = await response.json();
-        return Array.isArray(payload) ? payload : (payload.results || []);
+
+        return campaigns;
     }
 
     function renderCampaignCard(campaign) {
@@ -99,7 +132,7 @@ const OutboundUI = (() => {
                     <div class="row text-center g-2 pt-2 mt-2 border-top border-secondary">
                         <div class="col-4">
                             <div class="fw-bold text-light">${Number(campaign.sent_count || 0).toLocaleString('es-CO')}</div>
-                            <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Enviados</div>
+                            <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Destinatarios no pendientes ni de baja</div>
                         </div>
                         <div class="col-4">
                             <div class="fw-bold text-light">${Number(campaign.delivered_count || 0).toLocaleString('es-CO')}</div>
@@ -129,6 +162,15 @@ const OutboundUI = (() => {
             errorClose.addEventListener('click', () => error.classList.add('d-none'));
         }
 
+        list.innerHTML = `
+            <div class="text-center py-4" style="color: var(--text-muted);">
+                <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                Cargando listado de campañas…
+            </div>
+        `;
+        empty.classList.add('d-none');
+        error.classList.add('d-none');
+
         try {
             const campaigns = await fetchCampaigns();
             count.textContent = `${campaigns.length} campaña${campaigns.length === 1 ? '' : 's'}`;
@@ -137,7 +179,7 @@ const OutboundUI = (() => {
         } catch (requestError) {
             list.innerHTML = '';
             count.textContent = 'Error';
-            if (errorText) errorText.textContent = requestError.message;
+            if (errorText) errorText.textContent = requestError.message || 'No fue posible cargar las campañas.';
             error.classList.remove('d-none');
         }
     }
@@ -146,95 +188,154 @@ const OutboundUI = (() => {
         return `/campanas/detalle/?id=${encodeURIComponent(id)}`;
     }
 
-    function renderDashboard() {
-        const campaigns = loadCampaigns();
-        const sent = campaigns.reduce((a, c) => a + (c.sent || 0), 0);
-        const delivered = campaigns.reduce((a, c) => a + (c.delivered || 0), 0);
-        const read = campaigns.reduce((a, c) => a + (c.read || 0), 0);
-        const replies = campaigns.reduce((a, c) => a + (c.replies || 0), 0);
-        const kpis = [
-            { label: 'Mensajes enviados', value: sent.toLocaleString('es-CO') },
-            { label: 'Entregados', value: delivered.toLocaleString('es-CO') },
-            { label: 'Tasa de lectura', value: pct(read, delivered) },
-            { label: 'Respuestas', value: replies.toLocaleString('es-CO') },
-        ];
-        document.getElementById('kpiGrid').innerHTML = kpis.map((k) => `
-            <div class="col-6 col-lg-3"><div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div></div></div>
-        `).join('');
+    async function renderDashboard() {
+        const kpiGrid = document.getElementById('kpiGrid');
+        const recentBody = document.getElementById('recentCampaignsBody');
+        const channelList = document.getElementById('channelList');
+        const activityFeed = document.getElementById('activityFeed');
+        if (!kpiGrid || !recentBody || !channelList || !activityFeed) return;
 
-        document.getElementById('recentCampaignsBody').innerHTML = campaigns.slice(0, 4).map((c) => `
-            <tr data-href="${campaignUrl(c.id)}">
-                <td class="fw-semibold">${c.name}</td>
-                <td>${channelBadge(c.channel)}</td>
-                <td>${c.segments.join(', ')}</td>
-                <td>${statusPill(c.status)}</td>
-                <td>${pct(c.read, c.delivered)}</td>
-            </tr>
-        `).join('');
-
-        document.getElementById('channelList').innerHTML = Object.entries(CHANNELS).map(([key, meta]) => {
-            const count = campaigns.filter((c) => c.channel === key).length;
-            return `<div class="channel-row">${channelBadge(key)}<span class="ms-auto small text-muted">${count} campañas</span></div>`;
-        }).join('');
-
-        document.getElementById('activityFeed').innerHTML = SEED_LOGS.slice(0, 4).map((log) => `
-            <div class="activity-item">
-                <span class="channel-icon ${log.channel}"><i class="bi ${CHANNELS[log.channel].icon}"></i></span>
-                <div>
-                    <div><strong>${log.person}</strong> · ${log.event} en ${log.campaign}</div>
-                    <time>${log.at}</time>
-                </div>
+        const loading = `
+            <div class="text-center text-muted small py-3">
+                <span class="spinner-border spinner-border-sm text-success me-1" role="status"></span>
+                Cargando campañas…
             </div>
-        `).join('');
+        `;
+        kpiGrid.innerHTML = `<div class="col-12">${loading}</div>`;
+        recentBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">${loading}</td></tr>`;
+        channelList.innerHTML = loading;
+        activityFeed.innerHTML = '<p class="small text-muted mb-0">La actividad reciente no está disponible en esta vista.</p>';
 
-        bindRowLinks();
+        try {
+            const campaigns = await fetchCampaigns();
+            const total = (field) => campaigns.reduce(
+                (sum, campaign) => sum + (Number(campaign[field]) || 0),
+                0,
+            );
+            const totalRecipients = total('total_recipients');
+            const sent = total('sent_count');
+            const delivered = total('delivered_count');
+            const failed = total('failed_count');
+            const kpis = [
+                { label: 'Destinatarios', value: totalRecipients },
+                { label: 'Destinatarios no pendientes ni de baja', value: sent },
+                { label: 'Entregados', value: delivered },
+                { label: 'Fallidos', value: failed },
+            ];
+            kpiGrid.innerHTML = kpis.map((kpi) => `
+                <div class="col-6 col-lg-3"><div class="kpi-card"><div class="kpi-label">${kpi.label}</div><div class="kpi-value">${kpi.value.toLocaleString('es-CO')}</div></div></div>
+            `).join('');
+
+            recentBody.innerHTML = campaigns.slice(0, 4).map((campaign) => `
+                <tr data-href="${campaignUrl(campaign.id)}">
+                    <td class="fw-semibold">${escapeHtml(campaign.name)}</td>
+                    <td>${channelBadge(campaign.channel)}</td>
+                    <td>${escapeHtml(campaign.segment_name || '—')}</td>
+                    <td>${statusPill(campaign.status, CAMPAIGN_STATUS_LABELS[campaign.status] || campaign.status)}</td>
+                    <td>${pct(Number(campaign.read_count) || 0, Number(campaign.delivered_count) || 0)}</td>
+                </tr>
+            `).join('');
+            if (!campaigns.length) {
+                recentBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay campañas registradas.</td></tr>';
+            }
+
+            const channelCounts = campaigns.reduce((counts, campaign) => {
+                counts[campaign.channel] = (counts[campaign.channel] || 0) + 1;
+                return counts;
+            }, {});
+            channelList.innerHTML = Object.entries(channelCounts).length
+                ? Object.entries(channelCounts).map(([channel, count]) => `
+                    <div class="channel-row">${channelBadge(channel)}<span class="ms-auto small text-muted">${count} campaña${count === 1 ? '' : 's'}</span></div>
+                `).join('')
+                : '<p class="small text-muted mb-0">No hay campañas registradas.</p>';
+
+            bindRowLinks();
+        } catch (requestError) {
+            const message = escapeHtml(requestError.message || 'No fue posible cargar las campañas.');
+            kpiGrid.innerHTML = `<div class="col-12"><div class="alert alert-danger mb-0">No fue posible cargar los indicadores: ${message}</div></div>`;
+            recentBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">${message}</td></tr>`;
+            channelList.innerHTML = `<p class="small text-danger mb-0">${message}</p>`;
+        }
     }
 
     function bindRowLinks(root = document) {
         root.querySelectorAll('tr[data-href]').forEach((row) => {
+            if (row.dataset.linkBound) return;
+            row.dataset.linkBound = '1';
             row.addEventListener('click', () => { window.location.href = row.dataset.href; });
         });
     }
 
-    function renderCampaignsPage() {
+    let campaignsPageItems = [];
+
+    async function renderCampaignsPage() {
         const search = document.getElementById('filterSearch');
         const channel = document.getElementById('filterChannel');
         const status = document.getElementById('filterStatus');
         const clear = document.getElementById('clearFilters');
+        const body = document.getElementById('campaignsTableBody');
+        const empty = document.getElementById('campaignsEmpty');
+        if (!search || !channel || !status || !clear || !body || !empty) return;
+
         const draw = () => {
             const q = (search.value || '').toLowerCase();
-            const list = loadCampaigns().filter((c) => {
-                const hay = `${c.name} ${c.segments.join(' ')}`.toLowerCase();
+            const list = campaignsPageItems.filter((campaign) => {
+                const hay = `${campaign.name || ''} ${campaign.segment_name || ''}`.toLowerCase();
                 const okQ = !q || hay.includes(q);
-                const okC = !channel.value || c.channel === channel.value;
-                const okS = !status.value || c.status === status.value;
+                const okC = !channel.value || campaign.channel === channel.value;
+                const okS = !status.value || campaign.status === status.value;
                 return okQ && okC && okS;
             });
-            const body = document.getElementById('campaignsTableBody');
-            const empty = document.getElementById('campaignsEmpty');
-            body.innerHTML = list.map((c) => `
-                <tr data-href="${campaignUrl(c.id)}">
-                    <td class="fw-semibold">${c.name}</td>
-                    <td>${channelBadge(c.channel)}</td>
-                    <td>${c.segments.join(', ')}</td>
-                    <td>${c.executedAt}</td>
-                    <td>${pct(c.read, c.delivered)}</td>
-                    <td>${pct(c.clicks, c.delivered)}</td>
-                    <td>${pct(c.replies, c.delivered)}</td>
-                    <td>${statusPill(c.status)}</td>
+            body.innerHTML = list.map((campaign) => {
+                const executionDate = campaign.scheduled_at || campaign.sent_at;
+                const formattedDate = executionDate && !Number.isNaN(Date.parse(executionDate))
+                    ? new Date(executionDate).toLocaleString('es-CO')
+                    : (executionDate || '—');
+                const statusLabel = CAMPAIGN_STATUS_LABELS[campaign.status] || campaign.status;
+                return `
+                <tr data-href="${campaignUrl(campaign.id)}">
+                    <td class="fw-semibold">${escapeHtml(campaign.name)}</td>
+                    <td>${channelBadge(campaign.channel)}</td>
+                    <td>${escapeHtml(campaign.segment_name || '—')}</td>
+                    <td>${escapeHtml(formattedDate)}</td>
+                    <td>${pct(Number(campaign.read_count) || 0, Number(campaign.delivered_count) || 0)}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>${statusPill(campaign.status, statusLabel)}</td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
             empty.classList.toggle('d-none', list.length > 0);
             bindRowLinks();
         };
-        [search, channel, status].forEach((el) => el.addEventListener('input', draw));
-        clear.addEventListener('click', () => {
-            search.value = '';
-            channel.value = '';
-            status.value = '';
+        if (!body.dataset.filtersBound) {
+            body.dataset.filtersBound = '1';
+            [search, channel, status].forEach((el) => {
+                el.addEventListener(el === search ? 'input' : 'change', draw);
+            });
+            clear.addEventListener('click', () => {
+                search.value = '';
+                channel.value = '';
+                status.value = '';
+                draw();
+            });
+        }
+
+        empty.classList.add('d-none');
+        body.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                    <span class="spinner-border spinner-border-sm text-success me-2" role="status"></span>
+                    Cargando listado de campañas…
+                </td>
+            </tr>
+        `;
+        try {
+            campaignsPageItems = await fetchCampaigns();
             draw();
-        });
-        draw();
+        } catch (requestError) {
+            body.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${escapeHtml(requestError.message || 'No fue posible cargar las campañas.')}</td></tr>`;
+        }
     }
 
     async function renderCampaignDetail() {
@@ -406,15 +507,22 @@ const OutboundUI = (() => {
 
     function previewHtml(channel, tpl, vars = {}) {
         if (!tpl) return '<p class="small text-muted">Sin plantilla.</p>';
-        let body = tpl.body;
-        Object.entries(vars).forEach(([k, v]) => {
-            body = body.replaceAll(`{{${k}}}`, v || `{{${k}}}`);
+        const body = escapeHtml(tpl.body || '').replace(/\{\{(\d+)\}\}/g, (placeholder, index) => {
+            const value = vars[index];
+            return value === undefined || value === null || value === ''
+                ? placeholder
+                : escapeHtml(value);
         });
-        const buttons = (tpl.buttons || []).map((b) => `<span>${escapeHtml((b && b.text) ? b.text : b)}</span>`).join('');
+        const header = tpl.header_type === 'text' && tpl.header_text
+            ? `<div class="wa-header fw-semibold mb-2">${escapeHtml(tpl.header_text)}</div>`
+            : '';
+        const buttons = (tpl.buttons || [])
+            .map((button) => `<span>${escapeHtml((button && button.text) ? button.text : button)}</span>`)
+            .join('');
         if (channel === 'whatsapp') {
-            return `<div class="wa-bubble">${body}<span class="wa-meta">TdeA · ahora</span></div>${buttons ? `<div class="wa-buttons">${buttons}</div>` : ''}`;
+            return `<div class="wa-bubble">${header}${body}<span class="wa-meta">TdeA · ahora</span></div>${buttons ? `<div class="wa-buttons">${buttons}</div>` : ''}`;
         }
-        return `<div class="wa-bubble" style="background:#fff">${body}</div>`;
+        return `<div class="wa-bubble" style="background:#fff">${header}${body}</div>`;
     }
 
     function extractVars(body) {
@@ -439,7 +547,37 @@ const OutboundUI = (() => {
             segment: null,
             templateId: '',
             vars: {},
+            pendingAudienceFile: null,
+            audienceFile: null,
+            audienceFileIsOriginal: false,
+            personalizationColumns: [],
+            personalizationValidation: null,
+            personalizationReportOffsets: { valid: 0, rejected: 0 },
+            templateLoadError: '',
         };
+
+        document.addEventListener('change', (event) => {
+            const input = event.target;
+            if (
+                input instanceof HTMLInputElement
+                && input.type === 'file'
+                && input.name === 'file'
+                && input.closest('dialog[data-ap-dialog="create"]')
+            ) {
+                state.pendingAudienceFile = input.files && input.files[0]
+                    ? input.files[0]
+                    : null;
+            }
+        }, true);
+
+        document.addEventListener('close', (event) => {
+            if (
+                event.target instanceof HTMLDialogElement
+                && event.target.matches('dialog[data-ap-dialog="create"]')
+            ) {
+                state.pendingAudienceFile = null;
+            }
+        }, true);
 
         // Selector de audiencia compartido (crear nueva / escoger existente).
         // Reemplaza la antigua carga de archivo "inline" y los chips de segmentos.
@@ -457,6 +595,20 @@ const OutboundUI = (() => {
                             contact_count: segment.contact_count,
                         }
                         : null;
+                    if (state.pendingAudienceFile) {
+                        state.audienceFile = state.pendingAudienceFile;
+                        state.audienceFileIsOriginal = true;
+                        state.pendingAudienceFile = null;
+                    } else {
+                        state.audienceFile = null;
+                        state.audienceFileIsOriginal = false;
+                        document.getElementById('personalizationFile').value = '';
+                    }
+                    updatePersonalizationFileSource();
+                    resetPersonalizationValidation();
+                    state.personalizationColumns = [];
+                    document.getElementById('personalizationMapping').classList.add('d-none');
+                    if (state.audienceFile) inspectPersonalizationFile();
                 },
             });
         }
@@ -546,8 +698,8 @@ const OutboundUI = (() => {
 
                     contactsBody.insertAdjacentHTML('beforeend', contacts.map((contact) => `
                         <tr>${contactColumns.map(([field]) =>
-                            `<td>${escapeHtml(contact[field] ?? '—')}</td>`
-                        ).join('')}</tr>
+                        `<td>${escapeHtml(contact[field] ?? '—')}</td>`
+                    ).join('')}</tr>
                     `).join(''));
                     contactsStatus.innerHTML = '';
                     contactsTable.classList.remove('d-none');
@@ -654,13 +806,19 @@ const OutboundUI = (() => {
 
         function renderTemplates() {
             const grid = document.getElementById('templateGrid');
-            const list = templates;
-            grid.innerHTML = list.map((t) => `
-                <button type="button" class="template-card ${String(t.id) === state.templateId ? 'is-selected' : ''}" data-tpl="${t.id}">
-                    <div class="small text-muted mb-1">${t.type}</div>
-                    <div class="fw-semibold">${t.name}</div>
+            if (!templates.length) {
+                const message = state.templateLoadError
+                    ? 'No fue posible cargar las plantillas de Meta. Intenta nuevamente más tarde.'
+                    : 'No hay plantillas aprobadas';
+                grid.innerHTML = `<div class="alert ${state.templateLoadError ? 'alert-danger' : 'alert-info'} mb-0">${escapeHtml(message)}</div>`;
+                return;
+            }
+            grid.innerHTML = templates.map((t) => `
+                <button type="button" class="template-card ${String(t.id) === state.templateId ? 'is-selected' : ''}" data-tpl="${escapeHtml(t.id)}">
+                    <div class="small text-muted mb-1">${escapeHtml(t.type)}</div>
+                    <div class="fw-semibold">${escapeHtml(t.name)}</div>
                     ${t.isSample ? '<span class="template-sample">PLANTILLA DE PRUEBA META</span>' : ''}
-                    <p class="small mb-0 mt-2 text-muted">${t.body}</p>
+                    <p class="small mb-0 mt-2 text-muted">${escapeHtml(t.body)}</p>
                 </button>
             `).join('');
         }
@@ -675,18 +833,16 @@ const OutboundUI = (() => {
                 if (!response.ok || data.success === false) {
                     throw new Error(data.message || `No se pudieron cargar las plantillas (${response.status}).`);
                 }
+                state.templateLoadError = '';
                 const results = Array.isArray(data.templates) ? data.templates : [];
                 const approved = results.filter(
-                    (template) => String(template.status || '').toUpperCase() === 'APPROVED'
+                    (template) => (
+                        String(template.status || '').toUpperCase() === 'APPROVED'
+                        && !template.is_sample
+                        && String(template.name || '').trim().toLowerCase() !== 'hello_world'
+                    )
                 );
-                // Las plantillas de muestra (`hello_world`) solo se ofrecen si
-                // son la única aprobada: Meta solo las deja enviar desde el
-                // número de prueba público (131058), así que se ocultan en
-                // cuanto hay una plantilla propia.
-                const offerable = approved.some((template) => !template.is_sample)
-                    ? approved.filter((template) => !template.is_sample)
-                    : approved;
-                templates = offerable
+                templates = approved
                     .map((template) => ({
                         id: String(template.meta_id || ''),
                         name: template.name || '',
@@ -694,11 +850,14 @@ const OutboundUI = (() => {
                         language: template.language || 'es_CO',
                         type: TEMPLATE_CATEGORY_LABELS[template.category] || template.category || 'Plantilla',
                         body: template.body_text || '',
+                        header_type: template.header_type || 'none',
+                        header_text: template.header_text || '',
                         buttons: Array.isArray(template.buttons) ? template.buttons : [],
                         isSample: Boolean(template.is_sample),
                     }));
                 renderTemplates();
             } catch (error) {
+                state.templateLoadError = error.message || 'Error de conexión.';
                 templates = [];
                 renderTemplates();
                 console.error('Error al cargar plantillas:', error);
@@ -714,6 +873,10 @@ const OutboundUI = (() => {
             const tpl = templates.find((template) => String(template.id) === card.dataset.tpl);
             if (!tpl) return;
             state.templateId = String(tpl.id);
+            resetPersonalizationValidation();
+            if (state.personalizationColumns.length) {
+                renderPersonalizationColumns(state.personalizationColumns);
+            }
             document.querySelectorAll('.template-card').forEach((el) => el.classList.toggle('is-selected', el === card));
             const vars = extractVars(tpl.body);
             const editor = document.getElementById('variableEditor');
@@ -735,6 +898,7 @@ const OutboundUI = (() => {
         document.getElementById('variableFields').addEventListener('input', (e) => {
             if (!e.target.classList.contains('var-input')) return;
             state.vars[e.target.dataset.var] = e.target.value;
+            resetPersonalizationValidation();
             updatePreview();
         });
 
@@ -747,7 +911,29 @@ const OutboundUI = (() => {
         }
 
         function updatePreview() {
-            document.getElementById('messagePreview').innerHTML = previewHtml(state.channel, currentTpl(), state.vars);
+            const previewVars = { ...state.vars };
+            const template = currentTpl();
+            if (template && state.personalizationColumns.length) {
+                for (const variable of new Set(extractVars(template.body).map((item) => String(Number(item))))) {
+                    const mode = document.querySelector(`[data-variable-mode="${variable}"]`);
+                    if (!mode) continue;
+                    if (mode.value === 'column') {
+                        const columnIndex = document.querySelector(`[data-variable-column="${variable}"]`)?.value;
+                        const column = state.personalizationColumns.find(
+                            (item) => String(item.index) === String(columnIndex),
+                        );
+                        if (column) previewVars[variable] = `{{${column.label}}}`;
+                    } else {
+                        const fixedValue = document.querySelector(`[data-variable-fixed="${variable}"]`)?.value;
+                        previewVars[variable] = fixedValue || `{{${variable}}}`;
+                    }
+                }
+            }
+            document.getElementById('messagePreview').innerHTML = previewHtml(
+                state.channel,
+                template,
+                previewVars,
+            );
         }
 
         function showStep(n) {
@@ -788,7 +974,20 @@ const OutboundUI = (() => {
                 `;
 
             document.getElementById('costEstimate').textContent =
-                `Audiencia estimada: ${size.toLocaleString('es-CO')} destinatarios.`;
+                state.personalizationValidation
+                    ? `Excel validado: ${state.personalizationValidation.valid_count} destinatarios válidos de ${size.toLocaleString('es-CO')} en la audiencia.`
+                    : `Audiencia estimada: ${size.toLocaleString('es-CO')} destinatarios.`;
+
+            const validation = state.personalizationValidation;
+            const confirmationPanel = document.getElementById('partialConfirmationPanel');
+            confirmationPanel.classList.toggle(
+                'd-none',
+                !validation || !validation.rejected_count || !validation.valid_count,
+            );
+            document.getElementById('partialConfirmationText').textContent = validation && validation.rejected_count
+                ? `${validation.rejected_count} filas se excluirán. La API volverá a comprobar la validación antes de crear destinatarios.`
+                : '';
+            document.getElementById('confirmPartialSend').checked = false;
         }
 
         function getCookie(name) {
@@ -805,6 +1004,337 @@ const OutboundUI = (() => {
             return '';
         }
 
+        function selectedTemplateSnapshot(template) {
+            return {
+                name: template.name || '',
+                language: template.language || 'es_CO',
+                category: template.category || '',
+                body_text: template.body || '',
+                header_type: template.header_type || 'none',
+                header_text: template.header_text || '',
+                buttons: Array.isArray(template.buttons) ? template.buttons : [],
+            };
+        }
+
+        function resetPersonalizationValidation() {
+            state.personalizationValidation = null;
+            state.personalizationReportOffsets = { valid: 0, rejected: 0 };
+            const report = document.getElementById('personalizationReport');
+            if (report) report.replaceChildren();
+            const confirmation = document.getElementById('partialConfirmationPanel');
+            if (confirmation) confirmation.classList.add('d-none');
+            const confirmationCheckbox = document.getElementById('confirmPartialSend');
+            if (confirmationCheckbox) confirmationCheckbox.checked = false;
+        }
+
+        function getPersonalizationFile() {
+            return state.audienceFile || document.getElementById('personalizationFile').files[0] || null;
+        }
+
+        function updatePersonalizationFileSource() {
+            const source = document.getElementById('personalizationFileSource');
+            const uploadField = document.getElementById('personalizationUploadField');
+            const file = getPersonalizationFile();
+            const hasOriginal = Boolean(file && state.audienceFileIsOriginal);
+            source.classList.toggle('d-none', !hasOriginal);
+            source.textContent = hasOriginal
+                ? `Se reutilizará el archivo original de la audiencia: ${file.name}`
+                : '';
+            uploadField.classList.toggle('d-none', hasOriginal || !state.segment);
+        }
+
+        function renderPersonalizationColumns(columns) {
+            state.personalizationColumns = columns;
+            const mapping = document.getElementById('personalizationMapping');
+            const documentColumn = document.getElementById('personalizationDocumentColumn');
+            const variableMappings = document.getElementById('personalizationVariableMappings');
+            mapping.classList.remove('d-none');
+            documentColumn.replaceChildren();
+            variableMappings.replaceChildren();
+
+            columns.forEach((column) => {
+                const option = document.createElement('option');
+                option.value = String(column.index);
+                option.textContent = column.label;
+                documentColumn.append(option);
+            });
+
+            const template = currentTpl();
+            const variables = template ? [...new Set(extractVars(template.body).map((item) => String(Number(item))))] : [];
+            variables.forEach((variable) => {
+                const group = document.createElement('div');
+                group.className = 'row g-2 align-items-end mb-2';
+
+                const labelColumn = document.createElement('div');
+                labelColumn.className = 'col-md-3';
+                const label = document.createElement('label');
+                label.className = 'form-label small mb-1';
+                label.textContent = `Variable {{${variable}}}`;
+                labelColumn.append(label);
+                const assignedColumn = document.createElement('span');
+                assignedColumn.className = 'form-text d-block';
+                assignedColumn.dataset.variablePreview = variable;
+                labelColumn.append(assignedColumn);
+
+                const sourceColumn = document.createElement('div');
+                sourceColumn.className = 'col-md-3';
+                const source = document.createElement('select');
+                source.className = 'form-select form-select-sm';
+                source.dataset.variableMode = variable;
+                source.setAttribute('aria-label', `Origen de la variable ${variable}`);
+                source.innerHTML = '<option value="column">Columna Excel</option><option value="fixed">Valor fijo</option>';
+                sourceColumn.append(source);
+
+                const valueColumn = document.createElement('div');
+                valueColumn.className = 'col-md-6';
+                const columnSelect = document.createElement('select');
+                columnSelect.className = 'form-select form-select-sm';
+                columnSelect.dataset.variableColumn = variable;
+                columns.forEach((column) => {
+                    const option = document.createElement('option');
+                    option.value = String(column.index);
+                    option.textContent = column.label;
+                    columnSelect.append(option);
+                });
+                const fixedInput = document.createElement('input');
+                fixedInput.className = 'form-control form-control-sm d-none';
+                fixedInput.type = 'text';
+                fixedInput.dataset.variableFixed = variable;
+                fixedInput.setAttribute('aria-label', `Valor fijo para la variable ${variable}`);
+                fixedInput.placeholder = `Valor fijo para {{${variable}}}`;
+                valueColumn.append(columnSelect, fixedInput);
+
+                source.addEventListener('change', () => {
+                    const isFixed = source.value === 'fixed';
+                    columnSelect.classList.toggle('d-none', isFixed);
+                    fixedInput.classList.toggle('d-none', !isFixed);
+                    resetPersonalizationValidation();
+                    updatePersonalizationPreviewLabel(variable);
+                    updatePreview();
+                });
+                columnSelect.addEventListener('change', () => {
+                    resetPersonalizationValidation();
+                    updatePersonalizationPreviewLabel(variable);
+                    updatePreview();
+                });
+                fixedInput.addEventListener('input', () => {
+                    resetPersonalizationValidation();
+                    updatePersonalizationPreviewLabel(variable);
+                    updatePreview();
+                });
+
+                group.append(labelColumn, sourceColumn, valueColumn);
+                variableMappings.append(group);
+                updatePersonalizationPreviewLabel(variable);
+            });
+            updatePreview();
+        }
+
+        function updatePersonalizationPreviewLabel(variable) {
+            const previewLabel = document.querySelector(`[data-variable-preview="${variable}"]`);
+            const mode = document.querySelector(`[data-variable-mode="${variable}"]`);
+            if (!previewLabel || !mode) return;
+            if (mode.value === 'fixed') {
+                const value = document.querySelector(`[data-variable-fixed="${variable}"]`).value.trim();
+                previewLabel.textContent = value ? `Vista previa: ${value}` : 'Vista previa: valor fijo pendiente';
+                return;
+            }
+            const selectedColumn = document.querySelector(`[data-variable-column="${variable}"]`);
+            const column = state.personalizationColumns.find(
+                (item) => String(item.index) === String(selectedColumn.value),
+            );
+            previewLabel.textContent = column
+                ? `Vista previa: {{${column.label}}}`
+                : 'Vista previa: selecciona una columna';
+        }
+
+        function renderPersonalizationReport(report) {
+            const container = document.getElementById('personalizationReport');
+            container.replaceChildren();
+            const summary = document.createElement('p');
+            summary.className = 'small fw-semibold mb-2';
+            summary.textContent = `Filas válidas: ${report.valid_count}. Filas rechazadas: ${report.rejected_count}.`;
+            container.append(summary);
+
+            const pageSize = 100;
+            [
+                ['valid', 'Filas válidas', report.valid_rows || []],
+                ['rejected', 'Filas rechazadas', report.rejected_rows || []],
+            ].forEach(([kind, heading, rows]) => {
+                if (!rows.length) return;
+                const section = document.createElement('section');
+                section.className = 'mb-3';
+                const title = document.createElement('h4');
+                title.className = 'small fw-bold';
+                title.textContent = heading;
+                section.append(title);
+
+                const tableWrap = document.createElement('div');
+                tableWrap.className = 'table-responsive';
+                const table = document.createElement('table');
+                table.className = 'table table-sm align-middle';
+                const head = document.createElement('thead');
+                const headRow = document.createElement('tr');
+                const headers = kind === 'valid'
+                    ? ['Fila', 'Documento', 'Contacto', 'Vista previa']
+                    : ['Fila', 'Documento', 'Motivo'];
+                headers.forEach((text) => {
+                    const cell = document.createElement('th');
+                    cell.scope = 'col';
+                    cell.textContent = text;
+                    headRow.append(cell);
+                });
+                head.append(headRow);
+                const body = document.createElement('tbody');
+                const start = state.personalizationReportOffsets[kind];
+                const page = rows.slice(start, start + pageSize);
+                page.forEach((item) => {
+                    const row = document.createElement('tr');
+                    const values = kind === 'valid'
+                        ? [item.row, item.document_number, item.contact_name, item.message]
+                        : [item.row, item.document_number || '—', item.reason];
+                    values.forEach((value) => {
+                        const cell = document.createElement('td');
+                        cell.textContent = value == null ? '' : String(value);
+                        row.append(cell);
+                    });
+                    body.append(row);
+                });
+                table.append(head, body);
+                tableWrap.append(table);
+                section.append(tableWrap);
+
+                if (start + pageSize < rows.length) {
+                    const more = document.createElement('button');
+                    more.type = 'button';
+                    more.className = 'btn btn-outline-secondary btn-sm';
+                    more.textContent = `Mostrar más (${rows.length - start - pageSize} restantes)`;
+                    more.addEventListener('click', () => {
+                        state.personalizationReportOffsets[kind] += pageSize;
+                        renderPersonalizationReport(report);
+                    });
+                    section.append(more);
+                }
+                container.append(section);
+            });
+        }
+
+        document.getElementById('personalizationFile').addEventListener('change', () => {
+            const input = document.getElementById('personalizationFile');
+            state.audienceFile = input.files[0] || null;
+            state.audienceFileIsOriginal = false;
+            updatePersonalizationFileSource();
+            resetPersonalizationValidation();
+            state.personalizationColumns = [];
+            document.getElementById('personalizationMapping').classList.add('d-none');
+            updatePreview();
+        });
+
+        async function inspectPersonalizationFile(showToast = true) {
+            const file = getPersonalizationFile();
+            if (!file) {
+                if (showToast) toast('Selecciona un archivo .xlsx.');
+                return;
+            }
+            const button = document.getElementById('inspectPersonalizationFile');
+            button.disabled = true;
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                const response = await fetch('/campanas/api/campaigns/personalization/inspect/', {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                    body: form,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || Object.values(data).flat().join(' ') || 'No se pudieron leer las columnas.');
+                }
+                renderPersonalizationColumns(data.columns || []);
+                if (showToast) toast('Columnas del Excel cargadas.');
+            } catch (error) {
+                console.error('Error al inspeccionar Excel:', error);
+                if (showToast) toast(error.message || 'No se pudo leer el archivo Excel.');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        document.getElementById('inspectPersonalizationFile').addEventListener('click', () => {
+            inspectPersonalizationFile();
+        });
+
+        document.getElementById('personalizationDocumentColumn').addEventListener('change', resetPersonalizationValidation);
+
+        document.getElementById('validatePersonalization').addEventListener('click', async (event) => {
+            const file = getPersonalizationFile();
+            const template = currentTpl();
+            if (!file || !template || !state.segment) {
+                return toast('Selecciona el Excel, la audiencia y una plantilla antes de validar.');
+            }
+            if (!state.personalizationColumns.length) {
+                return toast('Lee primero las columnas del archivo.');
+            }
+
+            const variables = [...new Set(extractVars(template.body).map((item) => String(Number(item))))];
+            const mappings = {};
+            for (const variable of variables) {
+                const mode = document.querySelector(`[data-variable-mode="${variable}"]`);
+                if (!mode) return toast(`Configura el origen de la variable {{${variable}}}.`);
+                mappings[variable] = mode.value === 'column'
+                    ? {
+                        source: 'column',
+                        column: Number(document.querySelector(`[data-variable-column="${variable}"]`).value),
+                    }
+                    : {
+                        source: 'fixed',
+                        value: document.querySelector(`[data-variable-fixed="${variable}"]`).value,
+                    };
+            }
+
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                const form = new FormData();
+                form.append('file', file);
+                form.append('segment', String(state.segment.id));
+                form.append('template', state.templateId);
+                form.append('template_name', template.name || '');
+                form.append('template_language', template.language || 'es_CO');
+                form.append('template_snapshot', JSON.stringify(selectedTemplateSnapshot(template)));
+                form.append('default_params', JSON.stringify(state.vars));
+                form.append('document_column', document.getElementById('personalizationDocumentColumn').value);
+                form.append('variable_mappings', JSON.stringify(mappings));
+
+                const response = await fetch('/campanas/api/campaigns/personalization/validate/', {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                    credentials: 'same-origin',
+                    body: form,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || Object.values(data).flat().join(' ') || 'No se pudo validar el archivo.');
+                }
+                state.personalizationValidation = data;
+                renderPersonalizationReport(data);
+                fillReview();
+                toast('Validación del Excel completada.');
+            } catch (error) {
+                console.error('Error al validar personalización:', error);
+                toast(error.message || 'No se pudo validar el archivo.');
+            } finally {
+                button.disabled = false;
+            }
+        });
+
         document.getElementById('wizardBack').addEventListener('click', () => showStep(Math.max(1, state.step - 1)));
         document.getElementById('wizardNext').addEventListener('click', async () => {
             if (state.step === 1) {
@@ -820,6 +1350,12 @@ const OutboundUI = (() => {
             }
             if (state.step === 2) {
                 if (!state.templateId) return toast('Selecciona una plantilla.');
+                if (getPersonalizationFile() && !state.personalizationValidation) {
+                    return toast('Valida el Excel o quita el archivo antes de continuar.');
+                }
+                if (state.personalizationValidation && !state.personalizationValidation.valid_count) {
+                    return toast('El archivo no tiene filas válidas para la campaña.');
+                }
                 return showStep(3);
             }
             launch();
@@ -887,6 +1423,12 @@ const OutboundUI = (() => {
                 toast('La plantilla seleccionada ya no está disponible en Meta.');
                 return;
             }
+            const personalization = state.personalizationValidation;
+            const confirmPartial = document.getElementById('confirmPartialSend').checked;
+            if (personalization && personalization.rejected_count && !confirmPartial) {
+                toast('Confirma expresamente que continuarás solo con las filas válidas.');
+                return;
+            }
 
             try {
                 const payload = {
@@ -894,16 +1436,15 @@ const OutboundUI = (() => {
                     template: state.templateId,
                     template_name: selectedTemplate.name || '',
                     template_language: selectedTemplate.language || 'es_CO',
-                    template_snapshot: {
-                        name: selectedTemplate.name || '',
-                        language: selectedTemplate.language || 'es_CO',
-                        category: selectedTemplate.category || '',
-                        body_text: selectedTemplate.body || '',
-                        buttons: Array.isArray(selectedTemplate.buttons) ? selectedTemplate.buttons : [],
-                    },
+                    template_snapshot: selectedTemplateSnapshot(selectedTemplate),
                     segment: state.segment.id,
                     default_params: state.vars,
                 };
+
+                if (personalization) {
+                    payload.personalization_validation_id = personalization.validation_id;
+                    payload.confirm_partial = confirmPartial;
+                }
 
                 if (sendMode === 'later' && scheduleAt) {
                     payload.scheduled_at = scheduleAt;
@@ -922,7 +1463,7 @@ const OutboundUI = (() => {
                 if (!response.ok) {
                     const error = await response.json();
                     console.error('Error al crear campaña:', error);
-                    toast('No se pudo crear la campaña en el backend.');
+                    toast(error.detail || Object.values(error).flat().join(' ') || 'No se pudo crear la campaña en el backend.');
                     return;
                 }
 
@@ -939,10 +1480,6 @@ const OutboundUI = (() => {
         }
 
         showStep(1);
-    }
-
-    function initAudiencesPage() {
-        initWizard(true);
     }
 
     function initTemplatesPage() {
@@ -1275,10 +1812,73 @@ const OutboundUI = (() => {
                             </div>
                         </div>
                         <div class="field-group">
+                            <label class="field-label" for="templateHeaderType">Encabezado opcional</label>
+                            <select id="templateHeaderType" class="field-select">
+                                <option value="none">Ninguno</option>
+                                <option value="text">Texto estático</option>
+                                <option value="image">Imagen</option>
+                                <option value="video">Video</option>
+                                <option value="document">Documento PDF</option>
+                            </select>
+                            <div id="templateHeaderFields" class="template-header-fields d-none">
+                                <div id="templateHeaderTextField" class="field-group d-none">
+                                    <label class="field-label" for="templateHeaderText">Texto del encabezado</label>
+                                    <input id="templateHeaderText" class="field-input" maxlength="60">
+                                </div>
+                                <div id="templateHeaderFileField" class="field-group d-none">
+                                    <label class="field-label" for="templateHeaderFile">Archivo</label>
+                                    <input id="templateHeaderFile" class="field-input" type="file">
+                                    <span id="templateHeaderFileName" class="template-file-name d-none"></span>
+                                    <div id="templateHeaderFileError" class="template-field-error d-none" role="alert"></div>
+                                </div>
+                                <p id="templateTextHeaderNote" class="template-text-header-note">
+                                    Máximo 60 caracteres, sin variables ni caracteres especiales de Markdown.
+                                </p>
+                                <div id="templateHeaderMediaWarning" class="template-local-warning d-none" role="note">
+                                    Los encabezados multimedia todavía no se pueden guardar ni enviar a Meta. Selecciona «Ninguno» o «Texto estático».
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field-group">
                             <label class="field-label" for="templateBodyInput">Contenido del mensaje</label>
                             <textarea id="templateBodyInput" class="field-textarea" rows="4"></textarea>
                         </div>
                         <div id="templateVariablesBox"></div>
+                        <section class="template-button-editor" aria-labelledby="templateButtonSectionTitle">
+                            <div class="template-button-editor-head">
+                                <h4 id="templateButtonSectionTitle">Botón URL opcional</h4>
+                                <button type="button" class="btn btn-outline-success btn-sm" id="templateAddButtonToggle">
+                                    <i class="bi bi-plus-lg me-1"></i> Agregar botón
+                                </button>
+                            </div>
+                            <p class="template-button-count" id="templateButtonCount">0 de 3 botones</p>
+                            <div id="templateButtonList" class="template-button-list"></div>
+                            <div id="templateButtonForm" class="template-button-form d-none">
+                                <div class="template-fields">
+                                    <div class="field-group">
+                                        <label class="field-label" for="templateButtonText">Nombre del botón</label>
+                                        <input id="templateButtonText" class="field-input" maxlength="25" autocomplete="off" required aria-describedby="templateButtonTextError">
+                                        <div id="templateButtonTextError" class="template-field-error d-none" role="alert"></div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label class="field-label" for="templateButtonUrl">URL del botón</label>
+                                        <input id="templateButtonUrl" class="field-input" type="url" inputmode="url" placeholder="https://ejemplo.com" autocomplete="url" required aria-describedby="templateButtonUrlError">
+                                        <div id="templateButtonUrlError" class="template-field-error d-none" role="alert"></div>
+                                    </div>
+                                </div>
+                                <div class="template-button-form-actions">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="templateButtonCancel">Cancelar</button>
+                                    <button type="button" class="btn btn-success btn-sm" id="templateButtonSave">Agregar</button>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="template-live-preview" aria-labelledby="templatePreviewTitle">
+                            <h4 id="templatePreviewTitle">Vista previa local</h4>
+                            <div class="template-preview-phone">
+                                <div class="template-preview-message" id="templatePreviewMessage" aria-live="polite"></div>
+                            </div>
+                            <p class="template-preview-note">Los valores de ejemplo y archivos se muestran solo en este navegador; no se envían al servidor desde la vista previa.</p>
+                        </section>
                         <div class="template-dialog-actions">
                             <button type="button" class="btn btn-outline-secondary" id="templateCancel">Cancelar</button>
                             <div class="d-flex flex-wrap gap-2">
@@ -1300,6 +1900,48 @@ const OutboundUI = (() => {
         const variablesBox = document.getElementById('templateVariablesBox');
         const saveDraftBtn = document.getElementById('templateSaveDraft');
         const saveMetaBtn = document.getElementById('templateSaveMeta');
+        const headerTypeInput = document.getElementById('templateHeaderType');
+        const headerFields = document.getElementById('templateHeaderFields');
+        const headerTextField = document.getElementById('templateHeaderTextField');
+        const headerTextInput = document.getElementById('templateHeaderText');
+        const headerTextNote = document.getElementById('templateTextHeaderNote');
+        const headerMediaWarning = document.getElementById('templateHeaderMediaWarning');
+        const headerFileField = document.getElementById('templateHeaderFileField');
+        const headerFileInput = document.getElementById('templateHeaderFile');
+        const headerFileName = document.getElementById('templateHeaderFileName');
+        const headerFileError = document.getElementById('templateHeaderFileError');
+        const buttonToggle = document.getElementById('templateAddButtonToggle');
+        const buttonCount = document.getElementById('templateButtonCount');
+        const buttonList = document.getElementById('templateButtonList');
+        const buttonForm = document.getElementById('templateButtonForm');
+        const buttonTextInput = document.getElementById('templateButtonText');
+        const buttonUrlInput = document.getElementById('templateButtonUrl');
+        const buttonTextError = document.getElementById('templateButtonTextError');
+        const buttonUrlError = document.getElementById('templateButtonUrlError');
+        const buttonSave = document.getElementById('templateButtonSave');
+        const buttonCancel = document.getElementById('templateButtonCancel');
+        const previewMessage = document.getElementById('templatePreviewMessage');
+        const templateButtons = [];
+        let editingButtonIndex = null;
+        let headerObjectUrl = '';
+        let headerFile = null;
+
+        const releaseHeaderObjectUrl = () => {
+            if (headerObjectUrl) {
+                URL.revokeObjectURL(headerObjectUrl);
+                headerObjectUrl = '';
+            }
+        };
+
+        const clearHeaderFile = () => {
+            releaseHeaderObjectUrl();
+            headerFile = null;
+            headerFileInput.value = '';
+            headerFileName.textContent = '';
+            headerFileName.classList.add('d-none');
+            headerFileError.textContent = '';
+            headerFileError.classList.add('d-none');
+        };
 
         form.addEventListener('submit', (event) => event.preventDefault());
         document.getElementById('templateDialogClose').addEventListener('click', () => dialog.close());
@@ -1335,7 +1977,306 @@ const OutboundUI = (() => {
                 </div>`;
         }
 
-        bodyInput.addEventListener('input', () => renderVariables());
+        function renderTemplatePreview() {
+            previewMessage.replaceChildren();
+            const headerType = headerTypeInput.value;
+            if (headerType !== 'none') {
+                const header = document.createElement('div');
+                header.className = 'template-preview-header';
+                if (headerType === 'text') {
+                    header.textContent = headerTextInput.value.trim() || 'Texto del encabezado';
+                } else if (headerObjectUrl && headerType === 'image') {
+                    const image = document.createElement('img');
+                    image.src = headerObjectUrl;
+                    image.alt = 'Vista previa del encabezado de imagen';
+                    header.append(image);
+                } else if (headerObjectUrl && headerType === 'video') {
+                    const video = document.createElement('video');
+                    video.controls = true;
+                    video.preload = 'metadata';
+                    video.src = headerObjectUrl;
+                    video.setAttribute('aria-label', 'Vista previa local del video');
+                    const extension = headerFile?.name.split('.').pop().toLowerCase();
+                    const mimeType = headerFile?.type || (extension === 'mov' ? 'video/quicktime' : 'video/mp4');
+                    if (!video.canPlayType(mimeType)) {
+                        const message = document.createElement('span');
+                        message.textContent = 'El navegador no puede reproducir este formato; el archivo sigue siendo local.';
+                        header.append(message);
+                    } else {
+                        header.append(video);
+                    }
+                } else if (headerType === 'document') {
+                    header.classList.add('template-preview-header--document');
+                    const icon = document.createElement('i');
+                    icon.className = 'bi bi-file-earmark-pdf';
+                    icon.setAttribute('aria-hidden', 'true');
+                    const label = document.createElement('span');
+                    label.textContent = headerFile?.name || 'Documento PDF';
+                    header.append(icon, label);
+                } else {
+                    header.textContent = headerType === 'image' ? 'Imagen sin seleccionar' : 'Video sin seleccionar';
+                }
+                previewMessage.append(header);
+            }
+
+            const body = document.createElement('div');
+            body.className = 'template-preview-body';
+            body.textContent = (bodyInput.value || 'Escribe el contenido del mensaje.')
+                .replace(/\{\{(\d+)\}\}/g, (_, number) => `Ejemplo ${number}`);
+            previewMessage.append(body);
+
+            if (templateButtons.length) {
+                const buttonsContainer = document.createElement('div');
+                buttonsContainer.className = 'template-preview-buttons';
+
+                templateButtons.forEach((item) => {
+                    const button = document.createElement('a');
+                    button.className = 'template-preview-button';
+                    button.textContent = typeof item?.text === 'string' ? item.text : '';
+
+                    if (isValidButton(item)) {
+                        const destination = new URL(item.url.trim());
+                        button.href = destination.href;
+                        button.target = '_blank';
+                        button.rel = 'noopener noreferrer';
+                        button.setAttribute(
+                            'aria-label',
+                            `Abrir enlace externo: ${item.text.trim()}`
+                        );
+                        const icon = document.createElement('i');
+                        icon.className = 'bi bi-box-arrow-up-right';
+                        icon.setAttribute('aria-hidden', 'true');
+                        button.append(icon);
+                    } else {
+                        button.setAttribute('aria-disabled', 'true');
+                        button.setAttribute(
+                            'aria-label',
+                            `${button.textContent || 'Enlace'} no disponible`
+                        );
+                    }
+
+                    buttonsContainer.append(button);
+                });
+
+                previewMessage.append(buttonsContainer);
+            }
+        }
+
+        function updateHeaderFields() {
+            const headerType = headerTypeInput.value;
+            headerFields.classList.toggle('d-none', headerType === 'none');
+            headerTextField.classList.toggle('d-none', headerType !== 'text');
+            headerTextNote.classList.toggle('d-none', headerType !== 'text');
+            headerFileField.classList.toggle('d-none', !['image', 'video', 'document'].includes(headerType));
+            headerMediaWarning.classList.toggle(
+                'd-none',
+                !['image', 'video', 'document'].includes(headerType)
+            );
+            headerFileInput.accept = {
+                image: '.jpg,.jpeg,.png',
+                video: '.mp4,.mov',
+                document: '.pdf,application/pdf',
+            }[headerType] || '';
+            clearHeaderFile();
+            renderTemplatePreview();
+        }
+
+        function renderTemplateButtons() {
+            buttonList.replaceChildren();
+            templateButtons.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'template-button-row';
+                const description = document.createElement('span');
+                description.textContent = `${item.text || 'Botón'}${item.url ? ` · ${item.url}` : ''}`;
+
+                const actions = document.createElement('div');
+                actions.className = 'template-button-row-actions';
+                const edit = document.createElement('button');
+                edit.type = 'button';
+                edit.className = 'btn btn-outline-secondary btn-sm';
+                edit.dataset.buttonAction = 'edit';
+                edit.dataset.buttonIndex = String(index);
+                edit.textContent = 'Editar';
+                edit.setAttribute('aria-label', `Editar botón ${item.text || index + 1}`);
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'btn btn-outline-danger btn-sm';
+                remove.dataset.buttonAction = 'remove';
+                remove.dataset.buttonIndex = String(index);
+                remove.textContent = 'Eliminar';
+                remove.setAttribute('aria-label', `Eliminar botón ${item.text || index + 1}`);
+                actions.append(edit, remove);
+                row.append(description, actions);
+                buttonList.append(row);
+            });
+            buttonCount.textContent = `${templateButtons.length} de 3 botones`;
+            buttonToggle.disabled = (templateButtons.length >= 3 && editingButtonIndex === null)
+                || !buttonForm.classList.contains('d-none');
+            renderTemplatePreview();
+        }
+
+        function clearButtonErrors() {
+            [[buttonTextError, buttonTextInput], [buttonUrlError, buttonUrlInput]].forEach(([error, input]) => {
+                error.textContent = '';
+                error.classList.add('d-none');
+                input.removeAttribute('aria-invalid');
+            });
+        }
+
+        function closeButtonForm() {
+            editingButtonIndex = null;
+            buttonForm.classList.add('d-none');
+            buttonTextInput.value = '';
+            buttonUrlInput.value = '';
+            buttonSave.textContent = 'Agregar';
+            clearButtonErrors();
+            renderTemplateButtons();
+        }
+
+        function showButtonFieldError(errorElement, input, message) {
+            errorElement.textContent = message;
+            errorElement.classList.remove('d-none');
+            input.setAttribute('aria-invalid', 'true');
+        }
+
+        function validateButtonFields() {
+            clearButtonErrors();
+            const text = buttonTextInput.value.trim();
+            const rawUrl = buttonUrlInput.value.trim();
+            let url = null;
+            if (!text) {
+                showButtonFieldError(buttonTextError, buttonTextInput, 'Escribe el nombre del botón.');
+            }
+            try {
+                url = new URL(rawUrl);
+                if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) {
+                    url = null;
+                }
+            } catch {
+                url = null;
+            }
+            if (!url) {
+                showButtonFieldError(buttonUrlError, buttonUrlInput, 'Ingresa una URL absoluta HTTPS sin credenciales.');
+            }
+            if (!text || !url) return null;
+            return { text, url: url.href };
+        }
+
+        function isValidButton(item) {
+            if (!item || typeof item.text !== 'string' || !item.text.trim() || typeof item.url !== 'string') {
+                return false;
+            }
+            try {
+                const url = new URL(item.url.trim());
+                return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+            } catch {
+                return false;
+            }
+        }
+
+        function validateHeaderFile(file, headerType) {
+            const extension = file.name.split('.').pop().toLowerCase();
+            const allowed = {
+                image: { extensions: ['jpg', 'jpeg', 'png'], mimeTypes: ['image/jpeg', 'image/png'] },
+                video: { extensions: ['mp4', 'mov'], mimeTypes: ['video/mp4', 'video/quicktime'] },
+                document: { extensions: ['pdf'], mimeTypes: ['application/pdf'] },
+            }[headerType];
+            if (!allowed || !allowed.extensions.includes(extension)) {
+                return `Selecciona ${headerType === 'image' ? 'una imagen JPG, JPEG o PNG' : headerType === 'video' ? 'un video MP4 o MOV' : 'un documento PDF'}.`;
+            }
+            if (file.type && !allowed.mimeTypes.includes(file.type.toLowerCase())) {
+                return 'El tipo de archivo no coincide con la extensión permitida.';
+            }
+            return '';
+        }
+
+        bodyInput.addEventListener('input', () => {
+            renderVariables();
+            renderTemplatePreview();
+        });
+        headerTypeInput.addEventListener('change', updateHeaderFields);
+        headerTextInput.addEventListener('input', renderTemplatePreview);
+        headerFileInput.addEventListener('change', () => {
+            const file = headerFileInput.files[0];
+            releaseHeaderObjectUrl();
+            headerFile = null;
+            headerFileName.textContent = '';
+            headerFileName.classList.add('d-none');
+            headerFileError.textContent = '';
+            headerFileError.classList.add('d-none');
+            if (!file) {
+                renderTemplatePreview();
+                return;
+            }
+            const error = validateHeaderFile(file, headerTypeInput.value);
+            if (error) {
+                headerFileError.textContent = error;
+                headerFileError.classList.remove('d-none');
+                headerFileInput.value = '';
+                renderTemplatePreview();
+                return;
+            }
+            headerFile = file;
+            headerFileInput.value = '';
+            headerObjectUrl = URL.createObjectURL(file);
+            headerFileName.textContent = file.name;
+            headerFileName.classList.remove('d-none');
+            renderTemplatePreview();
+        });
+
+        buttonToggle.addEventListener('click', () => {
+            if (templateButtons.length >= 3 && editingButtonIndex === null) return;
+            editingButtonIndex = null;
+            buttonTextInput.value = '';
+            buttonUrlInput.value = '';
+            buttonSave.textContent = 'Agregar';
+            clearButtonErrors();
+            buttonForm.classList.remove('d-none');
+            buttonToggle.disabled = true;
+            buttonTextInput.focus();
+        });
+        buttonCancel.addEventListener('click', closeButtonForm);
+        buttonSave.addEventListener('click', () => {
+            const value = validateButtonFields();
+            if (!value) return;
+            if (editingButtonIndex === null) {
+                if (templateButtons.length >= 3) return;
+                templateButtons.push(value);
+            } else {
+                templateButtons[editingButtonIndex] = value;
+            }
+            closeButtonForm();
+        });
+        buttonList.addEventListener('click', (event) => {
+            const action = event.target.closest('[data-button-action]');
+            if (!action || !buttonList.contains(action)) return;
+            const index = Number(action.dataset.buttonIndex);
+            if (!Number.isInteger(index) || index < 0 || index >= templateButtons.length) return;
+            if (action.dataset.buttonAction === 'edit') {
+                editingButtonIndex = index;
+                buttonTextInput.value = templateButtons[index].text;
+                buttonUrlInput.value = templateButtons[index].url;
+                buttonSave.textContent = 'Guardar cambios';
+                clearButtonErrors();
+                buttonForm.classList.remove('d-none');
+                buttonToggle.disabled = true;
+                buttonTextInput.focus();
+            } else if (action.dataset.buttonAction === 'remove') {
+                templateButtons.splice(index, 1);
+                if (editingButtonIndex === index) closeButtonForm();
+                else {
+                    if (editingButtonIndex !== null && index < editingButtonIndex) editingButtonIndex -= 1;
+                    renderTemplateButtons();
+                }
+            }
+        });
+
+        dialog.addEventListener('close', () => {
+            clearHeaderFile();
+            headerTypeInput.value = 'none';
+            headerTextInput.value = '';
+            updateHeaderFields();
+        });
 
         function openDialog(nextMode, options = {}) {
             mode = nextMode;
@@ -1346,6 +2287,24 @@ const OutboundUI = (() => {
             nameInput.value = options.name || '';
             categoryInput.value = options.category || 'utility';
             bodyInput.value = options.bodyText || '';
+            templateButtons.splice(0, templateButtons.length, ...(
+                Array.isArray(options.buttons)
+                    ? options.buttons
+                        .filter((item) => item && typeof item === 'object')
+                        .map((item) => ({
+                            text: typeof item.text === 'string' ? item.text : '',
+                            url: typeof item.url === 'string' ? item.url : '',
+                        }))
+                    : []
+            ));
+            buttonForm.classList.add('d-none');
+            editingButtonIndex = null;
+            headerTypeInput.value = ['none', 'text', 'image', 'video', 'document'].includes(options.headerType)
+                ? options.headerType
+                : 'none';
+            headerTextInput.value = options.headerText || '';
+            updateHeaderFields();
+            renderTemplateButtons();
 
             const editingMeta = mode === 'edit-meta';
             const editingDraft = mode === 'edit-draft';
@@ -1360,16 +2319,34 @@ const OutboundUI = (() => {
 
             saveDraftBtn.classList.toggle('d-none', editingMeta);
             saveDraftBtn.textContent = editingDraft ? 'Guardar borrador' : 'Guardar como borrador';
+            saveDraftBtn.disabled = false;
+            saveMetaBtn.disabled = false;
+            buttonToggle.disabled = templateButtons.length >= 3;
 
             saveMetaBtn.textContent = editingMeta
                 ? 'Guardar cambios'
                 : (editingDraft ? 'Enviar a Meta' : 'Guardar y enviar a Meta');
 
             renderVariables(options.variableTypes || {});
+            renderTemplatePreview();
             dialog.showModal();
         }
 
         function collectPayload() {
+            const headerType = headerTypeInput.value;
+            if (['image', 'video', 'document'].includes(headerType)) {
+                throw new Error('Los encabezados multimedia no se pueden guardar ni enviar todavía. Selecciona «Ninguno» o «Texto estático».');
+            }
+            const headerText = headerType === 'text' ? headerTextInput.value.trim() : '';
+            if (headerType === 'text' && !headerText) {
+                throw new Error('Escribe el texto del encabezado.');
+            }
+            if (headerText.length > 60) {
+                throw new Error('El encabezado no puede superar 60 caracteres.');
+            }
+            if (headerText.includes('{{') || headerText.includes('}}')) {
+                throw new Error('El encabezado estático no admite variables.');
+            }
             const name = nameInput.value.trim();
             if (!name && mode !== 'edit-meta') {
                 throw new Error('Escribe un nombre para el borrador.');
@@ -1385,11 +2362,22 @@ const OutboundUI = (() => {
                 }
                 variableTypes[select.dataset.variableNumber] = select.value;
             }
+            for (const [index, item] of templateButtons.entries()) {
+                if (!isValidButton(item)) {
+                    throw new Error(`El botón ${index + 1} debe tener un nombre y una URL HTTPS válida sin credenciales.`);
+                }
+            }
+            if (templateButtons.length > 3) {
+                throw new Error('Una plantilla admite máximo tres botones URL. Elimina los adicionales antes de guardar.');
+            }
             return {
                 name,
                 category: categoryInput.value,
                 body_text: bodyText,
                 variable_types: variableTypes,
+                header_type: headerType,
+                header_text: headerText,
+                buttons: templateButtons.map((item) => ({ text: item.text.trim(), url: item.url.trim() })),
             };
         }
 
@@ -1434,6 +2422,9 @@ const OutboundUI = (() => {
                 body: JSON.stringify({
                     body_text: payload.body_text,
                     variable_types: payload.variable_types,
+                    buttons: payload.buttons,
+                    header_type: payload.header_type,
+                    header_text: payload.header_text,
                 }),
             });
             if (!response.ok || data.success === false) {
@@ -1586,6 +2577,9 @@ const OutboundUI = (() => {
                         category: template.category,
                         bodyText: template.body_text,
                         variableTypes: template.variable_types || {},
+                        headerType: template.header_type,
+                        headerText: template.header_text,
+                        buttons: template.buttons,
                     });
                 } else {
                     const template = metaTemplates.find((item) => String(item.meta_id) === String(id));
@@ -1596,6 +2590,9 @@ const OutboundUI = (() => {
                         category: template.category,
                         bodyText: template.body_text,
                         variableTypes: Object.fromEntries((template.indexes || []).map((index) => [index, 'text'])),
+                        headerType: template.header_type,
+                        headerText: template.header_text,
+                        buttons: template.buttons,
                     });
                 }
                 return;
@@ -1609,6 +2606,9 @@ const OutboundUI = (() => {
                     category: template.category,
                     bodyText: template.body_text,
                     variableTypes: Object.fromEntries((template.indexes || []).map((index) => [index, 'text'])),
+                    headerType: template.header_type,
+                    headerText: template.header_text,
+                    buttons: template.buttons,
                 });
                 showAlert('Duplicando una plantilla de Meta como borrador local.', 'warn');
                 return;
@@ -1673,46 +2673,13 @@ const OutboundUI = (() => {
         load();
     }
 
-    function renderSegments() {
-        const grid = document.getElementById('segmentsGrid');
-        grid.innerHTML = SEGMENTS.map((s) => `
-            <div class="col-md-6 col-lg-4">
-                <div class="card outbound-card h-100">
-                    <div class="card-body d-flex flex-column">
-                        <h2 class="h5">${s.name}</h2>
-                        <p class="text-muted small mb-2">Origen: ${s.source}</p>
-                        <p class="fw-bold text-success mb-3">${s.size.toLocaleString('es-CO')} personas</p>
-                        <a class="btn btn-entry mt-auto" href="/campanas/nueva/?segment=${s.id}">Iniciar campaña</a>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function renderLogs() {
-        const search = document.getElementById('logSearch');
-        const channel = document.getElementById('logChannel');
-        const draw = () => {
-            const q = (search.value || '').toLowerCase();
-            const rows = SEED_LOGS.filter((l) => {
-                const hay = `${l.person} ${l.campaign} ${l.event} ${l.detail}`.toLowerCase();
-                return (!q || hay.includes(q)) && (!channel.value || l.channel === channel.value);
-            });
-            document.getElementById('logsTableBody').innerHTML = rows.map((l) => `
-                <tr>
-                    <td>${l.at}</td>
-                    <td class="fw-semibold">${l.person}</td>
-                    <td>${channelBadge(l.channel)}</td>
-                    <td>${l.campaign}</td>
-                    <td>${l.event}</td>
-                    <td>${l.detail}</td>
-                </tr>
-            `).join('');
-        };
-        search.addEventListener('input', draw);
-        channel.addEventListener('change', draw);
-        draw();
-    }
-
-    return { renderDashboard, renderCampaignCards, renderCampaignsPage, renderCampaignDetail, initWizard, initAudiencesPage, initTemplatesPage, renderSegments, renderLogs };
+    return {
+        renderDashboard,
+        renderCampaignCards,
+        renderCampaignsPage,
+        renderCampaignDetail,
+        initWizard,
+        initAudiencesPage: () => initWizard(true),
+        initTemplatesPage,
+    };
 })();

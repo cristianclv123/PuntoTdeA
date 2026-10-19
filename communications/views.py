@@ -45,7 +45,6 @@ def templates(request):
         {"nav_section": "templates", "active_nav": "templates"},
     )
 
-
 @login_required
 def segments(request):
     return render(
@@ -53,16 +52,6 @@ def segments(request):
         "communications/segments.html",
         {"nav_section": "segments", "active_nav": "segments"},
     )
-
-
-@login_required
-def interactions(request):
-    return render(
-        request,
-        "communications/interactions.html",
-        {"nav_section": "interactions", "active_nav": "campaigns"},
-    )
-
 
 @require_POST
 @login_required

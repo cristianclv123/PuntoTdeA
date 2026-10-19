@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from communications.adapters.base import TemplateRef
 from communications.adapters.meta_adapter import MetaAdapter
 from communications.models import (
     AudienceSegment,
@@ -97,6 +98,105 @@ class MetaWhatsAppIntegrationTests(TestCase):
 
         self.assertFalse(result.success)
         self.assertIn("{{2}}", result.error)
+        post.assert_not_called()
+
+    @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_sends_static_text_header_and_body_parameters(self, post):
+        response = Mock()
+        response.json.return_value = {"messages": [{"id": "wamid.outbound.header"}]}
+        response.raise_for_status.return_value = None
+        post.return_value = response
+        template = TemplateRef(
+            name="matricula_2026",
+            language="es_CO",
+            body_text="Hola {{1}}, recuerda {{2}}.",
+            header_type="text",
+            header_text="Aviso importante",
+        )
+
+        result = MetaAdapter().send_template_message(
+            "+573001112233",
+            template,
+            {"1": "Ana", "2": "tu matrícula"},
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.provider_message_id, "wamid.outbound.header")
+        self.assertEqual(
+            post.call_args.kwargs["json"],
+            {
+                "messaging_product": "whatsapp",
+                "to": "573001112233",
+                "type": "template",
+                "template": {
+                    "name": "matricula_2026",
+                    "language": {"code": "es_CO"},
+                    "components": [
+                        {
+                            "type": "body",
+                            "parameters": [
+                                {"type": "text", "text": "Ana"},
+                                {"type": "text", "text": "tu matrícula"},
+                            ],
+                        },
+                        {
+                            "type": "header",
+                            "parameters": [
+                                {"type": "text", "text": "Aviso importante"}
+                            ],
+                        },
+                    ],
+                },
+            },
+        )
+
+    @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_rejects_text_header_without_text(self, post):
+        template = TemplateRef(
+            name="matricula_2026",
+            body_text="Hola",
+            header_type="text",
+        )
+
+        result = MetaAdapter().send_template_message(
+            "+573001112233", template, {}
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("encabezado de texto", result.error)
+        post.assert_not_called()
+
+    @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_rejects_dynamic_text_header(self, post):
+        template = TemplateRef(
+            name="matricula_2026",
+            body_text="Hola",
+            header_type="text",
+            header_text="Hola {{1}}",
+        )
+
+        result = MetaAdapter().send_template_message(
+            "+573001112233", template, {"1": "Ana"}
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("no admite variables", result.error)
+        post.assert_not_called()
+
+    @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_rejects_media_header_without_url(self, post):
+        template = TemplateRef(
+            name="matricula_2026",
+            body_text="Hola",
+            header_type="image",
+        )
+
+        result = MetaAdapter().send_template_message(
+            "+573001112233", template, {}
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("encabezado multimedia", result.error)
         post.assert_not_called()
 
     def test_webhook_verifies_meta_subscription(self):
