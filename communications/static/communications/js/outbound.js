@@ -436,6 +436,8 @@ const OutboundUI = (() => {
             };
         }
 
+        const canSend = campaign.status === 'draft' || campaign.status === 'scheduled';
+
         root.innerHTML = `
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
@@ -445,6 +447,11 @@ const OutboundUI = (() => {
                     ${statusPill(campaign.status)}
                 </div>
             </div>
+            ${canSend ? `
+                <button type="button" id="sendCampaignBtn" class="btn btn-success">
+                    <i class="bi bi-send me-1"></i> Enviar ahora
+                </button>
+            ` : ''}
         </div>
 
         <div class="row g-3 mb-4">
@@ -503,6 +510,41 @@ const OutboundUI = (() => {
             </div>
         </div>
     `;
+
+        if (canSend) {
+            const sendBtn = document.getElementById('sendCampaignBtn');
+            if (sendBtn) {
+                sendBtn.addEventListener('click', async () => {
+                    sendBtn.disabled = true;
+                    sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Enviando…';
+                    try {
+                        const sendResponse = await fetch(`/campanas/api/campaigns/${encodeURIComponent(campaign.id)}/send/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCookie('csrftoken'),
+                            },
+                            credentials: 'same-origin',
+                        });
+                        const sendData = await sendResponse.json().catch(() => ({}));
+                        if (!sendResponse.ok) {
+                            console.error('Error al enviar campaña:', sendData);
+                            toast(sendData.detail || 'No se pudo enviar la campaña.');
+                            sendBtn.disabled = false;
+                            sendBtn.innerHTML = '<i class="bi bi-send me-1"></i> Enviar ahora';
+                        } else {
+                            toast(`Campaña enviada. Destinatarios: ${sendData.total_recipients ?? 0}.`);
+                            renderCampaignDetail();
+                        }
+                    } catch (error) {
+                        console.error('Error de conexión al enviar:', error);
+                        toast('No se pudo conectar con el servidor.');
+                        sendBtn.disabled = false;
+                        sendBtn.innerHTML = '<i class="bi bi-send me-1"></i> Enviar ahora';
+                    }
+                });
+            }
+        }
     }
 
     function previewHtml(channel, tpl, vars = {}) {
@@ -1469,7 +1511,31 @@ const OutboundUI = (() => {
 
                 const backendCampaign = await response.json();
 
-                toast('Campaña creada correctamente en el backend.');
+                if (sendMode !== 'later') {
+                    toast('Campaña creada. Enviando a Meta…');
+                    try {
+                        const sendResponse = await fetch(`/campanas/api/campaigns/${encodeURIComponent(backendCampaign.id)}/send/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCookie('csrftoken'),
+                            },
+                            credentials: 'same-origin',
+                        });
+                        const sendData = await sendResponse.json().catch(() => ({}));
+                        if (!sendResponse.ok) {
+                            console.error('Error al enviar campaña:', sendData);
+                            toast('Campaña creada pero no se pudo enviar. Inténtalo desde el detalle.');
+                        } else {
+                            toast(`Campaña enviada. Destinatarios: ${sendData.total_recipients ?? 0}.`);
+                        }
+                    } catch (sendError) {
+                        console.error('Error de conexión al enviar:', sendError);
+                        toast('Campaña creada pero no se pudo enviar. Inténtalo desde el detalle.');
+                    }
+                } else {
+                    toast('Campaña programada correctamente.');
+                }
 
                 window.location.href = `/campanas/detalle/?id=${encodeURIComponent(backendCampaign.id)}`;
 
