@@ -9,7 +9,7 @@ const OutboundUI = (() => {
         return null;
     }
 
-    const { CHANNELS, SEGMENTS, TEMPLATES, SEED_LOGS, loadCampaigns, saveCampaigns } = window.OutboundDemo;
+    const { CHANNELS, TEMPLATES, loadCampaigns, saveCampaigns } = window.OutboundDemo;
 
     function toast(message) {
         const el = document.getElementById('outboundToast');
@@ -26,11 +26,12 @@ const OutboundUI = (() => {
 
     function channelBadge(channel) {
         const meta = CHANNELS[channel] || { label: channel, icon: 'bi-broadcast' };
-        return `<span class="channel-chip"><span class="channel-icon ${channel}"><i class="bi ${meta.icon}"></i></span>${meta.label}</span>`;
+        return `<span class="channel-chip"><span class="channel-icon ${escapeHtml(channel)}"><i class="bi ${escapeHtml(meta.icon)}"></i></span>${escapeHtml(meta.label)}</span>`;
     }
 
-    function statusPill(status) {
-        return `<span class="status-pill status-${status}">${status}</span>`;
+    function statusPill(status, label = status) {
+        const statusClass = CAMPAIGN_STATUS_CLASSES[status] || status;
+        return `<span class="status-pill status-${escapeHtml(statusClass)}">${escapeHtml(label)}</span>`;
     }
 
     const CAMPAIGN_STATUS_LABELS = {
@@ -61,15 +62,47 @@ const OutboundUI = (() => {
     }
 
     async function fetchCampaigns() {
-        const response = await fetch('/campanas/api/campaigns/', {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        });
-        if (!response.ok) {
-            throw new Error(`No se pudieron cargar las campañas (${response.status}).`);
+        const campaigns = [];
+        const visitedUrls = new Set();
+        const apiPath = '/campanas/api/campaigns/';
+        let nextUrl = '/campanas/api/campaigns/';
+        let requestBase = new URL(nextUrl, window.location.origin);
+
+        while (nextUrl) {
+            const requestUrl = new URL(nextUrl, requestBase);
+            if (requestUrl.origin !== window.location.origin || requestUrl.pathname !== apiPath) {
+                throw new Error('La paginación de campañas devolvió una URL fuera de la API.');
+            }
+            requestUrl.hash = '';
+            if (visitedUrls.has(requestUrl.href)) {
+                throw new Error('La paginación de campañas contiene un ciclo.');
+            }
+            visitedUrls.add(requestUrl.href);
+
+            const response = await fetch(requestUrl, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) {
+                throw new Error(`No se pudieron cargar las campañas (${response.status}).`);
+            }
+            const payload = await response.json();
+            if (Array.isArray(payload)) {
+                campaigns.push(...payload);
+                nextUrl = null;
+            } else if (payload && Array.isArray(payload.results)) {
+                campaigns.push(...payload.results);
+                nextUrl = payload.next || null;
+                if (nextUrl && typeof nextUrl !== 'string') {
+                    throw new Error('La paginación de campañas devolvió un enlace inválido.');
+                }
+                requestBase = requestUrl;
+            } else {
+                throw new Error('La API devolvió una respuesta de campañas inválida.');
+            }
         }
-        const payload = await response.json();
-        return Array.isArray(payload) ? payload : (payload.results || []);
+
+        return campaigns;
     }
 
     function renderCampaignCard(campaign) {
@@ -99,7 +132,7 @@ const OutboundUI = (() => {
                     <div class="row text-center g-2 pt-2 mt-2 border-top border-secondary">
                         <div class="col-4">
                             <div class="fw-bold text-light">${Number(campaign.sent_count || 0).toLocaleString('es-CO')}</div>
-                            <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Enviados</div>
+                            <div class="small" style="color: var(--text-muted); font-size: 0.75rem;">Destinatarios no pendientes ni de baja</div>
                         </div>
                         <div class="col-4">
                             <div class="fw-bold text-light">${Number(campaign.delivered_count || 0).toLocaleString('es-CO')}</div>
@@ -129,6 +162,15 @@ const OutboundUI = (() => {
             errorClose.addEventListener('click', () => error.classList.add('d-none'));
         }
 
+        list.innerHTML = `
+            <div class="text-center py-4" style="color: var(--text-muted);">
+                <div class="spinner-border spinner-border-sm text-success me-2" role="status"></div>
+                Cargando listado de campañas…
+            </div>
+        `;
+        empty.classList.add('d-none');
+        error.classList.add('d-none');
+
         try {
             const campaigns = await fetchCampaigns();
             count.textContent = `${campaigns.length} campaña${campaigns.length === 1 ? '' : 's'}`;
@@ -137,7 +179,7 @@ const OutboundUI = (() => {
         } catch (requestError) {
             list.innerHTML = '';
             count.textContent = 'Error';
-            if (errorText) errorText.textContent = requestError.message;
+            if (errorText) errorText.textContent = requestError.message || 'No fue posible cargar las campañas.';
             error.classList.remove('d-none');
         }
     }
@@ -146,95 +188,154 @@ const OutboundUI = (() => {
         return `/campanas/detalle/?id=${encodeURIComponent(id)}`;
     }
 
-    function renderDashboard() {
-        const campaigns = loadCampaigns();
-        const sent = campaigns.reduce((a, c) => a + (c.sent || 0), 0);
-        const delivered = campaigns.reduce((a, c) => a + (c.delivered || 0), 0);
-        const read = campaigns.reduce((a, c) => a + (c.read || 0), 0);
-        const replies = campaigns.reduce((a, c) => a + (c.replies || 0), 0);
-        const kpis = [
-            { label: 'Mensajes enviados', value: sent.toLocaleString('es-CO') },
-            { label: 'Entregados', value: delivered.toLocaleString('es-CO') },
-            { label: 'Tasa de lectura', value: pct(read, delivered) },
-            { label: 'Respuestas', value: replies.toLocaleString('es-CO') },
-        ];
-        document.getElementById('kpiGrid').innerHTML = kpis.map((k) => `
-            <div class="col-6 col-lg-3"><div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.value}</div></div></div>
-        `).join('');
+    async function renderDashboard() {
+        const kpiGrid = document.getElementById('kpiGrid');
+        const recentBody = document.getElementById('recentCampaignsBody');
+        const channelList = document.getElementById('channelList');
+        const activityFeed = document.getElementById('activityFeed');
+        if (!kpiGrid || !recentBody || !channelList || !activityFeed) return;
 
-        document.getElementById('recentCampaignsBody').innerHTML = campaigns.slice(0, 4).map((c) => `
-            <tr data-href="${campaignUrl(c.id)}">
-                <td class="fw-semibold">${c.name}</td>
-                <td>${channelBadge(c.channel)}</td>
-                <td>${c.segments.join(', ')}</td>
-                <td>${statusPill(c.status)}</td>
-                <td>${pct(c.read, c.delivered)}</td>
-            </tr>
-        `).join('');
-
-        document.getElementById('channelList').innerHTML = Object.entries(CHANNELS).map(([key, meta]) => {
-            const count = campaigns.filter((c) => c.channel === key).length;
-            return `<div class="channel-row">${channelBadge(key)}<span class="ms-auto small text-muted">${count} campañas</span></div>`;
-        }).join('');
-
-        document.getElementById('activityFeed').innerHTML = SEED_LOGS.slice(0, 4).map((log) => `
-            <div class="activity-item">
-                <span class="channel-icon ${log.channel}"><i class="bi ${CHANNELS[log.channel].icon}"></i></span>
-                <div>
-                    <div><strong>${log.person}</strong> · ${log.event} en ${log.campaign}</div>
-                    <time>${log.at}</time>
-                </div>
+        const loading = `
+            <div class="text-center text-muted small py-3">
+                <span class="spinner-border spinner-border-sm text-success me-1" role="status"></span>
+                Cargando campañas…
             </div>
-        `).join('');
+        `;
+        kpiGrid.innerHTML = `<div class="col-12">${loading}</div>`;
+        recentBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-4">${loading}</td></tr>`;
+        channelList.innerHTML = loading;
+        activityFeed.innerHTML = '<p class="small text-muted mb-0">La actividad reciente no está disponible en esta vista.</p>';
 
-        bindRowLinks();
+        try {
+            const campaigns = await fetchCampaigns();
+            const total = (field) => campaigns.reduce(
+                (sum, campaign) => sum + (Number(campaign[field]) || 0),
+                0,
+            );
+            const totalRecipients = total('total_recipients');
+            const sent = total('sent_count');
+            const delivered = total('delivered_count');
+            const failed = total('failed_count');
+            const kpis = [
+                { label: 'Destinatarios', value: totalRecipients },
+                { label: 'Destinatarios no pendientes ni de baja', value: sent },
+                { label: 'Entregados', value: delivered },
+                { label: 'Fallidos', value: failed },
+            ];
+            kpiGrid.innerHTML = kpis.map((kpi) => `
+                <div class="col-6 col-lg-3"><div class="kpi-card"><div class="kpi-label">${kpi.label}</div><div class="kpi-value">${kpi.value.toLocaleString('es-CO')}</div></div></div>
+            `).join('');
+
+            recentBody.innerHTML = campaigns.slice(0, 4).map((campaign) => `
+                <tr data-href="${campaignUrl(campaign.id)}">
+                    <td class="fw-semibold">${escapeHtml(campaign.name)}</td>
+                    <td>${channelBadge(campaign.channel)}</td>
+                    <td>${escapeHtml(campaign.segment_name || '—')}</td>
+                    <td>${statusPill(campaign.status, CAMPAIGN_STATUS_LABELS[campaign.status] || campaign.status)}</td>
+                    <td>${pct(Number(campaign.read_count) || 0, Number(campaign.delivered_count) || 0)}</td>
+                </tr>
+            `).join('');
+            if (!campaigns.length) {
+                recentBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay campañas registradas.</td></tr>';
+            }
+
+            const channelCounts = campaigns.reduce((counts, campaign) => {
+                counts[campaign.channel] = (counts[campaign.channel] || 0) + 1;
+                return counts;
+            }, {});
+            channelList.innerHTML = Object.entries(channelCounts).length
+                ? Object.entries(channelCounts).map(([channel, count]) => `
+                    <div class="channel-row">${channelBadge(channel)}<span class="ms-auto small text-muted">${count} campaña${count === 1 ? '' : 's'}</span></div>
+                `).join('')
+                : '<p class="small text-muted mb-0">No hay campañas registradas.</p>';
+
+            bindRowLinks();
+        } catch (requestError) {
+            const message = escapeHtml(requestError.message || 'No fue posible cargar las campañas.');
+            kpiGrid.innerHTML = `<div class="col-12"><div class="alert alert-danger mb-0">No fue posible cargar los indicadores: ${message}</div></div>`;
+            recentBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">${message}</td></tr>`;
+            channelList.innerHTML = `<p class="small text-danger mb-0">${message}</p>`;
+        }
     }
 
     function bindRowLinks(root = document) {
         root.querySelectorAll('tr[data-href]').forEach((row) => {
+            if (row.dataset.linkBound) return;
+            row.dataset.linkBound = '1';
             row.addEventListener('click', () => { window.location.href = row.dataset.href; });
         });
     }
 
-    function renderCampaignsPage() {
+    let campaignsPageItems = [];
+
+    async function renderCampaignsPage() {
         const search = document.getElementById('filterSearch');
         const channel = document.getElementById('filterChannel');
         const status = document.getElementById('filterStatus');
         const clear = document.getElementById('clearFilters');
+        const body = document.getElementById('campaignsTableBody');
+        const empty = document.getElementById('campaignsEmpty');
+        if (!search || !channel || !status || !clear || !body || !empty) return;
+
         const draw = () => {
             const q = (search.value || '').toLowerCase();
-            const list = loadCampaigns().filter((c) => {
-                const hay = `${c.name} ${c.segments.join(' ')}`.toLowerCase();
+            const list = campaignsPageItems.filter((campaign) => {
+                const hay = `${campaign.name || ''} ${campaign.segment_name || ''}`.toLowerCase();
                 const okQ = !q || hay.includes(q);
-                const okC = !channel.value || c.channel === channel.value;
-                const okS = !status.value || c.status === status.value;
+                const okC = !channel.value || campaign.channel === channel.value;
+                const okS = !status.value || campaign.status === status.value;
                 return okQ && okC && okS;
             });
-            const body = document.getElementById('campaignsTableBody');
-            const empty = document.getElementById('campaignsEmpty');
-            body.innerHTML = list.map((c) => `
-                <tr data-href="${campaignUrl(c.id)}">
-                    <td class="fw-semibold">${c.name}</td>
-                    <td>${channelBadge(c.channel)}</td>
-                    <td>${c.segments.join(', ')}</td>
-                    <td>${c.executedAt}</td>
-                    <td>${pct(c.read, c.delivered)}</td>
-                    <td>${pct(c.clicks, c.delivered)}</td>
-                    <td>${pct(c.replies, c.delivered)}</td>
-                    <td>${statusPill(c.status)}</td>
+            body.innerHTML = list.map((campaign) => {
+                const executionDate = campaign.scheduled_at || campaign.sent_at;
+                const formattedDate = executionDate && !Number.isNaN(Date.parse(executionDate))
+                    ? new Date(executionDate).toLocaleString('es-CO')
+                    : (executionDate || '—');
+                const statusLabel = CAMPAIGN_STATUS_LABELS[campaign.status] || campaign.status;
+                return `
+                <tr data-href="${campaignUrl(campaign.id)}">
+                    <td class="fw-semibold">${escapeHtml(campaign.name)}</td>
+                    <td>${channelBadge(campaign.channel)}</td>
+                    <td>${escapeHtml(campaign.segment_name || '—')}</td>
+                    <td>${escapeHtml(formattedDate)}</td>
+                    <td>${pct(Number(campaign.read_count) || 0, Number(campaign.delivered_count) || 0)}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>${statusPill(campaign.status, statusLabel)}</td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
             empty.classList.toggle('d-none', list.length > 0);
             bindRowLinks();
         };
-        [search, channel, status].forEach((el) => el.addEventListener('input', draw));
-        clear.addEventListener('click', () => {
-            search.value = '';
-            channel.value = '';
-            status.value = '';
+        if (!body.dataset.filtersBound) {
+            body.dataset.filtersBound = '1';
+            [search, channel, status].forEach((el) => {
+                el.addEventListener(el === search ? 'input' : 'change', draw);
+            });
+            clear.addEventListener('click', () => {
+                search.value = '';
+                channel.value = '';
+                status.value = '';
+                draw();
+            });
+        }
+
+        empty.classList.add('d-none');
+        body.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                    <span class="spinner-border spinner-border-sm text-success me-2" role="status"></span>
+                    Cargando listado de campañas…
+                </td>
+            </tr>
+        `;
+        try {
+            campaignsPageItems = await fetchCampaigns();
             draw();
-        });
-        draw();
+        } catch (requestError) {
+            body.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${escapeHtml(requestError.message || 'No fue posible cargar las campañas.')}</td></tr>`;
+        }
     }
 
     async function renderCampaignDetail() {
@@ -546,8 +647,8 @@ const OutboundUI = (() => {
 
                     contactsBody.insertAdjacentHTML('beforeend', contacts.map((contact) => `
                         <tr>${contactColumns.map(([field]) =>
-                            `<td>${escapeHtml(contact[field] ?? '—')}</td>`
-                        ).join('')}</tr>
+                        `<td>${escapeHtml(contact[field] ?? '—')}</td>`
+                    ).join('')}</tr>
                     `).join(''));
                     contactsStatus.innerHTML = '';
                     contactsTable.classList.remove('d-none');
@@ -694,6 +795,8 @@ const OutboundUI = (() => {
                         language: template.language || 'es_CO',
                         type: TEMPLATE_CATEGORY_LABELS[template.category] || template.category || 'Plantilla',
                         body: template.body_text || '',
+                        header_type: template.header_type || 'none',
+                        header_text: template.header_text || '',
                         buttons: Array.isArray(template.buttons) ? template.buttons : [],
                         isSample: Boolean(template.is_sample),
                     }));
@@ -899,6 +1002,8 @@ const OutboundUI = (() => {
                         language: selectedTemplate.language || 'es_CO',
                         category: selectedTemplate.category || '',
                         body_text: selectedTemplate.body || '',
+                        header_type: selectedTemplate.header_type || 'none',
+                        header_text: selectedTemplate.header_text || '',
                         buttons: Array.isArray(selectedTemplate.buttons) ? selectedTemplate.buttons : [],
                     },
                     segment: state.segment.id,
@@ -939,10 +1044,6 @@ const OutboundUI = (() => {
         }
 
         showStep(1);
-    }
-
-    function initAudiencesPage() {
-        initWizard(true);
     }
 
     function initTemplatesPage() {
@@ -1275,10 +1376,73 @@ const OutboundUI = (() => {
                             </div>
                         </div>
                         <div class="field-group">
+                            <label class="field-label" for="templateHeaderType">Encabezado opcional</label>
+                            <select id="templateHeaderType" class="field-select">
+                                <option value="none">Ninguno</option>
+                                <option value="text">Texto estático</option>
+                                <option value="image">Imagen</option>
+                                <option value="video">Video</option>
+                                <option value="document">Documento PDF</option>
+                            </select>
+                            <div id="templateHeaderFields" class="template-header-fields d-none">
+                                <div id="templateHeaderTextField" class="field-group d-none">
+                                    <label class="field-label" for="templateHeaderText">Texto del encabezado</label>
+                                    <input id="templateHeaderText" class="field-input" maxlength="60">
+                                </div>
+                                <div id="templateHeaderFileField" class="field-group d-none">
+                                    <label class="field-label" for="templateHeaderFile">Archivo</label>
+                                    <input id="templateHeaderFile" class="field-input" type="file">
+                                    <span id="templateHeaderFileName" class="template-file-name d-none"></span>
+                                    <div id="templateHeaderFileError" class="template-field-error d-none" role="alert"></div>
+                                </div>
+                                <p id="templateTextHeaderNote" class="template-text-header-note">
+                                    Máximo 60 caracteres, sin variables ni caracteres especiales de Markdown.
+                                </p>
+                                <div id="templateHeaderMediaWarning" class="template-local-warning d-none" role="note">
+                                    Los encabezados multimedia todavía no se pueden guardar ni enviar a Meta. Selecciona «Ninguno» o «Texto estático».
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field-group">
                             <label class="field-label" for="templateBodyInput">Contenido del mensaje</label>
                             <textarea id="templateBodyInput" class="field-textarea" rows="4"></textarea>
                         </div>
                         <div id="templateVariablesBox"></div>
+                        <section class="template-button-editor" aria-labelledby="templateButtonSectionTitle">
+                            <div class="template-button-editor-head">
+                                <h4 id="templateButtonSectionTitle">Botón URL opcional</h4>
+                                <button type="button" class="btn btn-outline-success btn-sm" id="templateAddButtonToggle">
+                                    <i class="bi bi-plus-lg me-1"></i> Agregar botón
+                                </button>
+                            </div>
+                            <p class="template-button-count" id="templateButtonCount">0 de 3 botones</p>
+                            <div id="templateButtonList" class="template-button-list"></div>
+                            <div id="templateButtonForm" class="template-button-form d-none">
+                                <div class="template-fields">
+                                    <div class="field-group">
+                                        <label class="field-label" for="templateButtonText">Nombre del botón</label>
+                                        <input id="templateButtonText" class="field-input" maxlength="25" autocomplete="off" required aria-describedby="templateButtonTextError">
+                                        <div id="templateButtonTextError" class="template-field-error d-none" role="alert"></div>
+                                    </div>
+                                    <div class="field-group">
+                                        <label class="field-label" for="templateButtonUrl">URL del botón</label>
+                                        <input id="templateButtonUrl" class="field-input" type="url" inputmode="url" placeholder="https://ejemplo.com" autocomplete="url" required aria-describedby="templateButtonUrlError">
+                                        <div id="templateButtonUrlError" class="template-field-error d-none" role="alert"></div>
+                                    </div>
+                                </div>
+                                <div class="template-button-form-actions">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="templateButtonCancel">Cancelar</button>
+                                    <button type="button" class="btn btn-success btn-sm" id="templateButtonSave">Agregar</button>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="template-live-preview" aria-labelledby="templatePreviewTitle">
+                            <h4 id="templatePreviewTitle">Vista previa local</h4>
+                            <div class="template-preview-phone">
+                                <div class="template-preview-message" id="templatePreviewMessage" aria-live="polite"></div>
+                            </div>
+                            <p class="template-preview-note">Los valores de ejemplo y archivos se muestran solo en este navegador; no se envían al servidor desde la vista previa.</p>
+                        </section>
                         <div class="template-dialog-actions">
                             <button type="button" class="btn btn-outline-secondary" id="templateCancel">Cancelar</button>
                             <div class="d-flex flex-wrap gap-2">
@@ -1300,6 +1464,48 @@ const OutboundUI = (() => {
         const variablesBox = document.getElementById('templateVariablesBox');
         const saveDraftBtn = document.getElementById('templateSaveDraft');
         const saveMetaBtn = document.getElementById('templateSaveMeta');
+        const headerTypeInput = document.getElementById('templateHeaderType');
+        const headerFields = document.getElementById('templateHeaderFields');
+        const headerTextField = document.getElementById('templateHeaderTextField');
+        const headerTextInput = document.getElementById('templateHeaderText');
+        const headerTextNote = document.getElementById('templateTextHeaderNote');
+        const headerMediaWarning = document.getElementById('templateHeaderMediaWarning');
+        const headerFileField = document.getElementById('templateHeaderFileField');
+        const headerFileInput = document.getElementById('templateHeaderFile');
+        const headerFileName = document.getElementById('templateHeaderFileName');
+        const headerFileError = document.getElementById('templateHeaderFileError');
+        const buttonToggle = document.getElementById('templateAddButtonToggle');
+        const buttonCount = document.getElementById('templateButtonCount');
+        const buttonList = document.getElementById('templateButtonList');
+        const buttonForm = document.getElementById('templateButtonForm');
+        const buttonTextInput = document.getElementById('templateButtonText');
+        const buttonUrlInput = document.getElementById('templateButtonUrl');
+        const buttonTextError = document.getElementById('templateButtonTextError');
+        const buttonUrlError = document.getElementById('templateButtonUrlError');
+        const buttonSave = document.getElementById('templateButtonSave');
+        const buttonCancel = document.getElementById('templateButtonCancel');
+        const previewMessage = document.getElementById('templatePreviewMessage');
+        const templateButtons = [];
+        let editingButtonIndex = null;
+        let headerObjectUrl = '';
+        let headerFile = null;
+
+        const releaseHeaderObjectUrl = () => {
+            if (headerObjectUrl) {
+                URL.revokeObjectURL(headerObjectUrl);
+                headerObjectUrl = '';
+            }
+        };
+
+        const clearHeaderFile = () => {
+            releaseHeaderObjectUrl();
+            headerFile = null;
+            headerFileInput.value = '';
+            headerFileName.textContent = '';
+            headerFileName.classList.add('d-none');
+            headerFileError.textContent = '';
+            headerFileError.classList.add('d-none');
+        };
 
         form.addEventListener('submit', (event) => event.preventDefault());
         document.getElementById('templateDialogClose').addEventListener('click', () => dialog.close());
@@ -1335,7 +1541,306 @@ const OutboundUI = (() => {
                 </div>`;
         }
 
-        bodyInput.addEventListener('input', () => renderVariables());
+        function renderTemplatePreview() {
+            previewMessage.replaceChildren();
+            const headerType = headerTypeInput.value;
+            if (headerType !== 'none') {
+                const header = document.createElement('div');
+                header.className = 'template-preview-header';
+                if (headerType === 'text') {
+                    header.textContent = headerTextInput.value.trim() || 'Texto del encabezado';
+                } else if (headerObjectUrl && headerType === 'image') {
+                    const image = document.createElement('img');
+                    image.src = headerObjectUrl;
+                    image.alt = 'Vista previa del encabezado de imagen';
+                    header.append(image);
+                } else if (headerObjectUrl && headerType === 'video') {
+                    const video = document.createElement('video');
+                    video.controls = true;
+                    video.preload = 'metadata';
+                    video.src = headerObjectUrl;
+                    video.setAttribute('aria-label', 'Vista previa local del video');
+                    const extension = headerFile?.name.split('.').pop().toLowerCase();
+                    const mimeType = headerFile?.type || (extension === 'mov' ? 'video/quicktime' : 'video/mp4');
+                    if (!video.canPlayType(mimeType)) {
+                        const message = document.createElement('span');
+                        message.textContent = 'El navegador no puede reproducir este formato; el archivo sigue siendo local.';
+                        header.append(message);
+                    } else {
+                        header.append(video);
+                    }
+                } else if (headerType === 'document') {
+                    header.classList.add('template-preview-header--document');
+                    const icon = document.createElement('i');
+                    icon.className = 'bi bi-file-earmark-pdf';
+                    icon.setAttribute('aria-hidden', 'true');
+                    const label = document.createElement('span');
+                    label.textContent = headerFile?.name || 'Documento PDF';
+                    header.append(icon, label);
+                } else {
+                    header.textContent = headerType === 'image' ? 'Imagen sin seleccionar' : 'Video sin seleccionar';
+                }
+                previewMessage.append(header);
+            }
+
+            const body = document.createElement('div');
+            body.className = 'template-preview-body';
+            body.textContent = (bodyInput.value || 'Escribe el contenido del mensaje.')
+                .replace(/\{\{(\d+)\}\}/g, (_, number) => `Ejemplo ${number}`);
+            previewMessage.append(body);
+
+            if (templateButtons.length) {
+                const buttonsContainer = document.createElement('div');
+                buttonsContainer.className = 'template-preview-buttons';
+
+                templateButtons.forEach((item) => {
+                    const button = document.createElement('a');
+                    button.className = 'template-preview-button';
+                    button.textContent = typeof item?.text === 'string' ? item.text : '';
+
+                    if (isValidButton(item)) {
+                        const destination = new URL(item.url.trim());
+                        button.href = destination.href;
+                        button.target = '_blank';
+                        button.rel = 'noopener noreferrer';
+                        button.setAttribute(
+                            'aria-label',
+                            `Abrir enlace externo: ${item.text.trim()}`
+                        );
+                        const icon = document.createElement('i');
+                        icon.className = 'bi bi-box-arrow-up-right';
+                        icon.setAttribute('aria-hidden', 'true');
+                        button.append(icon);
+                    } else {
+                        button.setAttribute('aria-disabled', 'true');
+                        button.setAttribute(
+                            'aria-label',
+                            `${button.textContent || 'Enlace'} no disponible`
+                        );
+                    }
+
+                    buttonsContainer.append(button);
+                });
+
+                previewMessage.append(buttonsContainer);
+            }
+        }
+
+        function updateHeaderFields() {
+            const headerType = headerTypeInput.value;
+            headerFields.classList.toggle('d-none', headerType === 'none');
+            headerTextField.classList.toggle('d-none', headerType !== 'text');
+            headerTextNote.classList.toggle('d-none', headerType !== 'text');
+            headerFileField.classList.toggle('d-none', !['image', 'video', 'document'].includes(headerType));
+            headerMediaWarning.classList.toggle(
+                'd-none',
+                !['image', 'video', 'document'].includes(headerType)
+            );
+            headerFileInput.accept = {
+                image: '.jpg,.jpeg,.png',
+                video: '.mp4,.mov',
+                document: '.pdf,application/pdf',
+            }[headerType] || '';
+            clearHeaderFile();
+            renderTemplatePreview();
+        }
+
+        function renderTemplateButtons() {
+            buttonList.replaceChildren();
+            templateButtons.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'template-button-row';
+                const description = document.createElement('span');
+                description.textContent = `${item.text || 'Botón'}${item.url ? ` · ${item.url}` : ''}`;
+
+                const actions = document.createElement('div');
+                actions.className = 'template-button-row-actions';
+                const edit = document.createElement('button');
+                edit.type = 'button';
+                edit.className = 'btn btn-outline-secondary btn-sm';
+                edit.dataset.buttonAction = 'edit';
+                edit.dataset.buttonIndex = String(index);
+                edit.textContent = 'Editar';
+                edit.setAttribute('aria-label', `Editar botón ${item.text || index + 1}`);
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'btn btn-outline-danger btn-sm';
+                remove.dataset.buttonAction = 'remove';
+                remove.dataset.buttonIndex = String(index);
+                remove.textContent = 'Eliminar';
+                remove.setAttribute('aria-label', `Eliminar botón ${item.text || index + 1}`);
+                actions.append(edit, remove);
+                row.append(description, actions);
+                buttonList.append(row);
+            });
+            buttonCount.textContent = `${templateButtons.length} de 3 botones`;
+            buttonToggle.disabled = (templateButtons.length >= 3 && editingButtonIndex === null)
+                || !buttonForm.classList.contains('d-none');
+            renderTemplatePreview();
+        }
+
+        function clearButtonErrors() {
+            [[buttonTextError, buttonTextInput], [buttonUrlError, buttonUrlInput]].forEach(([error, input]) => {
+                error.textContent = '';
+                error.classList.add('d-none');
+                input.removeAttribute('aria-invalid');
+            });
+        }
+
+        function closeButtonForm() {
+            editingButtonIndex = null;
+            buttonForm.classList.add('d-none');
+            buttonTextInput.value = '';
+            buttonUrlInput.value = '';
+            buttonSave.textContent = 'Agregar';
+            clearButtonErrors();
+            renderTemplateButtons();
+        }
+
+        function showButtonFieldError(errorElement, input, message) {
+            errorElement.textContent = message;
+            errorElement.classList.remove('d-none');
+            input.setAttribute('aria-invalid', 'true');
+        }
+
+        function validateButtonFields() {
+            clearButtonErrors();
+            const text = buttonTextInput.value.trim();
+            const rawUrl = buttonUrlInput.value.trim();
+            let url = null;
+            if (!text) {
+                showButtonFieldError(buttonTextError, buttonTextInput, 'Escribe el nombre del botón.');
+            }
+            try {
+                url = new URL(rawUrl);
+                if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) {
+                    url = null;
+                }
+            } catch {
+                url = null;
+            }
+            if (!url) {
+                showButtonFieldError(buttonUrlError, buttonUrlInput, 'Ingresa una URL absoluta HTTPS sin credenciales.');
+            }
+            if (!text || !url) return null;
+            return { text, url: url.href };
+        }
+
+        function isValidButton(item) {
+            if (!item || typeof item.text !== 'string' || !item.text.trim() || typeof item.url !== 'string') {
+                return false;
+            }
+            try {
+                const url = new URL(item.url.trim());
+                return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+            } catch {
+                return false;
+            }
+        }
+
+        function validateHeaderFile(file, headerType) {
+            const extension = file.name.split('.').pop().toLowerCase();
+            const allowed = {
+                image: { extensions: ['jpg', 'jpeg', 'png'], mimeTypes: ['image/jpeg', 'image/png'] },
+                video: { extensions: ['mp4', 'mov'], mimeTypes: ['video/mp4', 'video/quicktime'] },
+                document: { extensions: ['pdf'], mimeTypes: ['application/pdf'] },
+            }[headerType];
+            if (!allowed || !allowed.extensions.includes(extension)) {
+                return `Selecciona ${headerType === 'image' ? 'una imagen JPG, JPEG o PNG' : headerType === 'video' ? 'un video MP4 o MOV' : 'un documento PDF'}.`;
+            }
+            if (file.type && !allowed.mimeTypes.includes(file.type.toLowerCase())) {
+                return 'El tipo de archivo no coincide con la extensión permitida.';
+            }
+            return '';
+        }
+
+        bodyInput.addEventListener('input', () => {
+            renderVariables();
+            renderTemplatePreview();
+        });
+        headerTypeInput.addEventListener('change', updateHeaderFields);
+        headerTextInput.addEventListener('input', renderTemplatePreview);
+        headerFileInput.addEventListener('change', () => {
+            const file = headerFileInput.files[0];
+            releaseHeaderObjectUrl();
+            headerFile = null;
+            headerFileName.textContent = '';
+            headerFileName.classList.add('d-none');
+            headerFileError.textContent = '';
+            headerFileError.classList.add('d-none');
+            if (!file) {
+                renderTemplatePreview();
+                return;
+            }
+            const error = validateHeaderFile(file, headerTypeInput.value);
+            if (error) {
+                headerFileError.textContent = error;
+                headerFileError.classList.remove('d-none');
+                headerFileInput.value = '';
+                renderTemplatePreview();
+                return;
+            }
+            headerFile = file;
+            headerFileInput.value = '';
+            headerObjectUrl = URL.createObjectURL(file);
+            headerFileName.textContent = file.name;
+            headerFileName.classList.remove('d-none');
+            renderTemplatePreview();
+        });
+
+        buttonToggle.addEventListener('click', () => {
+            if (templateButtons.length >= 3 && editingButtonIndex === null) return;
+            editingButtonIndex = null;
+            buttonTextInput.value = '';
+            buttonUrlInput.value = '';
+            buttonSave.textContent = 'Agregar';
+            clearButtonErrors();
+            buttonForm.classList.remove('d-none');
+            buttonToggle.disabled = true;
+            buttonTextInput.focus();
+        });
+        buttonCancel.addEventListener('click', closeButtonForm);
+        buttonSave.addEventListener('click', () => {
+            const value = validateButtonFields();
+            if (!value) return;
+            if (editingButtonIndex === null) {
+                if (templateButtons.length >= 3) return;
+                templateButtons.push(value);
+            } else {
+                templateButtons[editingButtonIndex] = value;
+            }
+            closeButtonForm();
+        });
+        buttonList.addEventListener('click', (event) => {
+            const action = event.target.closest('[data-button-action]');
+            if (!action || !buttonList.contains(action)) return;
+            const index = Number(action.dataset.buttonIndex);
+            if (!Number.isInteger(index) || index < 0 || index >= templateButtons.length) return;
+            if (action.dataset.buttonAction === 'edit') {
+                editingButtonIndex = index;
+                buttonTextInput.value = templateButtons[index].text;
+                buttonUrlInput.value = templateButtons[index].url;
+                buttonSave.textContent = 'Guardar cambios';
+                clearButtonErrors();
+                buttonForm.classList.remove('d-none');
+                buttonToggle.disabled = true;
+                buttonTextInput.focus();
+            } else if (action.dataset.buttonAction === 'remove') {
+                templateButtons.splice(index, 1);
+                if (editingButtonIndex === index) closeButtonForm();
+                else {
+                    if (editingButtonIndex !== null && index < editingButtonIndex) editingButtonIndex -= 1;
+                    renderTemplateButtons();
+                }
+            }
+        });
+
+        dialog.addEventListener('close', () => {
+            clearHeaderFile();
+            headerTypeInput.value = 'none';
+            headerTextInput.value = '';
+            updateHeaderFields();
+        });
 
         function openDialog(nextMode, options = {}) {
             mode = nextMode;
@@ -1346,6 +1851,24 @@ const OutboundUI = (() => {
             nameInput.value = options.name || '';
             categoryInput.value = options.category || 'utility';
             bodyInput.value = options.bodyText || '';
+            templateButtons.splice(0, templateButtons.length, ...(
+                Array.isArray(options.buttons)
+                    ? options.buttons
+                        .filter((item) => item && typeof item === 'object')
+                        .map((item) => ({
+                            text: typeof item.text === 'string' ? item.text : '',
+                            url: typeof item.url === 'string' ? item.url : '',
+                        }))
+                    : []
+            ));
+            buttonForm.classList.add('d-none');
+            editingButtonIndex = null;
+            headerTypeInput.value = ['none', 'text', 'image', 'video', 'document'].includes(options.headerType)
+                ? options.headerType
+                : 'none';
+            headerTextInput.value = options.headerText || '';
+            updateHeaderFields();
+            renderTemplateButtons();
 
             const editingMeta = mode === 'edit-meta';
             const editingDraft = mode === 'edit-draft';
@@ -1360,16 +1883,34 @@ const OutboundUI = (() => {
 
             saveDraftBtn.classList.toggle('d-none', editingMeta);
             saveDraftBtn.textContent = editingDraft ? 'Guardar borrador' : 'Guardar como borrador';
+            saveDraftBtn.disabled = false;
+            saveMetaBtn.disabled = false;
+            buttonToggle.disabled = templateButtons.length >= 3;
 
             saveMetaBtn.textContent = editingMeta
                 ? 'Guardar cambios'
                 : (editingDraft ? 'Enviar a Meta' : 'Guardar y enviar a Meta');
 
             renderVariables(options.variableTypes || {});
+            renderTemplatePreview();
             dialog.showModal();
         }
 
         function collectPayload() {
+            const headerType = headerTypeInput.value;
+            if (['image', 'video', 'document'].includes(headerType)) {
+                throw new Error('Los encabezados multimedia no se pueden guardar ni enviar todavía. Selecciona «Ninguno» o «Texto estático».');
+            }
+            const headerText = headerType === 'text' ? headerTextInput.value.trim() : '';
+            if (headerType === 'text' && !headerText) {
+                throw new Error('Escribe el texto del encabezado.');
+            }
+            if (headerText.length > 60) {
+                throw new Error('El encabezado no puede superar 60 caracteres.');
+            }
+            if (headerText.includes('{{') || headerText.includes('}}')) {
+                throw new Error('El encabezado estático no admite variables.');
+            }
             const name = nameInput.value.trim();
             if (!name && mode !== 'edit-meta') {
                 throw new Error('Escribe un nombre para el borrador.');
@@ -1385,11 +1926,22 @@ const OutboundUI = (() => {
                 }
                 variableTypes[select.dataset.variableNumber] = select.value;
             }
+            for (const [index, item] of templateButtons.entries()) {
+                if (!isValidButton(item)) {
+                    throw new Error(`El botón ${index + 1} debe tener un nombre y una URL HTTPS válida sin credenciales.`);
+                }
+            }
+            if (templateButtons.length > 3) {
+                throw new Error('Una plantilla admite máximo tres botones URL. Elimina los adicionales antes de guardar.');
+            }
             return {
                 name,
                 category: categoryInput.value,
                 body_text: bodyText,
                 variable_types: variableTypes,
+                header_type: headerType,
+                header_text: headerText,
+                buttons: templateButtons.map((item) => ({ text: item.text.trim(), url: item.url.trim() })),
             };
         }
 
@@ -1434,6 +1986,9 @@ const OutboundUI = (() => {
                 body: JSON.stringify({
                     body_text: payload.body_text,
                     variable_types: payload.variable_types,
+                    buttons: payload.buttons,
+                    header_type: payload.header_type,
+                    header_text: payload.header_text,
                 }),
             });
             if (!response.ok || data.success === false) {
@@ -1586,6 +2141,9 @@ const OutboundUI = (() => {
                         category: template.category,
                         bodyText: template.body_text,
                         variableTypes: template.variable_types || {},
+                        headerType: template.header_type,
+                        headerText: template.header_text,
+                        buttons: template.buttons,
                     });
                 } else {
                     const template = metaTemplates.find((item) => String(item.meta_id) === String(id));
@@ -1596,6 +2154,9 @@ const OutboundUI = (() => {
                         category: template.category,
                         bodyText: template.body_text,
                         variableTypes: Object.fromEntries((template.indexes || []).map((index) => [index, 'text'])),
+                        headerType: template.header_type,
+                        headerText: template.header_text,
+                        buttons: template.buttons,
                     });
                 }
                 return;
@@ -1609,6 +2170,9 @@ const OutboundUI = (() => {
                     category: template.category,
                     bodyText: template.body_text,
                     variableTypes: Object.fromEntries((template.indexes || []).map((index) => [index, 'text'])),
+                    headerType: template.header_type,
+                    headerText: template.header_text,
+                    buttons: template.buttons,
                 });
                 showAlert('Duplicando una plantilla de Meta como borrador local.', 'warn');
                 return;
@@ -1673,46 +2237,13 @@ const OutboundUI = (() => {
         load();
     }
 
-    function renderSegments() {
-        const grid = document.getElementById('segmentsGrid');
-        grid.innerHTML = SEGMENTS.map((s) => `
-            <div class="col-md-6 col-lg-4">
-                <div class="card outbound-card h-100">
-                    <div class="card-body d-flex flex-column">
-                        <h2 class="h5">${s.name}</h2>
-                        <p class="text-muted small mb-2">Origen: ${s.source}</p>
-                        <p class="fw-bold text-success mb-3">${s.size.toLocaleString('es-CO')} personas</p>
-                        <a class="btn btn-entry mt-auto" href="/campanas/nueva/?segment=${s.id}">Iniciar campaña</a>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function renderLogs() {
-        const search = document.getElementById('logSearch');
-        const channel = document.getElementById('logChannel');
-        const draw = () => {
-            const q = (search.value || '').toLowerCase();
-            const rows = SEED_LOGS.filter((l) => {
-                const hay = `${l.person} ${l.campaign} ${l.event} ${l.detail}`.toLowerCase();
-                return (!q || hay.includes(q)) && (!channel.value || l.channel === channel.value);
-            });
-            document.getElementById('logsTableBody').innerHTML = rows.map((l) => `
-                <tr>
-                    <td>${l.at}</td>
-                    <td class="fw-semibold">${l.person}</td>
-                    <td>${channelBadge(l.channel)}</td>
-                    <td>${l.campaign}</td>
-                    <td>${l.event}</td>
-                    <td>${l.detail}</td>
-                </tr>
-            `).join('');
-        };
-        search.addEventListener('input', draw);
-        channel.addEventListener('change', draw);
-        draw();
-    }
-
-    return { renderDashboard, renderCampaignCards, renderCampaignsPage, renderCampaignDetail, initWizard, initAudiencesPage, initTemplatesPage, renderSegments, renderLogs };
+    return {
+        renderDashboard,
+        renderCampaignCards,
+        renderCampaignsPage,
+        renderCampaignDetail,
+        initWizard,
+        initAudiencesPage: () => initWizard(true),
+        initTemplatesPage,
+    };
 })();

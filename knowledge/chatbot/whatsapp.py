@@ -10,6 +10,7 @@ from typing import Any
 
 from django.conf import settings
 from django.utils import timezone
+from twisted import python
 
 from communications.adapters.meta_adapter import send_text_message
 from communications.models import Contact
@@ -109,6 +110,7 @@ def _forward_inbound_to_case(
     sender: str,
     text: str,
     external_message_id: str = '',
+    reason: str | None = None,
 ) -> CaseConversation:
     case_conversation = conversation.case_conversation
     if case_conversation is None:
@@ -120,7 +122,7 @@ def _forward_inbound_to_case(
             external_thread_id=case_conversation.external_thread_id,
             body=text,
             external_message_id=external_message_id,
-            theme=(conversation.escalation_reason or '')[:120],
+            theme=(reason or conversation.escalation_reason or '')[:120],
             **_case_contact_values(conversation.contact, sender),
         )
     )
@@ -131,7 +133,6 @@ def _forward_inbound_to_case(
 
     return case_conversation
 
-
 def _create_case_ticket(
     conversation: ChatConversation,
     sender: str,
@@ -139,11 +140,15 @@ def _create_case_ticket(
     reason: str,
     external_message_id: str = '',
 ) -> CaseConversation:
+
+    theme = (reason or conversation.escalation_reason or '')[:120]
+
     case_thread_id = sender
     previous_case = _manager(CaseConversation).filter(
         channel__code='whatsapp',
         external_thread_id=sender,
     ).order_by('-updated_at').first()
+
     if previous_case and previous_case.status == CaseConversation.Status.CERRADO:
         case_thread_id = f'{sender}:chat-{conversation.pk}'
 
@@ -153,10 +158,11 @@ def _create_case_ticket(
             external_thread_id=case_thread_id,
             body=question,
             external_message_id=external_message_id,
-            theme=reason[:120],
+            theme=theme,
             **_case_contact_values(conversation.contact, sender),
         )
     )
+
     conversation.case_conversation = case_conversation
     conversation.escalation_reason = reason
     conversation.escalated_at = timezone.now()
@@ -170,7 +176,9 @@ def _create_case_ticket(
         'flow_state',
         'updated_at',
     ])
+
     return case_conversation
+
 
 
 def _ticket_confirmation(conversation: ChatConversation, ticket: CaseConversation) -> str:

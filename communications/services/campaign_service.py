@@ -69,6 +69,7 @@ def _template_ref(campaign: Campaign) -> TemplateRef:
         language=campaign.template_language or "es_CO",
         body_text=snapshot.get("body_text", ""),
         header_type=snapshot.get("header_type", "none"),
+        header_text=snapshot.get("header_text", ""),
         header_media_url=snapshot.get("header_media_url", ""),
     )
 

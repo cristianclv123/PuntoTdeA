@@ -114,6 +114,7 @@ class MetaAdapter(ChannelAdapter):
             "language": getattr(template, "language", "") or "es_CO",
             "body_text": getattr(template, "body_text", "") or "",
             "header_type": getattr(template, "header_type", "") or "none",
+            "header_text": getattr(template, "header_text", "") or "",
             "header_media_url": getattr(template, "header_media_url", "") or "",
         }
 
@@ -146,7 +147,19 @@ class MetaAdapter(ChannelAdapter):
         if parameters:
             components.append({"type": "body", "parameters": parameters})
 
-        if fields["header_type"] != "none":
+        if fields["header_type"] == "text":
+            header_text = fields["header_text"].strip()
+            if not header_text:
+                return None, "La plantilla tiene encabezado de texto, pero no contiene el texto requerido."
+            if "{{" in header_text or "}}" in header_text:
+                return None, "El encabezado de texto no admite variables dinámicas."
+            components.append(
+                {
+                    "type": "header",
+                    "parameters": [{"type": "text", "text": header_text}],
+                }
+            )
+        elif fields["header_type"] in {"image", "video", "document"}:
             if not fields["header_media_url"]:
                 return None, "La plantilla tiene encabezado multimedia pero no una URL configurada."
             media_type = fields["header_type"]
@@ -158,6 +171,8 @@ class MetaAdapter(ChannelAdapter):
                     ],
                 }
             )
+        elif fields["header_type"] != "none":
+            return None, f"Tipo de encabezado no soportado: {fields['header_type']}."
 
         payload: dict[str, Any] = {
             "messaging_product": "whatsapp",

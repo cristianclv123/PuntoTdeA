@@ -178,13 +178,24 @@ def build_components(
     variable_types: dict | None = None,
     buttons: Any = None,
     header_type: str = "none",
+    header_text: str = "",
 ) -> list[dict[str, Any]]:
     """Traduce los campos de una plantilla a la lista ``components`` de Meta."""
-    if header_type and header_type != "none":
+    header_type = str(header_type or "none").lower()
+    components: list[dict[str, Any]] = []
+    if header_type == "text":
+        text = str(header_text or "").strip()
+        if not text:
+            raise TemplateBuildError("El encabezado de texto no puede estar vacío.")
+        if len(text) > 60:
+            raise TemplateBuildError("El encabezado de texto no puede superar 60 caracteres.")
+        if "{{" in text or "}}" in text:
+            raise TemplateBuildError("El encabezado de texto no admite variables.")
+        components.append({"type": "HEADER", "format": "TEXT", "text": text})
+    elif header_type != "none":
         raise TemplateBuildError(
-            "Meta no permite crear encabezados de imagen, video o documento por "
-            "API sin subir antes el archivo. Quita el encabezado o crea la "
-            "plantilla directamente en WhatsApp Manager."
+            "Los encabezados multimedia requieren una carga de archivo a Meta, "
+            "que aún no está implementada."
         )
 
     body: dict[str, Any] = {"type": "BODY", "text": body_text}
@@ -192,7 +203,7 @@ def build_components(
     if example:
         body["example"] = example
 
-    components: list[dict[str, Any]] = [body]
+    components.append(body)
     meta_buttons = _meta_buttons(buttons)
     if meta_buttons:
         components.append({"type": "BUTTONS", "buttons": meta_buttons})
@@ -249,6 +260,7 @@ def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
     """
     body_text = ""
     header_type = "none"
+    header_text = ""
     buttons: list[dict[str, str]] = []
     for component in data.get("components") or []:
         if not isinstance(component, dict):
@@ -259,10 +271,13 @@ def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
         elif component_type == "HEADER":
             fmt = str(component.get("format", "")).upper()
             header_type = {
+                "TEXT": "text",
                 "IMAGE": "image",
                 "VIDEO": "video",
                 "DOCUMENT": "document",
             }.get(fmt, "none")
+            if header_type == "text":
+                header_text = str(component.get("text", "") or "")
         elif component_type == "BUTTONS":
             for button in component.get("buttons") or []:
                 if not isinstance(button, dict):
@@ -291,6 +306,7 @@ def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
         "rejected_reason": rejection_reason,
         "body_text": body_text,
         "header_type": header_type,
+        "header_text": header_text,
         "buttons": buttons,
         "indexes": [int(number) for number in order],
         "param_count": len(order),
@@ -396,6 +412,7 @@ def create_from_draft(draft, meta_name: str = "") -> TemplateResult:
             draft.variable_types,
             draft.buttons,
             draft.header_type,
+            draft.header_text,
         )
     except TemplateBuildError as exc:
         return TemplateResult(ok=False, message=str(exc), kind=KIND_BUILD)
@@ -441,6 +458,7 @@ def edit_template(
     variable_types: dict | None = None,
     buttons: Any = None,
     header_type: str = "none",
+    header_text: str = "",
 ) -> TemplateResult:
     """Edita una plantilla existente en Meta (``POST /{template_id}``).
 
@@ -453,7 +471,9 @@ def edit_template(
         return TemplateResult(ok=False, message=error, kind=KIND_CONFIG)
 
     try:
-        components = build_components(body_text, variable_types, buttons, header_type)
+        components = build_components(
+            body_text, variable_types, buttons, header_type, header_text
+        )
     except TemplateBuildError as exc:
         return TemplateResult(ok=False, message=str(exc), kind=KIND_BUILD)
 

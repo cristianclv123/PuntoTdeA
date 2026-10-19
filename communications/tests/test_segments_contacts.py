@@ -30,13 +30,27 @@ class SegmentContactsApiTests(TestCase):
         response = self.client.get(
             f"/campanas/api/segments/{self.segment.id}/contacts/"
         )
+
         self.assertEqual(response.status_code, 200)
-        contacts = response.json()
-        self.assertEqual(len(contacts), 1)
-        self.assertEqual(contacts[0]["full_name"], "Camila Test")
+
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertIsNone(payload["next"])
+        self.assertIsNone(payload["previous"])
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["full_name"], "Camila Test")
 
     def test_contacts_endpoint_without_contacts_returns_empty_list(self):
         empty = AudienceSegment.objects.create(name="Vacía")
-        response = self.client.get(f"/campanas/api/segments/{empty.id}/contacts/")
+
+        response = self.client.get(
+            f"/campanas/api/segments/{empty.id}/contacts/"
+        )
+
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+
+        payload = response.json()
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["results"], [])
+        self.assertIsNone(payload["next"])
+        self.assertIsNone(payload["previous"])

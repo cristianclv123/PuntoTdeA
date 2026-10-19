@@ -31,11 +31,62 @@ class MessageTemplateSerializer(serializers.ModelSerializer):
         model = MessageTemplate
         fields = [
             "id", "name", "category",
-            "body_text", "variable_types", "header_type", "header_media_url", "buttons",
+            "body_text", "variable_types", "header_type",
+            "header_text", "header_media_url", "buttons",
             "param_count", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "param_count", "created_at", "updated_at"]
 
+    def validate(self, attrs):
+        header_type = attrs.get(
+            "header_type",
+            getattr(
+                self.instance,
+                "header_type",
+                MessageTemplate.HeaderType.NONE,
+            ),
+        )
+
+        current_header_text = getattr(self.instance, "header_text", "")
+        header_text = attrs.get("header_text", current_header_text)
+        header_text = (header_text or "").strip()
+
+        if header_type == MessageTemplate.HeaderType.TEXT:
+            if not header_text:
+                raise serializers.ValidationError(
+                    {"header_text": "El encabezado de texto no puede estar vacío."}
+                )
+
+            if "{{" in header_text or "}}" in header_text:
+                raise serializers.ValidationError(
+                    {"header_text": "El encabezado de texto no admite variables."}
+                )
+
+            if len(header_text) > 60:
+                raise serializers.ValidationError(
+                    {"header_text": "El encabezado no puede superar 60 caracteres."}
+                )
+
+            attrs["header_text"] = header_text
+
+        elif header_type == MessageTemplate.HeaderType.NONE:
+            attrs["header_text"] = ""
+
+        elif header_type in {
+            MessageTemplate.HeaderType.IMAGE,
+            MessageTemplate.HeaderType.VIDEO,
+            MessageTemplate.HeaderType.DOCUMENT,
+        }:
+            raise serializers.ValidationError(
+                {
+                    "header_type": (
+                        "Los encabezados multimedia todavía no están "
+                        "disponibles para los borradores."
+                    )
+                }
+            )
+
+        return attrs
 
 class AudienceSegmentSerializer(serializers.ModelSerializer):
     contact_count = serializers.ReadOnlyField()

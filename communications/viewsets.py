@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 
 from .adapters.meta_adapter import MetaAdapter
 from .models import AudienceSegment, BroadcastRecipient, Campaign, Contact, MessageTemplate
@@ -263,6 +264,8 @@ class MetaTemplateDetailView(APIView):
             body_text,
             request.data.get("variable_types") or {},
             request.data.get("buttons") or [],
+            request.data.get("header_type") or "none",
+            request.data.get("header_text") or "",
         )
         if not result.ok:
             return Response(
@@ -289,12 +292,17 @@ class MetaTemplateDetailView(APIView):
             )
         return Response({"success": True, "message": result.message})
 
+class CommunicationsPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 100
 
 @extend_schema(auth=INTERNAL_AUTH)
 class AudienceSegmentViewSet(viewsets.ModelViewSet):
     queryset = AudienceSegment.objects.all()
     serializer_class = AudienceSegmentSerializer
     permission_classes = [IsInternalService]
+    pagination_class = CommunicationsPagination
 
     @extend_schema(
         request=SegmentImportSerializer,
@@ -350,6 +358,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
     queryset = Campaign.objects.select_related("segment").all()
     serializer_class = CampaignSerializer
     permission_classes = [IsInternalService]
+    pagination_class = CommunicationsPagination
 
     def perform_create(self, serializer):
         scheduled_at = serializer.validated_data.get("scheduled_at")

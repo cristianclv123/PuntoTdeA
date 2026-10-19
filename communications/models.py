@@ -118,6 +118,7 @@ class MessageTemplate(models.Model):
 
     class HeaderType(models.TextChoices):
         NONE = "none", "Sin encabezado"
+        TEXT = "text", "Texto"
         IMAGE = "image", "Imagen"
         VIDEO = "video", "Video"
         DOCUMENT = "document", "Documento (PDF)"
@@ -137,6 +138,7 @@ class MessageTemplate(models.Model):
     )
 
     header_type = models.CharField(max_length=10, choices=HeaderType.choices, default=HeaderType.NONE)
+    header_text = models.CharField(max_length=60, blank=True, default="")
     header_media_url = models.URLField(blank=True)
     buttons = models.JSONField(
         default=list, blank=True,
