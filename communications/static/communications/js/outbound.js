@@ -920,27 +920,6 @@ const OutboundUI = (() => {
                 renderPersonalizationColumns(state.personalizationColumns);
             }
             document.querySelectorAll('.template-card').forEach((el) => el.classList.toggle('is-selected', el === card));
-            const vars = extractVars(tpl.body);
-            const editor = document.getElementById('variableEditor');
-            const fields = document.getElementById('variableFields');
-            if (!vars.length) {
-                editor.classList.add('d-none');
-                state.vars = {};
-            } else {
-                editor.classList.remove('d-none');
-                state.vars = Object.fromEntries(vars.map((v) => [v, state.vars[v] || '']));
-                fields.innerHTML = vars.map((v) => `
-                    <label class="form-label small mt-2">${v}</label>
-                    <input class="form-control var-input" data-var="${v}" value="${state.vars[v] || ''}" placeholder="${v}">
-                `).join('');
-            }
-            updatePreview();
-        });
-
-        document.getElementById('variableFields').addEventListener('input', (e) => {
-            if (!e.target.classList.contains('var-input')) return;
-            state.vars[e.target.dataset.var] = e.target.value;
-            resetPersonalizationValidation();
             updatePreview();
         });
 
