@@ -17,7 +17,6 @@ urlpatterns = [
     path("nueva/", views.campaign_new, name="campaign_new"),
     path("detalle/", views.campaign_detail, name="campaign_detail"),
     path("audiencias/", views.segments, name="segments"),
-    path("test-send/", views.test_send, name="test_send"),
     path("api/test-send/", viewsets.TestSendAPIView.as_view(), name="api-test-send"),
 
     # Plantillas de Meta (la fuente de verdad) y borradores locales.
