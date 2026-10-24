@@ -170,6 +170,18 @@ def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
     campaign.status = Campaign.Status.SENT
     campaign.sent_at = timezone.now()
     campaign.save(update_fields=["status", "sent_at"])
+    from notifications.events import notify_campaign
+    from notifications.models import Notification
+
+    sent = campaign.recipients.filter(status=BroadcastRecipient.Status.SENT).count()
+    failed = campaign.recipients.filter(status=BroadcastRecipient.Status.FAILED).count()
+    notify_campaign(
+        "Campaña enviada",
+        f"{campaign.name}: {sent} enviados, {failed} fallidos.",
+        event="campaign.sent",
+        level=Notification.Level.WARNING if failed else Notification.Level.SUCCESS,
+        campaign_id=campaign.id,
+    )
     return campaign
 
 
@@ -206,6 +218,16 @@ def pause_campaign(campaign: Campaign) -> Campaign:
     if campaign.status in (Campaign.Status.SCHEDULED, Campaign.Status.SENDING):
         campaign.status = Campaign.Status.PAUSED
         campaign.save(update_fields=["status"])
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        notify_campaign(
+            "Campaña pausada",
+            campaign.name,
+            event="campaign.paused",
+            level=Notification.Level.WARNING,
+            campaign_id=campaign.id,
+        )
     return campaign
 
 
@@ -215,6 +237,16 @@ def resume_campaign(campaign: Campaign) -> Campaign:
             Campaign.Status.SCHEDULED if campaign.scheduled_at else Campaign.Status.DRAFT
         )
         campaign.save(update_fields=["status"])
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        notify_campaign(
+            "Campaña reanudada",
+            campaign.name,
+            event="campaign.resumed",
+            level=Notification.Level.INFO,
+            campaign_id=campaign.id,
+        )
     return campaign
 
 
@@ -223,4 +255,14 @@ def cancel_campaign(campaign: Campaign) -> Campaign:
     if campaign.status in (Campaign.Status.DRAFT, Campaign.Status.SCHEDULED, Campaign.Status.PAUSED):
         campaign.status = Campaign.Status.CANCELLED
         campaign.save(update_fields=["status"])
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        notify_campaign(
+            "Campaña cancelada",
+            campaign.name,
+            event="campaign.cancelled",
+            level=Notification.Level.WARNING,
+            campaign_id=campaign.id,
+        )
     return campaign

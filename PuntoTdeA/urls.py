@@ -91,6 +91,7 @@ urlpatterns = [
     path('campanas/', include('communications.urls')),
     path('plantillas/', communications_views.templates, name='plantillas'),
     path('avisos/', include('announcements.urls')),
+    path('notificaciones/', include('notifications.urls')),
 
     # Redirecciones para compatibilidad con alias
     path('announcements/', lambda req: redirect('announcements:index', permanent=True)),

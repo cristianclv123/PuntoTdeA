@@ -72,6 +72,18 @@ class KnowledgeArticleViewSet(viewsets.ModelViewSet):
     serializer_class = KnowledgeArticleSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_create(self, serializer):
+        article = serializer.save()
+        from notifications.events import notify_knowledge
+        from notifications.models import Notification
+
+        notify_knowledge(
+            "Nuevo artículo en conocimiento",
+            article.title,
+            event="article.created",
+            level=Notification.Level.SUCCESS,
+        )
+
     def get_queryset(self):
         qs = super().get_queryset()
         params = self.request.query_params
@@ -103,6 +115,18 @@ class FAQViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     # Acepta JSON (gestion web sin imagen) y multipart (con imagen).
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def perform_create(self, serializer):
+        faq = serializer.save()
+        from notifications.events import notify_knowledge
+        from notifications.models import Notification
+
+        notify_knowledge(
+            "Nueva FAQ en conocimiento",
+            str(faq.question),
+            event="faq.created",
+            level=Notification.Level.SUCCESS,
+        )
 
     def get_queryset(self):
         qs = super().get_queryset()

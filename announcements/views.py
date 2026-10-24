@@ -29,6 +29,15 @@ def _notify(request: HttpRequest, status_ad: StatusAd) -> None:
         return
     estado = "activo" if status_ad.state == StatusAd.State.ACTIVE else "pausado (prueba)"
     messages.success(request, f"Anuncio creado en WhatsApp Status ({estado}).")
+    from notifications.events import notify_announcement
+    from notifications.models import Notification
+
+    notify_announcement(
+        "Aviso publicado en WhatsApp Status",
+        status_ad.announcement.title if status_ad.announcement_id else "Status",
+        event="announcement.status",
+        level=Notification.Level.SUCCESS,
+    )
 
 
 def _retry_status(request: HttpRequest, announcement: Announcement) -> None:
@@ -69,8 +78,18 @@ def index(request):
                     "estado de WhatsApp.",
                 )
                 return redirect("announcements:index")
+            title = announcement.title
             announcement.delete()
             messages.success(request, "Aviso eliminado.")
+            from notifications.events import notify_announcement
+            from notifications.models import Notification
+
+            notify_announcement(
+                "Se eliminó un aviso",
+                title,
+                event="announcement.deleted",
+                level=Notification.Level.WARNING,
+            )
             return redirect("announcements:index")
 
         if action == "publish_status":
@@ -117,6 +136,15 @@ def index(request):
         except Exception:
             pass
         messages.success(request, "Aviso creado.")
+        from notifications.events import notify_announcement
+        from notifications.models import Notification
+
+        notify_announcement(
+            "Se creó un aviso",
+            announcement.title,
+            event="announcement.created",
+            level=Notification.Level.SUCCESS,
+        )
 
         if publish_status:
             if not announcement.has_image:

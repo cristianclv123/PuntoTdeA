@@ -449,6 +449,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
         scheduled_at = serializer.validated_data.get("scheduled_at")
         initial_status = Campaign.Status.SCHEDULED if scheduled_at else Campaign.Status.DRAFT
         serializer.save(status=initial_status)
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        campaign = serializer.instance
+        notify_campaign(
+            "Se creó una campaña",
+            campaign.name,
+            event="campaign.created",
+            level=Notification.Level.INFO,
+            campaign_id=campaign.id,
+        )
 
     @extend_schema(
         summary="Enviar campaña ahora",
