@@ -2,9 +2,11 @@ import json
 import hashlib
 import hmac
 from datetime import timedelta
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -12,9 +14,14 @@ from rest_framework.test import APIClient
 
 from cases.models import Conversation as CaseConversation, Message as CaseMessage
 from communications.models import Contact
-from ..models import ChatConversation
+from ..models import Category, ChatConversation, FAQ
 from .case_status import get_case_status
-from .whatsapp import close_inactive_whatsapp_conversations, handle_message, process_webhook
+from .whatsapp import (
+    INACTIVITY_NOTICE,
+    close_inactive_whatsapp_conversations,
+    handle_message,
+    process_webhook,
+)
 
 
 def _manager(model):
@@ -679,6 +686,62 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['processed'], 1)
         send.assert_called_once()
+
+    @patch('knowledge.chatbot.whatsapp.send_image_message')
+    @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
+    def test_webhook_sends_the_image_attached_to_the_answer(
+        self,
+        send_text,
+        send_image_message,
+    ):
+        sender = '573001112233'
+        question = '¿Cómo consulto el calendario?'
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            faq = FAQ.objects.create(
+                question=question,
+                answer='Consulta el calendario.',
+                category=Category.objects.create(name='Calendario'),
+                image=SimpleUploadedFile(
+                    'calendario.png',
+                    b'faq-image-content',
+                    content_type='image/png',
+                ),
+            )
+            handle_message(sender, 'Hola')
+            send_image_message.return_value = Mock(success=True, error='')
+            payload = {
+                'entry': [{'changes': [{'value': {'messages': [{
+                    'id': 'wamid.inbound.image-test',
+                    'from': sender,
+                    'type': 'text',
+                    'text': {'body': question},
+                }]}}]}],
+            }
+
+            with patch(
+                'knowledge.chatbot.workflow.generate_response',
+                return_value={
+                    'answer': faq.answer,
+                    'confidence': 0.95,
+                    'needs_human_attention': False,
+                    'sources': [],
+                    'image_url': reverse('knowledge:faq-image', kwargs={'faq_id': faq.pk}),
+                    'image_source_id': faq.pk,
+                },
+            ):
+                self.assertEqual(process_webhook(payload), 1)
+
+            send_image_message.assert_called_once()
+            sent_to, image_file, caption = send_image_message.call_args.args
+            self.assertEqual(sent_to, sender)
+            self.assertEqual(image_file.name, faq.image.name)
+            self.assertEqual(caption, faq.answer)
+            send_text.assert_called_once_with(
+                sender,
+                '¿Tienes otra duda, necesitas hablar con un asesor? '
+                'Responde sí para continuar o no si ya no necesitas ayuda.\n\n'
+                + INACTIVITY_NOTICE,
+            )
 
 
 class WhatsAppInactivityTests(TestCase):

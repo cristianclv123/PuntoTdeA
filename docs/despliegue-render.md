@@ -119,6 +119,12 @@ gratuito Render no monta disco, así que las imágenes de avisos, los adjuntos d
 casos y las imágenes del chatbot se guardan en el sistema de archivos efímero
 del contenedor y **se pierden en el siguiente despliegue**.
 
+Las respuestas FAQ con imagen se envían a WhatsApp desde el archivo asociado a
+la FAQ en el almacenamiento de Django: el servidor lo sube a Meta y lo envía
+junto con el texto de respuesta. En el plan gratuito los archivos de media se
+pierden al desplegar, por lo que se requiere disco persistente o almacenamiento
+externo para conservarlos entre despliegues.
+
 Mientras tanto:
 
 - `MEDIA_UPLOADS_ENABLED=true` deja subir los archivos (funcionan hasta el

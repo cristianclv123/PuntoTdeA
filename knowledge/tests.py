@@ -1,10 +1,13 @@
 from datetime import datetime, time, timezone as datetime_timezone
+from tempfile import TemporaryDirectory
 
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
 
 from .chatbot.schedule import BusinessSchedule
 from .chatbot.workflow import ChatbotWorkflow
-from .models import Category, ChatConversation, KnowledgeArticle
+from .models import Category, ChatConversation, FAQ, KnowledgeArticle
 from .services.rag_service import answer_query, search_knowledge
 
 
@@ -40,6 +43,28 @@ class KnowledgeRagTests(TestCase):
         results = search_knowledge('¿Cómo puedo pagar la matrícula?', limit=1)
         self.assertEqual(results[0]['title'], 'Pago de matrícula en línea')
         self.assertIn('canales virtuales', answer_query('¿Cómo puedo pagar la matrícula?')['answer'])
+
+    def test_faq_image_is_returned_and_publicly_served(self):
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            faq = _manager(FAQ).create(
+                question='¿Cómo consultar el calendario académico de Punto TdeA?',
+                answer='Consulta el calendario académico en esta imagen.',
+                category=_manager(Category).get(name='Matrículas'),
+                image=SimpleUploadedFile(
+                    'calendario.png',
+                    b'faq-image-content',
+                    content_type='image/png',
+                ),
+            )
+
+            result = answer_query('¿Cómo consultar el calendario académico de Punto TdeA?')
+
+            image_url = reverse('knowledge:faq-image', kwargs={'faq_id': faq.pk})
+            self.assertEqual(result['image_url'], image_url)
+            response = self.client.get(image_url)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b''.join(response.streaming_content), b'faq-image-content')
 
 
 class ChatbotWorkflowTests(TestCase):

@@ -11,6 +11,7 @@ router.register("faqs", viewsets.FAQViewSet, basename="faq")
 router.register("conversations", viewsets.ChatConversationViewSet, basename="chat-conversation")
 
 urlpatterns = [
+    path("faqs/<int:faq_id>/image/", views.faq_image, name="faq-image"),
     path("search/", views.search, name="knowledge-search"),
     path("ask/", views.ask, name="knowledge-ask"),
     path(

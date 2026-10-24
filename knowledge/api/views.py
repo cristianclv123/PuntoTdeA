@@ -1,4 +1,9 @@
+import mimetypes
+
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from django.db import models
+from django.http import FileResponse, Http404
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -6,6 +11,7 @@ from rest_framework.response import Response
 
 from knowledge.services.indexing_service import index_academic_calendar
 from knowledge.services.rag_service import answer_query, search_knowledge
+from knowledge.models import FAQ
 
 _search_result = inline_serializer(
     name="KnowledgeSearchResult",
@@ -20,6 +26,22 @@ _search_result = inline_serializer(
         "image_url": serializers.CharField(required=False, allow_null=True),
     },
 )
+
+
+def faq_image(request, faq_id: int):
+    now = timezone.now()
+    faq = FAQ.objects.filter(pk=faq_id, is_active=True).filter(
+        models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=now),
+    ).filter(
+        models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=now),
+    ).first()
+    if faq is None or not faq.image or not faq.image.storage.exists(faq.image.name):
+        raise Http404
+
+    content_type = mimetypes.guess_type(faq.image.name)[0] or 'application/octet-stream'
+    response = FileResponse(faq.image.open('rb'), content_type=content_type)
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @extend_schema(

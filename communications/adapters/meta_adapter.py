@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import mimetypes
 import re
 from typing import Any
 
 import requests
 from django.conf import settings
+from django.core.files import File
 
 from .base import ChannelAdapter, SendResult
 from ..services.meta_errors import explain
@@ -30,6 +32,13 @@ def _messages_url() -> str:
     return (
         f"{settings.META_GRAPH_API_URL.rstrip('/')}/"
         f"{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/messages"
+    )
+
+
+def _media_url() -> str:
+    return (
+        f"{settings.META_GRAPH_API_URL.rstrip('/')}/"
+        f"{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/media"
     )
 
 
@@ -95,6 +104,67 @@ def send_text_message(to: str, text: str) -> SendResult:
             "to": normalized_phone,
             "type": "text",
             "text": {"body": text.strip()},
+        }
+    )
+
+
+def send_image_message(to: str, image_file: File, caption: str = "") -> SendResult:
+    """Sube una imagen guardada en el servidor y la envía con un pie de foto."""
+    normalized_phone = _normalize_phone(to)
+    if not normalized_phone:
+        return SendResult(success=False, error="Número de teléfono vacío.")
+    if not image_file:
+        return SendResult(success=False, error="El archivo de imagen está vacío.")
+
+    filename = image_file.name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    content_type = mimetypes.guess_type(filename)[0] or ""
+    if content_type not in {"image/jpeg", "image/png"}:
+        return SendResult(
+            success=False,
+            error="WhatsApp solo admite imágenes JPG o PNG para este envío.",
+        )
+
+    error = _configuration_error()
+    if error:
+        return SendResult(success=False, error=error)
+
+    upload_response = None
+    try:
+        image_file.open("rb")
+        upload_response = requests.post(
+            _media_url(),
+            headers={"Authorization": f"Bearer {settings.META_ACCESS_TOKEN}"},
+            data={"messaging_product": "whatsapp"},
+            files={"file": (filename, image_file, content_type)},
+            timeout=settings.META_REQUEST_TIMEOUT,
+        )
+        upload_response.raise_for_status()
+        media_id = upload_response.json().get("id")
+    except (OSError, requests.RequestException, ValueError) as exc:
+        return SendResult(
+            success=False,
+            error=_request_error(upload_response, exc),
+        )
+    finally:
+        image_file.close()
+
+    if not media_id:
+        return SendResult(success=False, error="Meta no devolvió el identificador de la imagen.")
+
+    image_payload: dict[str, Any] = {"id": media_id}
+    if caption.strip():
+        if len(caption.strip()) > 1024:
+            return SendResult(
+                success=False,
+                error="La respuesta supera el límite de 1024 caracteres del pie de imagen.",
+            )
+        image_payload["caption"] = caption.strip()
+    return _post_message(
+        {
+            "messaging_product": "whatsapp",
+            "to": normalized_phone,
+            "type": "image",
+            "image": image_payload,
         }
     )
 

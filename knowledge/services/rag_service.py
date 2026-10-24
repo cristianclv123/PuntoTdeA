@@ -6,6 +6,7 @@ from typing import Any
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -182,7 +183,11 @@ def search_knowledge(query: str, limit: int | None = None):
             'category': faq.category.name if faq.category else 'General',
             'score': round(score, 4),
             'source_type': 'faq',
-            'image_url': faq.image.url if faq.image else None,
+            'image_url': (
+                reverse('knowledge:faq-image', kwargs={'faq_id': faq.pk})
+                if faq.image else None
+            ),
+            'image_source_id': faq.pk if faq.image else None,
         })
 
     results.sort(key=lambda item: item['score'], reverse=True)
@@ -223,6 +228,12 @@ def answer_query(question: str) -> dict[str, Any]:
             'confidence': confidence,
             'needs_human_attention': confidence < settings.KNOWLEDGE_SETTINGS.get('MIN_CONFIDENCE', 0.7),
             'sources': results,
+            'image_url': best_result.get('image_url'),
+            'image_source_id': (
+                best_result.get('id')
+                if best_result.get('source_type') == 'faq' and best_result.get('image_url')
+                else None
+            ),
         }
 
     return {

@@ -9,13 +9,14 @@ from datetime import datetime
 from typing import Any
 
 from django.conf import settings
+from django.core.files import File
 from django.utils import timezone
 
-from communications.adapters.meta_adapter import send_text_message
+from communications.adapters.meta_adapter import send_image_message, send_text_message
 from communications.models import Contact
 from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
-from ..models import ChatConversation
+from ..models import ChatConversation, FAQ
 from .case_status import CaseStatusAPIError, get_case_status
 from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
 from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
@@ -200,6 +201,9 @@ def _submit_question(
         conversation.flow_state = 'waiting_low_confidence_choice'
         conversation.messages[-1]['content'] = follow_up
         conversation.messages[-1].pop('awaiting_advisor', None)
+        conversation.messages[-1].pop('image_url', None)
+        conversation.messages[-1].pop('image_source_id', None)
+        conversation.messages[-1].pop('source_question', None)
         conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
         return [follow_up]
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
@@ -387,15 +391,49 @@ def send_text(recipient: str, text: str) -> bool:
     return result.success
 
 
+def send_image(recipient: str, image_file: File, caption: str = '') -> bool:
+    result = send_image_message(recipient, image_file, caption)
+    if not result.success:
+        logger.warning(
+            'No fue posible enviar la imagen de WhatsApp a %s: %s',
+            recipient,
+            result.error,
+        )
+    return result.success
+
+
+def _question_image(sender: str, question: str) -> FAQ | None:
+    conversation = _manager(ChatConversation).filter(
+        channel='whatsapp',
+        external_user_id=sender,
+    ).order_by('-updated_at', '-created_at').first()
+    if conversation is None or conversation.last_question != question:
+        return None
+    for message in reversed(conversation.messages):
+        image_source_id = message.get('image_source_id')
+        if message.get('source_question') == question and image_source_id:
+            faq = _manager(FAQ).filter(pk=image_source_id, is_active=True).first()
+            if faq and faq.image and faq.image.storage.exists(faq.image.name):
+                return faq
+    return None
+
+
 def process_webhook(payload: dict[str, Any]) -> int:
     processed = 0
     for sender, text, external_message_id in _messages(payload):
-        for reply in handle_message(
+        replies = handle_message(
             sender,
             text,
             external_message_id=external_message_id,
-        ):
-            send_text(sender, f'{reply}\n\n{INACTIVITY_NOTICE}')
+        )
+        faq = _question_image(sender, text)
+        image_sent = False
+        for index, reply in enumerate(replies):
+            caption = f'{reply}\n\n{INACTIVITY_NOTICE}'
+            if index == 0 and faq:
+                image_sent = send_image(sender, faq.image, reply)
+            if index > 0 or not image_sent:
+                send_text(sender, caption)
         processed += 1
     return processed
 
