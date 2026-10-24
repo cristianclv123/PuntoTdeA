@@ -178,7 +178,9 @@ class WhatsAppFlowTests(TestCase):
 
     def test_user_can_request_advisor_and_get_a_case_ticket(self):
         handle_message('573001112234', 'Hola')
-        self.assertIn('transferiremos', handle_message('573001112234', 'Quiero un asesor')[0])
+        advisor_prompt = handle_message('573001112234', 'Quiero un asesor')[0]
+        self.assertIn('transferiremos', advisor_prompt)
+        self.assertIn('documento de identidad', advisor_prompt)
         responses = handle_message('573001112234', 'Necesito ayuda con mi matrícula')
         conversation = _manager(ChatConversation).get(external_user_id='573001112234')
         case_conversation = _manager(CaseConversation).get(

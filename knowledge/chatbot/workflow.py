@@ -98,7 +98,11 @@ class ChatbotWorkflow:
         return self._result('ended', message, inactivity=True)
 
     def escalate(self, reason: str = '') -> dict[str, Any]:
-        message = 'Para ayudarte mejor, transferiremos esta conversación a un asesor. ¿Qué solicitud deseas enviarle?'
+        message = (
+            'Para ayudarte mejor, transferiremos esta conversación a un asesor. '
+            '¿Qué solicitud deseas enviarle? Por favor, incluye también tu número '
+            'de documento de identidad.'
+        )
         self.conversation.escalation_reason = reason.strip()
         self.conversation.flow_state = 'waiting_advisor_question'
         self._add_message('bot', message)
