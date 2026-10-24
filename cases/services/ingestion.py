@@ -129,6 +129,12 @@ def ingest_inbound_message(payload: InboundPayload) -> tuple[Conversation, Messa
         sent_at=sent_at,
     )
     broadcast_new_message(message)
+    from notifications.events import notify_customer_reply, notify_new_chat
+
+    if conversation.messages.filter(direction=Message.Direction.INBOUND).count() <= 1:
+        notify_new_chat(conversation)
+    else:
+        notify_customer_reply(conversation, payload.body)
     return conversation, message, True
 
 
@@ -182,6 +188,7 @@ def create_outbound_message(
     uploaded_files=None,
     template=None,
     template_params=None,
+    emit_notification: bool = True,
 ) -> Message:
     from cases.models import MessageAttachment
     from cases.services.attachments import validate_uploaded_file
@@ -224,4 +231,8 @@ def create_outbound_message(
     conversation.last_message_at = sent_at
     conversation.save(update_fields=["last_message_at", "updated_at"])
     broadcast_new_message(message)
+    if emit_notification:
+        from notifications.events import notify_advisor_reply
+
+        notify_advisor_reply(conversation, user)
     return message

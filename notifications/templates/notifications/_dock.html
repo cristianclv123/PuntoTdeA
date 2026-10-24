@@ -1,0 +1,38 @@
+{% load icons %}
+<div
+  id="notif-dock"
+  class="notif-dock"
+  data-user-id="{{ request.user.id }}"
+  data-list-url="{% url 'notifications:list' %}"
+  data-read-all-url="{% url 'notifications:mark-all-read' %}"
+  data-read-url-template="{% url 'notifications:mark-read' 0 %}"
+  data-ws-url="{% if request.is_secure %}wss{% else %}ws{% endif %}://{{ request.get_host }}/ws/notificaciones/"
+>
+  <div class="notif-toasts" id="notif-toasts" aria-live="polite"></div>
+
+  <div class="notif-panel" id="notif-panel" hidden>
+    <div class="notif-panel-head">
+      <div>
+        <div class="notif-panel-title">Notificaciones</div>
+        <div class="notif-panel-sub">Actividad de todos los módulos</div>
+      </div>
+      <button type="button" class="notif-text-btn" id="notif-read-all">Marcar leídas</button>
+    </div>
+    <div class="notif-panel-list" id="notif-panel-list">
+      <div class="notif-empty">Sin novedades aún.</div>
+    </div>
+  </div>
+
+  <button
+    type="button"
+    class="notif-fab"
+    id="notif-fab"
+    aria-label="Notificaciones"
+    aria-expanded="false"
+    aria-controls="notif-panel"
+    title="Notificaciones"
+  >
+    {% icon 'bell' size=18 %}
+    <span class="notif-badge" id="notif-fab-badge" hidden>0</span>
+  </button>
+</div>

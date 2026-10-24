@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.pagination import PageNumberPagination
 
 from .adapters.meta_adapter import MetaAdapter
 from .models import AudienceSegment, BroadcastRecipient, Campaign, Contact, MessageTemplate
@@ -20,6 +21,7 @@ from .serializers import (
     SegmentImportSerializer,
 )
 from .services import campaign_service, meta_templates, segmentation_service
+from .services import campaign_personalization_service
 from .services.test_send_registry import record_test_send
 
 
@@ -31,6 +33,37 @@ class TestSendRequestSerializer(serializers.Serializer):
     def validate_params(self, value):
         if not isinstance(value, dict):
             raise serializers.ValidationError("Los parámetros deben ser un objeto JSON.")
+        return value
+
+
+class PersonalizationInspectSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class PersonalizationValidateSerializer(serializers.Serializer):
+    file = serializers.FileField()
+    segment = serializers.PrimaryKeyRelatedField(queryset=AudienceSegment.objects.all())
+    template = serializers.CharField(max_length=64)
+    template_name = serializers.CharField(max_length=150)
+    template_language = serializers.CharField(max_length=10, default="es_CO")
+    template_snapshot = serializers.JSONField()
+    default_params = serializers.JSONField(required=False, default=dict)
+    document_column = serializers.IntegerField(min_value=0)
+    variable_mappings = serializers.JSONField()
+
+    def validate_template_snapshot(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("La copia de la plantilla debe ser un objeto JSON.")
+        return value
+
+    def validate_default_params(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Los parámetros generales deben ser un objeto JSON.")
+        return value
+
+    def validate_variable_mappings(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("El mapeo de variables debe ser un objeto JSON.")
         return value
 
 
@@ -263,6 +296,8 @@ class MetaTemplateDetailView(APIView):
             body_text,
             request.data.get("variable_types") or {},
             request.data.get("buttons") or [],
+            request.data.get("header_type") or "none",
+            request.data.get("header_text") or "",
         )
         if not result.ok:
             return Response(
@@ -289,12 +324,17 @@ class MetaTemplateDetailView(APIView):
             )
         return Response({"success": True, "message": result.message})
 
+class CommunicationsPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 100
 
 @extend_schema(auth=INTERNAL_AUTH)
 class AudienceSegmentViewSet(viewsets.ModelViewSet):
     queryset = AudienceSegment.objects.all()
     serializer_class = AudienceSegmentSerializer
     permission_classes = [IsInternalService]
+    pagination_class = CommunicationsPagination
 
     @extend_schema(
         request=SegmentImportSerializer,
@@ -350,11 +390,76 @@ class CampaignViewSet(viewsets.ModelViewSet):
     queryset = Campaign.objects.select_related("segment").all()
     serializer_class = CampaignSerializer
     permission_classes = [IsInternalService]
+    pagination_class = CommunicationsPagination
+
+    @extend_schema(
+        summary="Inspeccionar columnas de un Excel de personalización",
+        request=PersonalizationInspectSerializer,
+        responses={200: serializers.ListField(child=serializers.DictField())},
+        auth=INTERNAL_AUTH,
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="personalization/inspect",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def personalization_inspect(self, request):
+        payload = PersonalizationInspectSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        columns = campaign_personalization_service.inspect_columns(
+            payload.validated_data["file"]
+        )
+        return Response({"columns": columns})
+
+    @extend_schema(
+        summary="Validar un Excel de personalización",
+        request=PersonalizationValidateSerializer,
+        responses={201: serializers.DictField()},
+        auth=INTERNAL_AUTH,
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="personalization/validate",
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def personalization_validate(self, request):
+        payload = PersonalizationValidateSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        campaign_data = {
+            "segment": data["segment"],
+            "template_meta_id": data["template"],
+            "template_name": data["template_name"],
+            "template_language": data["template_language"],
+            "template_snapshot": data["template_snapshot"],
+            "default_params": data["default_params"],
+        }
+        _, report = campaign_personalization_service.validate_personalization(
+            file_obj=data["file"],
+            segment=data["segment"],
+            campaign_data=campaign_data,
+            document_column=data["document_column"],
+            variable_mappings=data["variable_mappings"],
+        )
+        return Response(report, status=status.HTTP_201_CREATED)
 
     def perform_create(self, serializer):
         scheduled_at = serializer.validated_data.get("scheduled_at")
         initial_status = Campaign.Status.SCHEDULED if scheduled_at else Campaign.Status.DRAFT
         serializer.save(status=initial_status)
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        campaign = serializer.instance
+        notify_campaign(
+            "Se creó una campaña",
+            campaign.name,
+            event="campaign.created",
+            level=Notification.Level.INFO,
+            campaign_id=campaign.id,
+        )
 
     @extend_schema(
         summary="Enviar campaña ahora",
@@ -371,7 +476,10 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 {"detail": f"No se puede enviar una campaña en estado '{campaign.status}'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        campaign_service.send_campaign(campaign)
+        try:
+            campaign_service.send_campaign(campaign)
+        except campaign_service.CampaignSendError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         campaign.refresh_from_db()
         return Response(self.get_serializer(campaign).data)
 

@@ -8,11 +8,17 @@ no cambia.
 """
 
 import random
+from django.db import transaction
 from django.utils import timezone
 
 from ..adapters.base import TemplateRef
 from ..adapters.meta_adapter import MetaAdapter
 from ..models import BroadcastRecipient, Campaign, Contact, ContactEvent
+from .campaign_personalization_service import (
+    PersonalizationAuthorizationError,
+    assert_authorized_recipients,
+    template_variables,
+)
 from .logging_service import log_event
 
 # Único lugar donde se decide qué adaptador se usa hoy.
@@ -20,9 +26,21 @@ from .logging_service import log_event
 DEFAULT_ADAPTER = MetaAdapter()
 
 
+class CampaignSendError(Exception):
+    """La campaña no supera la validación previa al envío."""
+
+
 def resolve_recipients(campaign: Campaign) -> list[BroadcastRecipient]:
     """Crea (si no existen) los BroadcastRecipient para cada contacto del
     segmento de la campaña. Es idempotente: correrlo varias veces no duplica."""
+    if hasattr(campaign, "personalization"):
+        recipients = list(campaign.recipients.select_related("contact").all())
+        try:
+            assert_authorized_recipients(campaign, recipients)
+        except PersonalizationAuthorizationError as exc:
+            raise CampaignSendError(str(exc)) from exc
+        return recipients
+
     existing_contact_ids = set(
         campaign.recipients.values_list("contact_id", flat=True)
     )
@@ -69,6 +87,7 @@ def _template_ref(campaign: Campaign) -> TemplateRef:
         language=campaign.template_language or "es_CO",
         body_text=snapshot.get("body_text", ""),
         header_type=snapshot.get("header_type", "none"),
+        header_text=snapshot.get("header_text", ""),
         header_media_url=snapshot.get("header_media_url", ""),
     )
 
@@ -78,11 +97,41 @@ def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
     pendientes. Actualiza estados y deja rastro en ContactEvent."""
     adapter = adapter or DEFAULT_ADAPTER
 
-    resolve_recipients(campaign)
-    campaign.status = Campaign.Status.SENDING
-    campaign.save(update_fields=["status"])
+    with transaction.atomic():
+        campaign = Campaign.objects.select_for_update().get(pk=campaign.pk)
+        if campaign.status not in (Campaign.Status.DRAFT, Campaign.Status.SCHEDULED):
+            raise CampaignSendError(
+                f"No se puede enviar una campaña en estado '{campaign.status}'."
+            )
 
-    for recipient in campaign.recipients.filter(status=BroadcastRecipient.Status.PENDING):
+        recipients = resolve_recipients(campaign)
+        pending_recipients = [
+            recipient
+            for recipient in recipients
+            if recipient.status == BroadcastRecipient.Status.PENDING
+        ]
+        body_text = (campaign.template_snapshot or {}).get("body_text", "")
+        required_variables = template_variables(body_text)
+        for recipient in pending_recipients:
+            if recipient.contact.whatsapp_opt_in == Contact.OptInStatus.BAJA:
+                continue
+            if not recipient.phone_snapshot.strip():
+                raise CampaignSendError(
+                    f"El destinatario {recipient.contact_id} no tiene un teléfono válido."
+                )
+            params = recipient.params if isinstance(recipient.params, dict) else {}
+            for variable in required_variables:
+                value = params.get(variable)
+                if value is None or not str(value).strip():
+                    raise CampaignSendError(
+                        f"Falta el valor de {{{{{variable}}}}} para el destinatario "
+                        f"{recipient.contact_id}; no se inició ningún envío."
+                    )
+
+        campaign.status = Campaign.Status.SENDING
+        campaign.save(update_fields=["status"])
+
+    for recipient in pending_recipients:
         if recipient.contact.whatsapp_opt_in == Contact.OptInStatus.BAJA:
             recipient.status = BroadcastRecipient.Status.OPTED_OUT
             recipient.save(update_fields=["status"])
@@ -121,6 +170,18 @@ def send_campaign(campaign: Campaign, adapter=None) -> Campaign:
     campaign.status = Campaign.Status.SENT
     campaign.sent_at = timezone.now()
     campaign.save(update_fields=["status", "sent_at"])
+    from notifications.events import notify_campaign
+    from notifications.models import Notification
+
+    sent = campaign.recipients.filter(status=BroadcastRecipient.Status.SENT).count()
+    failed = campaign.recipients.filter(status=BroadcastRecipient.Status.FAILED).count()
+    notify_campaign(
+        "Campaña enviada",
+        f"{campaign.name}: {sent} enviados, {failed} fallidos.",
+        event="campaign.sent",
+        level=Notification.Level.WARNING if failed else Notification.Level.SUCCESS,
+        campaign_id=campaign.id,
+    )
     return campaign
 
 
@@ -157,6 +218,16 @@ def pause_campaign(campaign: Campaign) -> Campaign:
     if campaign.status in (Campaign.Status.SCHEDULED, Campaign.Status.SENDING):
         campaign.status = Campaign.Status.PAUSED
         campaign.save(update_fields=["status"])
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        notify_campaign(
+            "Campaña pausada",
+            campaign.name,
+            event="campaign.paused",
+            level=Notification.Level.WARNING,
+            campaign_id=campaign.id,
+        )
     return campaign
 
 
@@ -166,6 +237,16 @@ def resume_campaign(campaign: Campaign) -> Campaign:
             Campaign.Status.SCHEDULED if campaign.scheduled_at else Campaign.Status.DRAFT
         )
         campaign.save(update_fields=["status"])
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        notify_campaign(
+            "Campaña reanudada",
+            campaign.name,
+            event="campaign.resumed",
+            level=Notification.Level.INFO,
+            campaign_id=campaign.id,
+        )
     return campaign
 
 
@@ -174,4 +255,14 @@ def cancel_campaign(campaign: Campaign) -> Campaign:
     if campaign.status in (Campaign.Status.DRAFT, Campaign.Status.SCHEDULED, Campaign.Status.PAUSED):
         campaign.status = Campaign.Status.CANCELLED
         campaign.save(update_fields=["status"])
+        from notifications.events import notify_campaign
+        from notifications.models import Notification
+
+        notify_campaign(
+            "Campaña cancelada",
+            campaign.name,
+            event="campaign.cancelled",
+            level=Notification.Level.WARNING,
+            campaign_id=campaign.id,
+        )
     return campaign

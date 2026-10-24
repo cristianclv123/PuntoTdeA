@@ -22,6 +22,10 @@ class CampaignWizardPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("campaignAudiencePicker", content)
+        self.assertIn('id="personalizationFile"', content)
+        self.assertIn('id="inspectPersonalizationFile"', content)
+        self.assertIn('id="validatePersonalization"', content)
+        self.assertIn('id="confirmPartialSend"', content)
         # Con DEBUG=false whitenoise sirve el asset con hash en el nombre; se
         # compara contra la ruta real del manifest, no contra el nombre literal.
         self.assertIn(static("js/audience-picker.js"), content)

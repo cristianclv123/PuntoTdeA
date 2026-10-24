@@ -277,11 +277,49 @@ def _process_inbound(message: dict[str, Any], phone_number_id: str) -> str:
     return "processed"
 
 
+def _process_template_status(field: str, value: dict[str, Any]) -> str:
+    name = (value.get("message_template_name") or value.get("name") or "").strip()
+    event_name = (
+        value.get("event") or value.get("new_quality_score") or field or ""
+    ).strip().upper()
+    language = (value.get("message_template_language") or "").strip()
+    if not name and not event_name:
+        return "ignored"
+
+    event, should_process = _event(
+        f"template:{field}:{name}:{language}:{event_name}",
+        name or "template",
+        WhatsAppWebhookEvent.Type.STATUS,
+        event_name.lower()[:30],
+        value if isinstance(value, dict) else {},
+    )
+    if not should_process:
+        return "duplicate"
+
+    # El estado vive en Meta; el borrador local no guarda status ni nombre de Meta.
+    from notifications.events import notify_template_status
+
+    notify_template_status(name or "Plantilla de WhatsApp", event_name)
+    _finish_event(event)
+    return "processed"
+
+
 def _process_payload(payload: dict[str, Any]) -> dict[str, int]:
     summary = {"processed": 0, "duplicates": 0, "ignored": 0, "unmatched": 0}
     for entry in payload.get("entry", []):
         for change in entry.get("changes", []):
             value = change.get("value") or {}
+            field = (change.get("field") or "").strip()
+            if field in {
+                "message_template_status_update",
+                "message_template_quality_update",
+            }:
+                result = _process_template_status(field, value)
+                if result == "duplicate":
+                    summary["duplicates"] += 1
+                else:
+                    summary[result] = summary.get(result, 0) + 1
+                continue
             metadata = value.get("metadata") or {}
             phone_number_id = (metadata.get("phone_number_id") or "").strip()
             for message in value.get("messages") or []:
