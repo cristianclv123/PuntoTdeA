@@ -194,14 +194,19 @@ class CloseConversationUnitTests(AssignmentOutboundFixtures):
         send_text.return_value = SendResult(success=True, provider_message_id="wamid.close")
         conversation = self._conv(assigned_to=self.owner, department=self.dept)
         close_conversation(conversation.id, self.owner)
+        conversation.refresh_from_db()
         send_text.assert_called_once_with(
             "573004445566",
-            "El asesor ya cerró el caso. Si necesitas más ayuda, escríbenos de nuevo.",
+            (
+                f"El asesor ya cerró el caso {conversation.ticket_number}. "
+                "Si necesitas más ayuda, escríbenos de nuevo."
+            ),
         )
         notice = Message.objects.get(
             conversation=conversation,
             direction=Message.Direction.OUTBOUND,
         )
+        self.assertIn(conversation.ticket_number, notice.body)
         self.assertIn("cerró el caso", notice.body)
         with self.assertRaises(CloseError):
             close_conversation(conversation.id, self.owner)
