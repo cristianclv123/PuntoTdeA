@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import Any
 
 from django.conf import settings
-from django.core.files import File
 from django.utils import timezone
 
 from communications.adapters.meta_adapter import send_image_message, send_text_message
@@ -391,8 +390,20 @@ def send_text(recipient: str, text: str) -> bool:
     return result.success
 
 
-def send_image(recipient: str, image_file: File, caption: str = '') -> bool:
-    result = send_image_message(recipient, image_file, caption)
+def send_image(
+    recipient: str,
+    image_data: bytes,
+    filename: str,
+    content_type: str,
+    caption: str = '',
+) -> bool:
+    result = send_image_message(
+        recipient,
+        image_data,
+        filename,
+        content_type,
+        caption,
+    )
     if not result.success:
         logger.warning(
             'No fue posible enviar la imagen de WhatsApp a %s: %s',
@@ -413,7 +424,7 @@ def _question_image(sender: str, question: str) -> FAQ | None:
         image_source_id = message.get('image_source_id')
         if message.get('source_question') == question and image_source_id:
             faq = _manager(FAQ).filter(pk=image_source_id, is_active=True).first()
-            if faq and faq.image and faq.image.storage.exists(faq.image.name):
+            if faq and faq.has_image:
                 return faq
     return None
 
@@ -431,7 +442,15 @@ def process_webhook(payload: dict[str, Any]) -> int:
         for index, reply in enumerate(replies):
             caption = f'{reply}\n\n{INACTIVITY_NOTICE}'
             if index == 0 and faq:
-                image_sent = send_image(sender, faq.image, reply)
+                image_sent = send_image(
+                    sender,
+                    faq.get_image_bytes() or b'',
+                    faq.image_name,
+                    faq.image_content_type,
+                    reply[:1024],
+                )
+                if image_sent and len(reply) > 1024:
+                    send_text(sender, reply[1024:])
             if index > 0 or not image_sent:
                 send_text(sender, caption)
         processed += 1

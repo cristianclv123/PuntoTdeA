@@ -1,14 +1,5 @@
-import json
-
-from django.conf import settings
-from django.contrib.auth.decorators import login_required, user_passes_test
-from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
-from django.views.decorators.http import require_POST
-
-from .adapters.meta_adapter import MetaAdapter
-from .services import meta_templates
-from .services.test_send_registry import record_test_send
 
 
 @login_required
@@ -45,113 +36,10 @@ def templates(request):
         {"nav_section": "templates", "active_nav": "templates"},
     )
 
-
 @login_required
 def segments(request):
     return render(
         request,
         "communications/segments.html",
         {"nav_section": "segments", "active_nav": "segments"},
-    )
-
-
-@login_required
-def interactions(request):
-    return render(
-        request,
-        "communications/interactions.html",
-        {"nav_section": "interactions", "active_nav": "campaigns"},
-    )
-
-
-@require_POST
-@login_required
-@user_passes_test(lambda user: user.is_active and user.is_staff)
-def test_send(request):
-    if request.content_type != "application/json":
-        return JsonResponse(
-            {"success": False, "message": "La solicitud debe enviarse como JSON."},
-            status=400,
-        )
-
-    try:
-        payload = json.loads(request.body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return JsonResponse(
-            {"success": False, "message": "El cuerpo JSON no es válido."},
-            status=400,
-        )
-
-    if not isinstance(payload, dict):
-        return JsonResponse(
-            {"success": False, "message": "La solicitud debe ser un objeto JSON."},
-            status=400,
-        )
-
-    template_id = payload.get("template")
-    params = payload.get("params", {})
-    if not isinstance(template_id, str) or not template_id.strip():
-        return JsonResponse(
-            {"success": False, "message": "Debes indicar una plantilla válida."},
-            status=400,
-        )
-    if not isinstance(params, dict):
-        return JsonResponse(
-            {"success": False, "message": "Los parámetros deben ser un objeto JSON."},
-            status=400,
-        )
-
-    test_recipient = settings.WHATSAPP_TEST_RECIPIENT
-    if not test_recipient:
-        return JsonResponse(
-            {
-                "success": False,
-                "message": "No está configurado el destinatario de pruebas de WhatsApp.",
-            },
-            status=503,
-        )
-
-    fetched = meta_templates.get_template(template_id)
-    if not fetched.ok or not fetched.template:
-        return JsonResponse(
-            {
-                "success": False,
-                "message": fetched.message or "La plantilla indicada no existe.",
-            },
-            status=502 if fetched.kind == meta_templates.KIND_META else 404,
-        )
-    if fetched.template.get("status") != "APPROVED":
-        return JsonResponse(
-            {
-                "success": False,
-                "message": "La plantilla debe estar aprobada por Meta para enviar una prueba.",
-            },
-            status=400,
-        )
-
-    template = meta_templates.to_template_ref(fetched.template)
-    result = MetaAdapter().send_template_message(test_recipient, template, params)
-    if not result.success:
-        return JsonResponse(
-            {
-                "success": False,
-                "message": result.error or "Meta no pudo enviar el mensaje de prueba.",
-            },
-            status=502,
-        )
-
-    if result.provider_message_id:
-        record_test_send(
-            test_recipient,
-            result.provider_message_id,
-            "test_template",
-            f"{template.name} {params}",
-        )
-
-    return JsonResponse(
-        {
-            "success": True,
-            "message": "Mensaje de prueba enviado correctamente.",
-            "provider_message_id": result.provider_message_id,
-        }
     )

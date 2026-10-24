@@ -26,6 +26,7 @@ communications/
   webhooks/meta_webhook.py
   services/
     campaign_service.py    # send_campaign()
+    campaign_personalization_service.py # validación Excel y autorizaciones
     meta_config.py
     meta_diagnostics.py
     meta_errors.py
@@ -48,6 +49,7 @@ communications/
 | `AudienceSegment` + `SegmentMembership` | Audiencias |
 | `Campaign` | Envío masivo (draft → scheduled → sending → sent / paused / cancelled / failed) |
 | `BroadcastRecipient` | Un destinatario; `provider_message_id` = wamid (**solo lo escribe el envío**) |
+| `CampaignPersonalization` | Validación temporal del Excel y conjunto autorizado de destinatarios |
 | `WhatsAppWebhookEvent` | Idempotencia del webhook |
 
 ## Pasarela Meta (único cliente Graph)
@@ -89,6 +91,36 @@ Por destinatario `pending`:
 Plantilla: `status=approved`, `meta_template_name` real en Meta, idioma, params `{{n}}`, header media si aplica.
 
 UI: listado, nueva, detalle, plantillas, audiencias, interacciones, test-send.
+
+### Personalización desde Excel
+
+El asistente de campañas permite subir un `.xlsx` independiente del importador de
+audiencias. Primero se inspeccionan las columnas y luego se mapea el documento
+y cada variable numérica `{{n}}` a una columna o a un valor fijo. La validación
+relaciona filas exclusivamente por `Contact.document_number`, comprueba que el
+contacto pertenezca al segmento, rechaza documentos duplicados y valida los
+datos/variables requeridos. Los rechazados incluyen fila y motivo; sus valores
+no se copian a `Contact`.
+
+La API interna añade:
+
+- `POST /campanas/api/campaigns/personalization/inspect/` (multipart `file`):
+  devuelve encabezados e índices de columna.
+- `POST /campanas/api/campaigns/personalization/validate/` (multipart `file`,
+  segmento, snapshot y mapeo): devuelve la vista previa, filas válidas y
+  rechazadas, y un identificador de validación con vigencia de 30 minutos.
+
+Al crear la campaña se envía `personalization_validation_id`; si hubo filas
+rechazadas también se requiere `confirm_partial=true`. El backend verifica que
+la validación corresponda a la misma audiencia y plantilla, crea únicamente los
+destinatarios válidos y almacena sus parámetros en `BroadcastRecipient.params`.
+Los datos intermedios del Excel se eliminan al consumir la validación. Antes de
+cualquier envío, el servicio verifica que los destinatarios sigan coincidiendo
+con la autorización y que todas las variables estén completas. Los envíos
+directos por API y la acción de administración usan la misma protección.
+Las validaciones no consumidas expiran a los 30 minutos; para retirar sus datos
+se puede programar `python manage.py cleanup_campaign_personalizations
+--ejecutar` (sin la opción, el comando solo informa).
 
 ## API interna `/campanas/api/`
 

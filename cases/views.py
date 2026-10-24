@@ -14,12 +14,13 @@ from cases.services.assignment import (
     ClaimError,
     CloseError,
     advisor_can_reply,
+    announce_advisor_change,
     claim_conversation,
     close_conversation,
     user_can_act_on_conversation,
 )
 from cases.services.attachments import ACCEPT_ATTR
-from cases.services.case_events import advisor_label, mark_claimed
+from cases.services.case_events import advisor_label
 from cases.services.ingestion import create_outbound_message
 
 User = get_user_model()
@@ -293,7 +294,7 @@ def _handle_update_case(request, conversation: Conversation):
         messages.error(request, "Si el caso está escalado, debes indicar a qué dependencia.")
         return False
 
-    was_unassigned = conversation.assigned_to_id is None
+    previous_assigned_id = conversation.assigned_to_id
     conversation.status = status
     conversation.priority = priority
     conversation.department_id = int(department_id) if department_id.isdigit() else None
@@ -307,10 +308,7 @@ def _handle_update_case(request, conversation: Conversation):
             int(assigned_to_id) if assigned_to_id.isdigit() else conversation.assigned_to_id
         )
     conversation.save()
-
-    if conversation.assigned_to_id and (was_unassigned or not conversation.claimed_at):
-        assignee = conversation.assigned_to or request.user
-        mark_claimed(conversation, assignee, assign=False)
+    announce_advisor_change(conversation, previous_assigned_id)
 
     messages.success(request, "Gestión del caso guardada.")
     return True

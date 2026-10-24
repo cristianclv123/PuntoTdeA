@@ -10,6 +10,7 @@ from cases.services.assignment import (
     ClaimError,
     CloseError,
     advisor_can_reply,
+    announce_advisor_change,
     claim_conversation,
     claim_greeting_body,
     close_conversation,
@@ -72,10 +73,14 @@ class UserCanActTests(AssignmentOutboundFixtures):
         self.assertFalse(advisor_can_reply(conversation, self.owner))
         self.assertFalse(advisor_can_reply(conversation, self.staff))
 
-    def test_staff_can_reply_unassigned_open_case(self):
+    def test_nobody_can_reply_until_the_case_is_claimed(self):
         conversation = self._conv()
-        self.assertTrue(advisor_can_reply(conversation, self.staff))
+        self.assertFalse(advisor_can_reply(conversation, self.staff))
         self.assertFalse(advisor_can_reply(conversation, self.owner))
+        conversation.assigned_to = self.owner
+        conversation.save(update_fields=["assigned_to"])
+        self.assertTrue(advisor_can_reply(conversation, self.staff))
+        self.assertTrue(advisor_can_reply(conversation, self.owner))
 
 
 class ClaimConversationUnitTests(AssignmentOutboundFixtures):
@@ -183,6 +188,47 @@ class CloseConversationUnitTests(AssignmentOutboundFixtures):
         self.assertEqual(closed.assigned_to_id, self.staff.id)
         self.assertEqual(closed.department_id, self.dept.id)
         self.assertEqual(closed.closed_by_id, self.staff.id)
+
+    @patch("cases.services.ingestion.send_text_message")
+    def test_close_sends_whatsapp_notice_once(self, send_text):
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.close")
+        conversation = self._conv(assigned_to=self.owner, department=self.dept)
+        close_conversation(conversation.id, self.owner)
+        send_text.assert_called_once_with(
+            "573004445566",
+            "El asesor ya cerró el caso. Si necesitas más ayuda, escríbenos de nuevo.",
+        )
+        notice = Message.objects.get(
+            conversation=conversation,
+            direction=Message.Direction.OUTBOUND,
+        )
+        self.assertIn("cerró el caso", notice.body)
+        with self.assertRaises(CloseError):
+            close_conversation(conversation.id, self.owner)
+        send_text.assert_called_once()
+
+    @patch("cases.services.ingestion.send_text_message")
+    def test_reassign_sends_new_advisor_greeting(self, send_text):
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.move")
+        conversation = self._conv(assigned_to=self.owner)
+        self.other.first_name = "Luis"
+        self.other.last_name = "Otro"
+        self.other.save(update_fields=["first_name", "last_name"])
+        previous = conversation.assigned_to_id
+        conversation.assigned_to = self.other
+        conversation.save(update_fields=["assigned_to"])
+        announce_advisor_change(conversation, previous)
+        expected = claim_greeting_body(self.other)
+        send_text.assert_called_once_with("573004445566", expected)
+        self.assertTrue(
+            Message.objects.filter(
+                conversation=conversation,
+                direction=Message.Direction.SYSTEM,
+                body__contains="tomó el caso",
+            ).exists()
+        )
+        announce_advisor_change(conversation, self.other.id)
+        send_text.assert_called_once()
 
     def test_already_closed_and_invalid_priority(self):
         conversation = self._conv(assigned_to=self.owner, department=self.dept)

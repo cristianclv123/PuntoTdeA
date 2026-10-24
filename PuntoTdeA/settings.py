@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     "knowledge",
     "communications",
     "announcements",
+    "notifications",
     "tests.apps.TestsConfig",
 ]
 

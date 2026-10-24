@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=dash-campaigns-1">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=notif-dock-1">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -32,8 +32,9 @@
             {% icon 'search' size=16 %}
             <input type="text" placeholder="Buscar por nombre, tema...">
           </div>
-          <button class="icon-btn" type="button" aria-label="Notificaciones">
+          <button class="icon-btn notif-top-bell" type="button" id="notif-top-bell" aria-label="Notificaciones" aria-expanded="false" aria-controls="notif-panel">
             {% icon 'bell' size=17 %}
+            <span class="notif-badge" id="notif-top-badge" hidden>0</span>
           </button>
           {% if user.is_authenticated %}
             <a href="{% url 'profile' %}" class="user-row user-row-link" title="Mi perfil" aria-label="Mi perfil">
@@ -64,7 +65,13 @@
       {% endblock %}
     </div>
   </div>
+  {% if user.is_authenticated %}
+    {% include "notifications/_dock.html" %}
+  {% endif %}
   <script src="{% static 'js/app-shell.js' %}"></script>
+  {% if user.is_authenticated %}
+    <script src="{% static 'notifications/js/notifications.js' %}"></script>
+  {% endif %}
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

@@ -19,11 +19,11 @@ from cases.services.assignment import (
     ClaimError,
     CloseError,
     advisor_can_reply,
+    announce_advisor_change,
     claim_conversation,
     close_conversation,
     user_can_act_on_conversation,
 )
-from cases.services.case_events import mark_claimed
 from cases.services.ingestion import create_outbound_message
 
 from .serializers import (
@@ -263,7 +263,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        was_unassigned = conversation.assigned_to_id is None
+        previous_assigned_id = conversation.assigned_to_id
         for field in ("status", "priority", "theme"):
             if field in data:
                 setattr(conversation, field, data[field])
@@ -276,10 +276,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if conversation.status != Conversation.Status.ESCALADO:
             conversation.escalated_to = None
         conversation.save()
-
-        if conversation.assigned_to_id and (was_unassigned or not conversation.claimed_at):
-            assignee = conversation.assigned_to or request.user
-            mark_claimed(conversation, assignee, assign=False)
+        announce_advisor_change(conversation, previous_assigned_id)
 
         conversation.refresh_from_db()
         return Response(ConversationDetailSerializer(conversation).data)

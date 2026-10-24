@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import mimetypes
 import re
 from typing import Any
 
 import requests
 from django.conf import settings
-from django.core.files import File
 
 from .base import ChannelAdapter, SendResult
 from ..services.meta_errors import explain
@@ -108,16 +106,20 @@ def send_text_message(to: str, text: str) -> SendResult:
     )
 
 
-def send_image_message(to: str, image_file: File, caption: str = "") -> SendResult:
-    """Sube una imagen guardada en el servidor y la envía con un pie de foto."""
+def send_image_message(
+    to: str,
+    image_data: bytes,
+    filename: str,
+    content_type: str,
+    caption: str = "",
+) -> SendResult:
+    """Sube bytes de imagen almacenados en la base de datos y los envía con texto."""
     normalized_phone = _normalize_phone(to)
     if not normalized_phone:
         return SendResult(success=False, error="Número de teléfono vacío.")
-    if not image_file:
+    if not image_data:
         return SendResult(success=False, error="El archivo de imagen está vacío.")
 
-    filename = image_file.name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
-    content_type = mimetypes.guess_type(filename)[0] or ""
     if content_type not in {"image/jpeg", "image/png"}:
         return SendResult(
             success=False,
@@ -130,12 +132,11 @@ def send_image_message(to: str, image_file: File, caption: str = "") -> SendResu
 
     upload_response = None
     try:
-        image_file.open("rb")
         upload_response = requests.post(
             _media_url(),
             headers={"Authorization": f"Bearer {settings.META_ACCESS_TOKEN}"},
             data={"messaging_product": "whatsapp"},
-            files={"file": (filename, image_file, content_type)},
+            files={"file": (filename, image_data, content_type)},
             timeout=settings.META_REQUEST_TIMEOUT,
         )
         upload_response.raise_for_status()
@@ -145,8 +146,6 @@ def send_image_message(to: str, image_file: File, caption: str = "") -> SendResu
             success=False,
             error=_request_error(upload_response, exc),
         )
-    finally:
-        image_file.close()
 
     if not media_id:
         return SendResult(success=False, error="Meta no devolvió el identificador de la imagen.")
@@ -184,6 +183,7 @@ class MetaAdapter(ChannelAdapter):
             "language": getattr(template, "language", "") or "es_CO",
             "body_text": getattr(template, "body_text", "") or "",
             "header_type": getattr(template, "header_type", "") or "none",
+            "header_text": getattr(template, "header_text", "") or "",
             "header_media_url": getattr(template, "header_media_url", "") or "",
         }
 
@@ -216,7 +216,19 @@ class MetaAdapter(ChannelAdapter):
         if parameters:
             components.append({"type": "body", "parameters": parameters})
 
-        if fields["header_type"] != "none":
+        if fields["header_type"] == "text":
+            header_text = fields["header_text"].strip()
+            if not header_text:
+                return None, "La plantilla tiene encabezado de texto, pero no contiene el texto requerido."
+            if "{{" in header_text or "}}" in header_text:
+                return None, "El encabezado de texto no admite variables dinámicas."
+            components.append(
+                {
+                    "type": "header",
+                    "parameters": [{"type": "text", "text": header_text}],
+                }
+            )
+        elif fields["header_type"] in {"image", "video", "document"}:
             if not fields["header_media_url"]:
                 return None, "La plantilla tiene encabezado multimedia pero no una URL configurada."
             media_type = fields["header_type"]
@@ -228,6 +240,8 @@ class MetaAdapter(ChannelAdapter):
                     ],
                 }
             )
+        elif fields["header_type"] != "none":
+            return None, f"Tipo de encabezado no soportado: {fields['header_type']}."
 
         payload: dict[str, Any] = {
             "messaging_product": "whatsapp",

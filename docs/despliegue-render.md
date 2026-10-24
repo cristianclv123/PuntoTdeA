@@ -116,14 +116,14 @@ Sube el cambio a `main` y Render aplica el plan nuevo.
 
 **Ahora mismo no hay media persistente.** Es una decisión consciente: en plan
 gratuito Render no monta disco, así que las imágenes de avisos, los adjuntos de
-casos y las imágenes del chatbot se guardan en el sistema de archivos efímero
-del contenedor y **se pierden en el siguiente despliegue**.
+casos se guardan en el sistema de archivos efímero del contenedor y **se pierden
+en el siguiente despliegue**.
 
-Las respuestas FAQ con imagen se envían a WhatsApp desde el archivo asociado a
-la FAQ en el almacenamiento de Django: el servidor lo sube a Meta y lo envía
-junto con el texto de respuesta. En el plan gratuito los archivos de media se
-pierden al desplegar, por lo que se requiere disco persistente o almacenamiento
-externo para conservarlos entre despliegues.
+Las imágenes de las FAQ se guardan como bytes en Postgres, no en `MEDIA_ROOT`.
+Al responder una pregunta relacionada, el bot recupera esos bytes de la FAQ y
+los sube a Meta; WhatsApp recibe la imagen con la respuesta como pie de foto.
+Las FAQ permanecen disponibles mientras exista la base de datos. En el plan
+gratuito, Postgres expira a los 30 días.
 
 Mientras tanto:
 

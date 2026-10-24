@@ -170,7 +170,13 @@ def search_knowledge(query: str, limit: int | None = None):
         models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=now),
     ).filter(
         models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=now),
-    ).select_related('category', 'intent')
+    ).select_related('category', 'intent').annotate(
+        image_available=models.Case(
+            models.When(image_data__isnull=False, then=models.Value(True)),
+            default=models.Value(False),
+            output_field=models.BooleanField(),
+        ),
+    ).defer('image_data')
     for faq in faq_queryset:
         score = _relevance_score(query, faq.question, f'{faq.question} {faq.answer}', faq.category.name)
         if score <= 0:
@@ -184,10 +190,10 @@ def search_knowledge(query: str, limit: int | None = None):
             'score': round(score, 4),
             'source_type': 'faq',
             'image_url': (
-                reverse('knowledge:faq-image', kwargs={'faq_id': faq.pk})
-                if faq.image else None
+                reverse('knowledge:faq-image', kwargs={'pk': faq.pk})
+                if faq.image_available else None
             ),
-            'image_source_id': faq.pk if faq.image else None,
+            'image_source_id': faq.pk if faq.image_available else None,
         })
 
     results.sort(key=lambda item: item['score'], reverse=True)
