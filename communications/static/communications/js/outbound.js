@@ -967,7 +967,6 @@ const OutboundUI = (() => {
             });
             document.getElementById('wizardBack').disabled = n === 1;
             document.getElementById('wizardNext').textContent = n === 3 ? 'Lanzar campaña' : 'Continuar';
-            document.getElementById('wizardTest').classList.toggle('d-none', n !== 3);
             if (n === 2) renderTemplates();
             if (n === 3) fillReview();
             updatePreview();
@@ -1380,44 +1379,6 @@ const OutboundUI = (() => {
                 return showStep(3);
             }
             launch();
-        });
-        const wizardTestButton = document.getElementById('wizardTest');
-        wizardTestButton.addEventListener('click', async () => {
-            if (!state.templateId) {
-                toast('Selecciona una plantilla antes de enviar la prueba.');
-                return;
-            }
-
-            const originalText = wizardTestButton.textContent;
-            wizardTestButton.disabled = true;
-            wizardTestButton.textContent = 'Enviando...';
-            try {
-                const response = await fetch('/campanas/test-send/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken'),
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        template: state.templateId,
-                        params: state.vars,
-                    }),
-                });
-                const data = await response.json();
-                if (!response.ok || !data.success) {
-                    toast(data.message || 'No se pudo enviar el mensaje de prueba.');
-                    return;
-                }
-                toast(data.message || 'Mensaje de prueba enviado correctamente.');
-            } catch (error) {
-                console.error('Error al enviar mensaje de prueba:', error);
-                toast('No se pudo enviar el mensaje de prueba. Verifica la conexión con el servidor.');
-            } finally {
-                wizardTestButton.disabled = false;
-                wizardTestButton.textContent = originalText;
-            }
         });
         document.querySelectorAll('.wizard-step').forEach((btn) => {
             btn.addEventListener('click', () => showStep(Number(btn.dataset.step)));
