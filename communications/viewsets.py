@@ -11,9 +11,15 @@ from rest_framework.pagination import PageNumberPagination
 
 from .adapters.meta_adapter import MetaAdapter
 from .models import AudienceSegment, BroadcastRecipient, Campaign, Contact, MessageTemplate
-from .permissions import IsInternalService
+from .permissions import (
+    IsAnnouncementsSegmentReader,
+    IsInternalService,
+    has_internal_service_access,
+)
 from .serializers import (
     AudienceSegmentSerializer,
+    AnnouncementSegmentContactPreviewSerializer,
+    AnnouncementSegmentPickerSerializer,
     BroadcastRecipientSerializer,
     CampaignSerializer,
     ContactSerializer,
@@ -333,8 +339,22 @@ class CommunicationsPagination(PageNumberPagination):
 class AudienceSegmentViewSet(viewsets.ModelViewSet):
     queryset = AudienceSegment.objects.all()
     serializer_class = AudienceSegmentSerializer
-    permission_classes = [IsInternalService]
+    permission_classes = [IsInternalService | IsAnnouncementsSegmentReader]
     pagination_class = CommunicationsPagination
+
+    def get_serializer_class(self):
+        has_full_access = has_internal_service_access(self.request)
+        if self.action == "contacts":
+            return (
+                ContactSerializer
+                if has_full_access
+                else AnnouncementSegmentContactPreviewSerializer
+            )
+        if has_full_access:
+            return AudienceSegmentSerializer
+        if self.action == "list":
+            return AnnouncementSegmentPickerSerializer
+        return AudienceSegmentSerializer
 
     @extend_schema(
         request=SegmentImportSerializer,
@@ -381,8 +401,8 @@ class AudienceSegmentViewSet(viewsets.ModelViewSet):
         queryset = segment.contacts.all().order_by("pk")
         page = self.paginate_queryset(queryset)
         if page is not None:
-            return self.get_paginated_response(ContactSerializer(page, many=True).data)
-        return Response(ContactSerializer(queryset, many=True).data)
+            return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        return Response(self.get_serializer(queryset, many=True).data)
 
 
 @extend_schema(auth=INTERNAL_AUTH)

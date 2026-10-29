@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
@@ -13,7 +14,14 @@ def _image(name="aviso.png"):
 
 class AnnouncementsE2ETests(TestCase):
     def setUp(self):
-        get_user_model().objects.create_user(username="av_e2e", password="secret123")
+        user = get_user_model().objects.create_user(
+            username="av_e2e", password="secret123"
+        )
+        permission = Permission.objects.get(
+            content_type__app_label="announcements",
+            codename="access_announcements",
+        )
+        user.user_permissions.add(permission)
         self.client.login(username="av_e2e", password="secret123")
         self.segment = AudienceSegment.objects.create(name="Aspirantes")
 

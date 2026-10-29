@@ -12,7 +12,6 @@ from collections import OrderedDict
 from datetime import timedelta
 
 from django.contrib import messages
-from django.contrib.auth.decorators import user_passes_test
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,6 +19,7 @@ from django.views.decorators.http import require_POST
 
 from communications.adapters.meta_adapter import MetaAdapter, send_text_message
 from communications.adapters.meta_adapter import _normalize_phone
+from communications.decorators import communications_staff_required
 from communications.models import (
     BroadcastRecipient,
     WhatsAppWebhookEvent,
@@ -30,14 +30,7 @@ from communications.services import meta_templates
 from communications.services.test_send_registry import record_test_send
 
 
-def _staff_required(view):
-    return user_passes_test(
-        lambda user: user.is_active and user.is_staff,
-        login_url="login",
-    )(view)
-
-
-@_staff_required
+@communications_staff_required
 def config(request: HttpRequest):
     """Estado de la configuración y los pasos para aplicarla. Solo lectura."""
     return render(
@@ -174,7 +167,7 @@ def recent_chats(limit: int = 5) -> list[dict]:
     return chats
 
 
-@_staff_required
+@communications_staff_required
 def index(request: HttpRequest):
     """Envío de prueba: formularios de texto y plantilla y estado de configuración.
 
@@ -190,7 +183,7 @@ def index(request: HttpRequest):
     return render(request, "communications/whatsapp_test.html", context)
 
 
-@_staff_required
+@communications_staff_required
 def results(request: HttpRequest):
     """Movimientos de la integracion: lo que Meta reporta de vuelta.
 
@@ -270,7 +263,7 @@ def meta_ad_rows(limit: int = 40) -> list[dict]:
     return rows
 
 
-@_staff_required
+@communications_staff_required
 @require_POST
 def delete_meta_ad(request: HttpRequest):
     """Elimina en Meta la campaña (u objeto) de un intento y limpia su rastro.
@@ -317,7 +310,7 @@ def delete_meta_ad(request: HttpRequest):
     return redirect("meta-whatsapp-results")
 
 
-@_staff_required
+@communications_staff_required
 @require_POST
 def send_test_message(request: HttpRequest):
     """Envía un mensaje de texto real al número indicado."""
@@ -351,7 +344,7 @@ def send_test_message(request: HttpRequest):
     return redirect("meta-whatsapp-test")
 
 
-@_staff_required
+@communications_staff_required
 @require_POST
 def send_test_template(request: HttpRequest):
     """Envía una plantilla aprobada al número indicado.
@@ -401,7 +394,7 @@ def send_test_template(request: HttpRequest):
     return redirect("meta-whatsapp-test")
 
 
-@_staff_required
+@communications_staff_required
 def window_status(request: HttpRequest) -> JsonResponse:
     """Ventana de servicio de 24 h para un número, sin recargar la página.
 
@@ -440,7 +433,7 @@ def window_status(request: HttpRequest) -> JsonResponse:
     )
 
 
-@_staff_required
+@communications_staff_required
 @require_POST
 def validate_credentials(request: HttpRequest):
     """Ejecuta las consultas reales a Graph API bajo demanda."""
@@ -459,7 +452,7 @@ def validate_credentials(request: HttpRequest):
     return redirect("meta-whatsapp-test")
 
 
-@_staff_required
+@communications_staff_required
 def health(request: HttpRequest) -> JsonResponse:
     """Resumen de configuración en formato JSON, para chequeos automatizados."""
     config = meta_config.capability_status()

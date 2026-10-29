@@ -5,6 +5,8 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -59,6 +61,15 @@ class WhatsAppFlowTests(TestCase):
             username='knowledge-ticket-status-test',
             password='test-password',
         )
+        knowledge_content_type = ContentType.objects.get(
+            app_label='knowledge',
+            model='knowledgearticle',
+        )
+        permission = Permission.objects.get(
+            content_type=knowledge_content_type,
+            codename='access_knowledge',
+        )
+        user.user_permissions.add(permission)
         client = APIClient()
         client.force_authenticate(user=user)
 

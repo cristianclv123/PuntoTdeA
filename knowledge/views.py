@@ -1,21 +1,22 @@
 import json
 
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
 
+from PuntoTdeA.access import module_access_required
 from communications.webhooks.meta_webhook import whatsapp_webhook as meta_whatsapp_webhook
 from .chatbot import workflow as chatbot_workflow
 from .models import Category, ChatConversation, FAQ, KnowledgeArticle
+from .api.permissions import KNOWLEDGE_PERMISSION
 
 
 def _manager(model):
     return getattr(model, '_default_manager')
 
 
-@login_required
+@module_access_required(KNOWLEDGE_PERMISSION, module_name="Knowledge")
 def index(request):
     articles = _manager(KnowledgeArticle).filter(published=True, status='published')[:10]
     faqs = _manager(FAQ).filter(is_active=True)[:5]
@@ -26,12 +27,12 @@ def index(request):
     )
 
 
-@login_required
+@module_access_required(KNOWLEDGE_PERMISSION, module_name="Knowledge")
 def faq_list(request):
     return index(request)
 
 
-@login_required
+@module_access_required(KNOWLEDGE_PERMISSION, module_name="Knowledge")
 def manage(request):
     """Gestión de preguntas y artículos: la tabla se carga y muta por JS
     contra /api/knowledge/ (ver knowledge/static/knowledge/js/manage.js)."""
@@ -56,7 +57,7 @@ def chatbot(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'El cuerpo de la solicitud debe ser JSON válido.'}, status=400)
 
-    conversation_id = request.session.get('chatbot_conversation_id') or payload.get('conversation_id')
+    conversation_id = request.session.get('chatbot_conversation_id')
     if not conversation_id:
         return JsonResponse({'error': 'Inicia una conversación antes de enviar mensajes.'}, status=400)
     try:
@@ -88,7 +89,7 @@ def whatsapp_webhook(request):
     return meta_whatsapp_webhook(request)
 
 
-@login_required
+@module_access_required(KNOWLEDGE_PERMISSION, module_name="Knowledge")
 def faq_image(request, pk):
     """Sirve el binario de la imagen de la FAQ guardado en la base de datos."""
     faq = get_object_or_404(FAQ, pk=pk)

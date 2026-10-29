@@ -1,6 +1,7 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.utils import timezone
+from django.urls import reverse
 
 from cases.constants import channel_ui, status_tag_class
 
@@ -65,7 +66,10 @@ def _message_payload(message) -> dict:
     attachments = [
         {
             "id": att.id,
-            "url": att.file.url,
+            "url": reverse(
+                "cases-attachment-download",
+                kwargs={"attachment_id": att.pk},
+            ),
             "name": att.original_name,
             "kind": att.kind,
         }

@@ -30,8 +30,8 @@ python manage.py test knowledge.chatbot knowledge.tests.ChatbotWorkflowTests
 El endpoint JSON está disponible en `GET /base-de-conocimiento/chatbot/` para iniciar
 una conversación y en `POST /base-de-conocimiento/chatbot/` para enviar acciones.
 El cuerpo POST usa una de estas acciones: `question`, `confirm`, `escalate` o
-`advisor_question`. La sesión guarda el identificador de la conversación; también
-puede enviarse `conversation_id` explícitamente.
+`advisor_question`. La sesión guarda el identificador de la conversación; el
+servidor no acepta `conversation_id` desde el cuerpo de la solicitud.
 
 ## Relación con el diagrama
 

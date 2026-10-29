@@ -26,45 +26,53 @@
       {% icon 'layout-dashboard' %}
       <span>Dashboard</span>
     </a>
-    <a href="{% url 'cases:bandeja' %}" class="sidebar-link {% if active_nav == 'bandeja' %}active{% endif %}" title="Bandeja" aria-label="Bandeja">
-      {% icon 'inbox' %}
-      <span>Bandeja</span>
-    </a>
-    <details class="sidebar-group" {% if active_nav == 'knowledge' or active_nav == 'knowledge-manage' %}open{% endif %}>
-      <summary class="sidebar-link {% if active_nav == 'knowledge' or active_nav == 'knowledge-manage' %}active{% endif %}" title="Base de conocimiento" aria-label="Base de conocimiento">
-        {% icon 'book-open' %}
-        <span>Base de conocimiento</span>
-        {% icon 'chevron-down' size=14 %}
-      </summary>
-      <div class="sidebar-submenu">
-        <a href="{% url 'knowledge:list' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'knowledge' %}active{% endif %}">
-          <span>Asistente</span>
-        </a>
-        <a href="{% url 'knowledge:manage' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'knowledge-manage' %}active{% endif %}">
-          <span>Gestionar contenido</span>
-        </a>
-      </div>
-    </details>
-    <details class="sidebar-group" {% if active_nav == 'campaigns' or active_nav == 'templates' %}open{% endif %}>
-      <summary class="sidebar-link {% if active_nav == 'campaigns' or active_nav == 'templates' %}active{% endif %}" title="Campañas" aria-label="Campañas">
-        {% icon 'send' %}
-        <span>Campañas</span>
-        {% icon 'chevron-down' size=14 %}
-      </summary>
-      <div class="sidebar-submenu">
-        <a href="{% url 'communications:campaigns' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'campaigns' %}active{% endif %}">
+    {% if can_access_cases %}
+      <a href="{% url 'cases:bandeja' %}" class="sidebar-link {% if active_nav == 'bandeja' %}active{% endif %}" title="Bandeja" aria-label="Bandeja">
+        {% icon 'inbox' %}
+        <span>Bandeja</span>
+      </a>
+    {% endif %}
+    {% if can_access_knowledge %}
+      <details class="sidebar-group" {% if active_nav == 'knowledge' or active_nav == 'knowledge-manage' %}open{% endif %}>
+        <summary class="sidebar-link {% if active_nav == 'knowledge' or active_nav == 'knowledge-manage' %}active{% endif %}" title="Base de conocimiento" aria-label="Base de conocimiento">
+          {% icon 'book-open' %}
+          <span>Base de conocimiento</span>
+          {% icon 'chevron-down' size=14 %}
+        </summary>
+        <div class="sidebar-submenu">
+          <a href="{% url 'knowledge:list' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'knowledge' %}active{% endif %}">
+            <span>Asistente</span>
+          </a>
+          <a href="{% url 'knowledge:manage' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'knowledge-manage' %}active{% endif %}">
+            <span>Gestionar contenido</span>
+          </a>
+        </div>
+      </details>
+    {% endif %}
+    {% if can_access_communications %}
+      <details class="sidebar-group" {% if active_nav == 'campaigns' or active_nav == 'templates' %}open{% endif %}>
+        <summary class="sidebar-link {% if active_nav == 'campaigns' or active_nav == 'templates' %}active{% endif %}" title="Campañas" aria-label="Campañas">
+          {% icon 'send' %}
           <span>Campañas</span>
-        </a>
-        <a href="{% url 'plantillas' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'templates' %}active{% endif %}">
-          <span>Gestionar plantillas</span>
-        </a>
-      </div>
-    </details>
-    <a href="{% url 'announcements:index' %}" class="sidebar-link {% if active_nav == 'announcements' %}active{% endif %}" title="Avisos" aria-label="Avisos">
-      {% icon 'megaphone' %}
-      <span>Avisos</span>
-    </a>
-    {% if user.is_staff %}
+          {% icon 'chevron-down' size=14 %}
+        </summary>
+        <div class="sidebar-submenu">
+          <a href="{% url 'communications:campaigns' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'campaigns' %}active{% endif %}">
+            <span>Campañas</span>
+          </a>
+          <a href="{% url 'plantillas' %}" class="sidebar-link sidebar-link--sub {% if active_nav == 'templates' %}active{% endif %}">
+            <span>Gestionar plantillas</span>
+          </a>
+        </div>
+      </details>
+    {% endif %}
+    {% if can_access_announcements %}
+      <a href="{% url 'announcements:index' %}" class="sidebar-link {% if active_nav == 'announcements' %}active{% endif %}" title="Avisos" aria-label="Avisos">
+        {% icon 'megaphone' %}
+        <span>Avisos</span>
+      </a>
+    {% endif %}
+    {% if user.is_staff and can_access_communications %}
       <details class="sidebar-group" {% if active_nav == 'whatsapp-test' or active_nav == 'whatsapp-config' or active_nav == 'whatsapp-results' %}open{% endif %}>
         <summary class="sidebar-link {% if active_nav == 'whatsapp-test' or active_nav == 'whatsapp-config' or active_nav == 'whatsapp-results' %}active{% endif %}" title="WhatsApp (Meta)" aria-label="WhatsApp (Meta)">
           {% icon 'message-circle' %}

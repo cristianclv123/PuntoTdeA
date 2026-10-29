@@ -4,9 +4,13 @@
   const storageKey = "tdea_widget_session";
 
   function api(path, options) {
+    const requestOptions = options || {};
     return fetch(apiBase.replace(/\/?$/, "/") + path.replace(/^\//, ""), {
-      headers: { "Content-Type": "application/json", ...(options && options.headers) },
-      ...options,
+      ...requestOptions,
+      headers: {
+        "Content-Type": "application/json",
+        ...(requestOptions.headers || {}),
+      },
     }).then(async (res) => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Error de API");
@@ -53,6 +57,13 @@
   let pollTimer = null;
   let lastMessageId = 0;
 
+  // Las sesiones guardadas antes de exigir credenciales firmadas no se pueden
+  // recuperar de forma segura. Se pide iniciar una sesión nueva.
+  if (session && !session.contactCredential) {
+    localStorage.removeItem(storageKey);
+    session = null;
+  }
+
   function addBubble(text, mine) {
     const el = document.createElement("div");
     el.className = "tdea-chat-msg" + (mine ? " mine" : "");
@@ -83,7 +94,11 @@
           method: "POST",
           body: JSON.stringify(payload),
         });
-        session = { contactId: contact.id, documentNumber: contact.document_number, conversationId: null };
+        session = {
+          contactCredential: contact.contact_credential,
+          conversationId: null,
+          conversationCredential: null,
+        };
         saveSession(session);
         renderComposer();
         addBubble("¡Hola! Cuéntanos en qué podemos ayudarte.", false);
@@ -110,13 +125,11 @@
       try {
         const result = await api("web/messages/", {
           method: "POST",
-          body: JSON.stringify({
-            contact_id: session.contactId,
-            document_number: session.documentNumber,
-            body,
-          }),
+          headers: { "X-Widget-Credential": session.contactCredential },
+          body: JSON.stringify({ body }),
         });
-        session.conversationId = result.conversation.id;
+        session.conversationId = result.conversation_id;
+        session.conversationCredential = result.conversation_credential;
         lastMessageId = Math.max(lastMessageId, result.message.id || 0);
         saveSession(session);
         startPolling();
@@ -131,7 +144,12 @@
     if (!session || !session.conversationId) return;
     try {
       const data = await api(
-        `web/conversations/${session.conversationId}/messages/?after_id=${lastMessageId}`
+        `web/conversations/${session.conversationId}/messages/?after_id=${lastMessageId}`,
+        {
+          headers: {
+            "X-Widget-Credential": session.conversationCredential,
+          },
+        }
       );
       (data.messages || []).forEach((m) => {
         lastMessageId = Math.max(lastMessageId, m.id);
@@ -152,7 +170,7 @@
     panel.classList.toggle("open");
   });
 
-  if (session && session.contactId) {
+  if (session && session.contactCredential) {
     renderComposer();
     addBubble("Retomamos tu conversación.", false);
   } else {

@@ -58,5 +58,7 @@ class KnowledgeE2ETests(TestCase):
     def test_baja_confianza_crea_ticket(self):
         handle_message("573000111224", "Hola")
         responses = handle_message("573000111224", "Tema muy específico que el bot no cubre")
+        self.assertIn("¿Deseas comunicarte con un asesor?", responses[0])
+        responses = handle_message("573000111224", "Sí")
         self.assertTrue(CaseConversation.objects.filter(external_thread_id="573000111224").exists())
         self.assertTrue(any("TDEA-" in r for r in responses))

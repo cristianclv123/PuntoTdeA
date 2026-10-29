@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib import messages
+from PuntoTdeA.module_admin import ModuleAccessModelAdmin, ModuleAccessTabularInline
 
 from .models import (
     AudienceSegment,
@@ -15,38 +16,38 @@ from .services import campaign_service
 
 
 @admin.register(Contact)
-class ContactAdmin(admin.ModelAdmin):
+class ContactAdmin(ModuleAccessModelAdmin):
     list_display = ("full_name", "phone", "document_number", "role", "whatsapp_opt_in", "created_at")
     search_fields = ("full_name", "phone", "document_number", "email")
     list_filter = ("role", "whatsapp_opt_in", "source")
 
 
 @admin.register(ContactEvent)
-class ContactEventAdmin(admin.ModelAdmin):
+class ContactEventAdmin(ModuleAccessModelAdmin):
     list_display = ("contact", "event_type", "channel", "created_at")
     list_filter = ("event_type", "channel")
     autocomplete_fields = ("contact",)
 
 
-class SegmentMembershipInline(admin.TabularInline):
+class SegmentMembershipInline(ModuleAccessTabularInline):
     model = SegmentMembership
     extra = 0
     autocomplete_fields = ("contact",)
 
 
 @admin.register(AudienceSegment)
-class AudienceSegmentAdmin(admin.ModelAdmin):
+class AudienceSegmentAdmin(ModuleAccessModelAdmin):
     list_display = ("name", "source_type", "contact_count", "created_at")
     inlines = [SegmentMembershipInline]
 
 
 @admin.register(MessageTemplate)
-class MessageTemplateAdmin(admin.ModelAdmin):
+class MessageTemplateAdmin(ModuleAccessModelAdmin):
     list_display = ("name", "category", "param_count", "updated_at")
     list_filter = ("category", "header_type")
 
 
-class BroadcastRecipientInline(admin.TabularInline):
+class BroadcastRecipientInline(ModuleAccessTabularInline):
     model = BroadcastRecipient
     extra = 0
     readonly_fields = ("contact", "phone_snapshot", "status", "provider_message_id", "sent_at", "delivered_at", "read_at")
@@ -54,7 +55,7 @@ class BroadcastRecipientInline(admin.TabularInline):
 
 
 @admin.register(Campaign)
-class CampaignAdmin(admin.ModelAdmin):
+class CampaignAdmin(ModuleAccessModelAdmin):
     list_display = ("name", "template_name", "segment", "status", "scheduled_at", "sent_count", "delivered_count", "read_count")
     list_filter = ("status", "channel")
     inlines = [BroadcastRecipientInline]
@@ -86,14 +87,14 @@ class CampaignAdmin(admin.ModelAdmin):
 
 
 @admin.register(BroadcastRecipient)
-class BroadcastRecipientAdmin(admin.ModelAdmin):
+class BroadcastRecipientAdmin(ModuleAccessModelAdmin):
     list_display = ("campaign", "contact", "phone_snapshot", "status", "provider", "sent_at")
     list_filter = ("status", "provider")
     search_fields = ("phone_snapshot",)
 
 
 @admin.register(WhatsAppWebhookEvent)
-class WhatsAppWebhookEventAdmin(admin.ModelAdmin):
+class WhatsAppWebhookEventAdmin(ModuleAccessModelAdmin):
     list_display = ("provider_message_id", "event_type", "status", "processed_at", "created_at")
     list_filter = ("event_type", "status")
     search_fields = ("provider_message_id", "event_key")
