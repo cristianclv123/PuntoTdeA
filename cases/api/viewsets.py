@@ -8,13 +8,14 @@ from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins, permissions, status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from cases.models import CaseComment, Channel, Contact, Conversation, Department, Message, ReplyTemplate
+from cases.permissions import HasCasesAccess
 from cases.services.assignment import (
     ClaimError,
     CloseError,
@@ -45,7 +46,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
 
 class ReplyTemplateViewSet(viewsets.ModelViewSet):
@@ -53,7 +54,7 @@ class ReplyTemplateViewSet(viewsets.ModelViewSet):
 
     queryset = ReplyTemplate.objects.select_related("created_by").all()
     serializer_class = ReplyTemplateSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -64,7 +65,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -84,7 +85,7 @@ class CaseCommentViewSet(viewsets.ModelViewSet):
 
     queryset = CaseComment.objects.select_related("author").all()
     serializer_class = CaseCommentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -116,7 +117,7 @@ class MessageViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
 
     queryset = Message.objects.prefetch_related("attachments").all()
     serializer_class = MessageDetailSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -136,7 +137,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         "channel", "contact", "department", "escalated_to",
         "assigned_to", "claimed_by", "closed_by",
     ).all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_serializer_class(self):
         if self.action == "create":

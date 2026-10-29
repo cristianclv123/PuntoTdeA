@@ -87,6 +87,9 @@ class KnowledgeArticle(BaseKnowledgeModel):
             models.Index(fields=['title', 'status']),
             models.Index(fields=['category', 'status']),
         ]
+        permissions = [
+            ('access_knowledge', 'Puede acceder al módulo Knowledge'),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.slug:

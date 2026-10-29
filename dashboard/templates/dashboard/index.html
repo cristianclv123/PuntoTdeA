@@ -6,6 +6,7 @@
 {% block page_subtitle %}Operación de atención por WhatsApp{% endblock %}
 
 {% block content %}
+  {% if can_access_cases %}
   <div class="section-head">
     <div>
       <div class="card-title font-brand">Cola WhatsApp</div>
@@ -58,7 +59,9 @@
       </div>
     {% endfor %}
   </div>
+  {% endif %}
 
+  {% if can_access_communications %}
   <div class="section-head" style="margin-top: 28px;">
     <div>
       <div class="card-title font-brand">Campañas WhatsApp</div>
@@ -133,4 +136,5 @@
       </div>
     </div>
   </div>
+  {% endif %}
 {% endblock %}

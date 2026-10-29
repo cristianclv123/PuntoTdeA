@@ -3,6 +3,7 @@ from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from openpyxl import Workbook
@@ -45,6 +46,12 @@ class CampaignPersonalizationTests(TestCase):
         user = get_user_model().objects.create_user(
             username="personalizacion",
             password="test-password",
+        )
+        user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="communications",
+                codename="access_communications",
+            )
         )
         self.client.force_login(user)
         self.segment = AudienceSegment.objects.create(name="Aspirantes")

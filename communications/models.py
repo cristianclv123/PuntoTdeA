@@ -265,6 +265,9 @@ class Campaign(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("access_communications", "Puede acceder al módulo Communications"),
+        ]
 
     def __str__(self):
         return self.name

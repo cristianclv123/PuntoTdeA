@@ -1,17 +1,19 @@
 from django.contrib import admin
 
+from PuntoTdeA.module_admin import ModuleAccessModelAdmin
+
 from .models import Announcement, StatusAd
 
 
 @admin.register(Announcement)
-class AnnouncementAdmin(admin.ModelAdmin):
+class AnnouncementAdmin(ModuleAccessModelAdmin):
     list_display = ("title", "is_urgent", "created_at")
     list_filter = ("is_urgent",)
     search_fields = ("title", "content")
 
 
 @admin.register(StatusAd)
-class StatusAdAdmin(admin.ModelAdmin):
+class StatusAdAdmin(ModuleAccessModelAdmin):
     list_display = ("announcement", "state", "ad_id", "created_at")
     list_filter = ("state",)
     search_fields = ("announcement__title", "ad_id", "campaign_id")

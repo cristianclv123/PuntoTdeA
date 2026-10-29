@@ -2,26 +2,27 @@ from django import forms
 from django.contrib import admin
 from django.urls import reverse
 from django.utils.html import format_html
+from PuntoTdeA.module_admin import ModuleAccessModelAdmin
 
 from .models import Category, ChatConversation, FAQ, Intent, KnowledgeArticle
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
+class CategoryAdmin(ModuleAccessModelAdmin):
     list_display = ('name', 'slug', 'is_active')
     search_fields = ('name', 'description')
     list_filter = ('is_active',)
 
 
 @admin.register(Intent)
-class IntentAdmin(admin.ModelAdmin):
+class IntentAdmin(ModuleAccessModelAdmin):
     list_display = ('name', 'slug', 'confidence_threshold', 'is_active')
     search_fields = ('name', 'description')
     list_filter = ('is_active',)
 
 
 @admin.register(KnowledgeArticle)
-class KnowledgeArticleAdmin(admin.ModelAdmin):
+class KnowledgeArticleAdmin(ModuleAccessModelAdmin):
     list_display = ('title', 'category', 'status', 'published', 'published_at')
     search_fields = ('title', 'summary', 'content', 'tags')
     list_filter = ('status', 'published', 'category')
@@ -56,7 +57,7 @@ class FAQAdminForm(forms.ModelForm):
 
 
 @admin.register(FAQ)
-class FAQAdmin(admin.ModelAdmin):
+class FAQAdmin(ModuleAccessModelAdmin):
     form = FAQAdminForm
     list_display = ('question', 'category', 'is_active', 'order', 'has_image')
     search_fields = ('question', 'answer')
@@ -78,7 +79,7 @@ class FAQAdmin(admin.ModelAdmin):
 
 
 @admin.register(ChatConversation)
-class ChatConversationAdmin(admin.ModelAdmin):
+class ChatConversationAdmin(ModuleAccessModelAdmin):
     list_display = ('id', 'channel', 'external_user_id', 'status', 'flow_state', 'created_at')
     search_fields = ('external_user_id', 'last_question', 'escalation_reason')
     list_filter = ('channel', 'status', 'flow_state')

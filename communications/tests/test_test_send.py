@@ -2,6 +2,7 @@ import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -45,6 +46,12 @@ class CampaignTestSendAPITests(TestCase):
         self.url = reverse("communications:api-test-send")
         self.user = get_user_model().objects.create_user(
             username="api-test-send", password="test-password"
+        )
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="communications",
+                codename="access_communications",
+            )
         )
         self.client.force_login(self.user)
         self.payload = {

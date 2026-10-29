@@ -72,7 +72,7 @@ communications/
 - Textos inbound → `chatbot_whatsapp.handle_message` + `send_text` por cada reply.
 - Status (sent/delivered/read/failed) → actualiza `BroadcastRecipient` por wamid.
 
-Health: `GET /api/whatsapp/health/`.
+Health: `GET /api/whatsapp/health/`, parte de la consola protegida: requiere sesión staff y permiso explícito de Communications. Sin sesión responde 302 al login. Render acepta respuestas 2xx y 3xx para su health check (ver `docs/despliegue-render.md`), por eso la ruta actual funciona sin hacer público el estado de la integración.
 
 ## Campañas
 
@@ -126,9 +126,11 @@ se puede programar `python manage.py cleanup_campaign_personalizations
 
 ViewSets: `contacts`, `templates`, `segments`, `campaigns` (acción `send` desde `draft`/`scheduled`).
 
-Permiso `IsInternalService`: sesión autenticada o `X-Internal-Token`. Con `DEBUG=True` permite todo.
+Permiso `IsInternalService`: permiso explícito `communications.access_communications` en sesión o `X-Internal-Token` válido para consumidores de servicio. `DEBUG=True` no omite este control. Como excepción funcional, `announcements.access_announcements` permite solo listar segmentos y consultar la vista previa acotada de sus contactos; no permite ver el detalle ni crear, importar, modificar o eliminar segmentos.
 
 ## Consola staff
+
+Todas las vistas de la consola requieren `is_staff` y acceso explícito a Communications. El superusuario activo conserva el acceso por la regla modular global.
 
 | Ruta | Uso |
 | --- | --- |

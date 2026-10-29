@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase, override_settings
 
 from communications.models import MessageTemplate
@@ -434,6 +435,12 @@ class MetaTemplateServiceTests(TestCase):
 class MetaTemplateAPITests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="staff", password="secret")
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="communications",
+                codename="access_communications",
+            )
+        )
         self.client.force_login(self.user)
         self.draft = MessageTemplate.objects.create(
             name="Recordatorio",

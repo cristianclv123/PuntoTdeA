@@ -1,8 +1,10 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from PuntoTdeA.access import module_access_required
+
+from .permissions import ANNOUNCEMENTS_PERMISSION
 from .models import Announcement, StatusAd
 from .status_ad_service import publish_announcement
 
@@ -63,7 +65,10 @@ def _retry_status(request: HttpRequest, announcement: Announcement) -> None:
     _notify(request, status_ad)
 
 
-@login_required
+@module_access_required(
+    ANNOUNCEMENTS_PERMISSION,
+    module_name="Announcements",
+)
 def index(request):
     if request.method == "POST":
         action = (request.POST.get("action") or "create").strip()
@@ -173,7 +178,10 @@ def index(request):
     return render(request, "announcements/avisos.html", context)
 
 
-@login_required
+@module_access_required(
+    ANNOUNCEMENTS_PERMISSION,
+    module_name="Announcements",
+)
 def announcement_image(request: HttpRequest, pk: int) -> HttpResponse:
     """Sirve el binario de la imagen del aviso guardado en la base de datos."""
     announcement = get_object_or_404(Announcement, pk=pk)

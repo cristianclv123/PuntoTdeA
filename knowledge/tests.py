@@ -4,6 +4,8 @@ import tempfile
 from datetime import datetime, time, timezone as datetime_timezone
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -141,6 +143,15 @@ class FAQImageTests(TestCase):
         self.addCleanup(self._override.disable)
         self.addCleanup(shutil.rmtree, self._media, True)
         self.user = get_user_model().objects.create_superuser(username='tester', password='clave-segura')
+        knowledge_content_type = ContentType.objects.get(
+            app_label='knowledge',
+            model='knowledgearticle',
+        )
+        permission = Permission.objects.get(
+            content_type=knowledge_content_type,
+            codename='access_knowledge',
+        )
+        self.user.user_permissions.add(permission)
         self.api = APIClient()
 
     def test_faq_stores_image_bytes_in_database_not_media(self):

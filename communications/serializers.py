@@ -102,6 +102,36 @@ class AudienceSegmentSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "contact_count", "created_at", "updated_at"]
 
 
+class AnnouncementSegmentPickerSerializer(serializers.ModelSerializer):
+    """Datos mínimos para elegir un segmento desde Avisos."""
+
+    contact_count = serializers.ReadOnlyField()
+
+    class Meta:
+        model = AudienceSegment
+        fields = ["id", "name", "contact_count"]
+        read_only_fields = fields
+
+
+class AnnouncementSegmentContactPreviewSerializer(serializers.ModelSerializer):
+    """Campos que muestra la vista previa de contactos del selector de Avisos."""
+
+    class Meta:
+        model = Contact
+        fields = [
+            "full_name",
+            "document_number",
+            "phone",
+            "email",
+            "academic_program",
+            "semester",
+            "role",
+            "whatsapp_opt_in",
+            "source",
+        ]
+        read_only_fields = fields
+
+
 class SegmentImportSerializer(serializers.Serializer):
     """Serializer de entrada para POST /segments/import_excel/ (multipart)."""
 
