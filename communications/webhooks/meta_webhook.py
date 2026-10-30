@@ -266,9 +266,12 @@ def _process_inbound(message: dict[str, Any], phone_number_id: str) -> str:
             external_message_id=message_id,
         )
         for reply in replies:
-            result = chatbot_whatsapp.send_text(sender, reply)
-            if not result:
-                logger.error("Meta no aceptó la respuesta del chatbot para el mensaje %s", message_id)
+            if isinstance(reply, dict):
+                chatbot_whatsapp._send_reply(sender, reply)
+            else:
+                result = chatbot_whatsapp.send_text(sender, reply)
+                if not result:
+                    logger.error("Meta no aceptó la respuesta del chatbot para el mensaje %s", message_id)
     except Exception:
         logger.exception("No fue posible procesar el mensaje de Meta %s", message_id)
         raise

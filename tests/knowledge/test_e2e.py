@@ -34,7 +34,7 @@ class KnowledgeE2ETests(TestCase):
             channel__code="whatsapp",
             external_thread_id="573000111223",
         )
-        self.assertTrue(any(case.ticket_number in r for r in responses))
+        self.assertTrue(any(case.ticket_number in (r if isinstance(r, str) else r.get('text', '')) for r in responses))
         bot = ChatConversation.objects.get(external_user_id="573000111223")
         self.assertEqual(bot.case_conversation_id, case.id)
         self.assertEqual(bot.status, ChatConversation.STATUS_ACTIVE)
@@ -61,4 +61,4 @@ class KnowledgeE2ETests(TestCase):
         self.assertIn("¿Deseas comunicarte con un asesor?", responses[0])
         responses = handle_message("573000111224", "Sí")
         self.assertTrue(CaseConversation.objects.filter(external_thread_id="573000111224").exists())
-        self.assertTrue(any("TDEA-" in r for r in responses))
+        self.assertTrue(any("TDEA-" in (r if isinstance(r, str) else r.get('text', '')) for r in responses))

@@ -23,6 +23,11 @@ def _manager(model):
     return getattr(model, '_default_manager')
 
 
+def _text(reply):
+    """Extrae el texto de un mensaje que puede ser string o dict con 'text'."""
+    return reply if isinstance(reply, str) else reply.get('text', '')
+
+
 class WhatsAppFlowTests(TestCase):
     @patch('knowledge.chatbot.case_status.requests.get')
     def test_case_status_uses_session_cookie_and_remote_ticket_id(self, get):
@@ -136,12 +141,15 @@ class WhatsAppFlowTests(TestCase):
             external_user_id='573001112233'
         )
         self.assertEqual(conversation.flow_state, 'waiting_confirmation')
-        self.assertIn('La respuesta de prueba', response[0])
-        self.assertIn('otra duda', response[1])
-        self.assertIn('asesor', response[1])
+        text0 = response[0]['text'] if isinstance(response[0], dict) else response[0]
+        text1 = response[1]['text'] if isinstance(response[1], dict) else response[1]
+        self.assertIn('La respuesta de prueba', text0)
+        self.assertIn('otra duda', text1)
+        self.assertIn('asesor', text1)
         continuation = handle_message('573001112233', 'sí')[0]
-        self.assertIn('otra pregunta', continuation)
-        self.assertIn('hablar con un asesor', continuation)
+        continuation_text = continuation if isinstance(continuation, str) else continuation['text']
+        self.assertIn('otra pregunta', continuation_text)
+        self.assertIn('hablar con un asesor', continuation_text)
         conversation.refresh_from_db()
         self.assertEqual(conversation.flow_state, 'help_options')
         self.assertIn('transferiremos', handle_message('573001112233', 'Quiero un asesor')[0])
@@ -160,14 +168,14 @@ class WhatsAppFlowTests(TestCase):
 
         response = handle_message('573001112245', '¿Cuándo son las matrículas?')
 
-        self.assertIn('La información que solicitas es esta.', response[0])
-        self.assertIn('¿Tienes otra duda', response[1])
+        self.assertIn('La información que solicitas es esta.', _text(response[0]))
+        self.assertIn('¿Tienes otra duda', _text(response[1]))
         close_response = handle_message('573001112245', 'no')
         conversation = _manager(ChatConversation).get(
             channel='whatsapp',
             external_user_id='573001112245',
         )
-        self.assertIn('finalizado', close_response[0])
+        self.assertIn('finalizado', _text(close_response[0]))
         self.assertEqual(conversation.status, ChatConversation.STATUS_ENDED)
         self.assertEqual(conversation.flow_state, 'ended')
 
@@ -179,13 +187,13 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(conversations.count(), 2)
         self.assertNotEqual(conversations.first().pk, conversation.pk)
         self.assertEqual(conversations.first().status, ChatConversation.STATUS_ACTIVE)
-        self.assertIn('ayudarte', restart_response[0])
+        self.assertIn('ayudarte', _text(restart_response[0]))
         self.assertEqual(len(restart_response), 1)
         self.assertEqual(conversations.first().flow_state, 'waiting_question')
 
         next_response = handle_message('573001112245', '¿Cuándo son las matrículas?')
-        self.assertIn('La información que solicitas es esta.', next_response[0])
-        self.assertIn('¿Tienes otra duda', next_response[1])
+        self.assertIn('La información que solicitas es esta.', _text(next_response[0]))
+        self.assertIn('¿Tienes otra duda', _text(next_response[1]))
 
     def test_user_can_request_advisor_and_get_a_case_ticket(self):
         handle_message('573001112234', 'Hola')
@@ -196,7 +204,7 @@ class WhatsAppFlowTests(TestCase):
             channel__code='whatsapp',
             external_thread_id='573001112234',
         )
-        self.assertIn(case_conversation.ticket_number, responses[1])
+        self.assertIn(case_conversation.ticket_number, _text(responses[1]))
         self.assertEqual(conversation.case_conversation, case_conversation)
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
         self.assertEqual(conversation.flow_state, 'help_options')
@@ -290,9 +298,9 @@ class WhatsAppFlowTests(TestCase):
 
         conversation = _manager(ChatConversation).get(external_user_id='573001112235')
         self.assertEqual(len(responses), 1)
-        self.assertIn('No encontré una respuesta confiable', responses[0])
-        self.assertIn('responde sí', responses[0].lower())
-        self.assertIn('o no para escribir una nueva pregunta', responses[0].lower())
+        self.assertIn('No encontré una respuesta confiable', _text(responses[0]))
+        self.assertIn('responde sí', _text(responses[0]).lower())
+        self.assertIn('o no para escribir una nueva pregunta', _text(responses[0]).lower())
         self.assertEqual(conversation.flow_state, 'waiting_low_confidence_choice')
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
         self.assertIsNone(conversation.case_conversation)
@@ -304,7 +312,7 @@ class WhatsAppFlowTests(TestCase):
 
         ticket_response = handle_message('573001112235', 'Sí')
         conversation.refresh_from_db()
-        self.assertIn('He creado el ticket', ticket_response[0])
+        self.assertIn('He creado el ticket', _text(ticket_response[0]))
         self.assertEqual(conversation.flow_state, 'help_options')
         self.assertIsNotNone(conversation.case_conversation)
         self.assertTrue(conversation.messages[-1]['awaiting_advisor'])
@@ -339,7 +347,7 @@ class WhatsAppFlowTests(TestCase):
         conversation = _manager(ChatConversation).get(external_user_id='573001112250')
         self.assertEqual(generate_response.call_count, 2)
         self.assertEqual(len(first_response), 1)
-        self.assertIn('¿Deseas comunicarte con un asesor?', first_response[0])
+        self.assertIn('¿Deseas comunicarte con un asesor?', _text(first_response[0]))
         self.assertEqual(
             no_response,
             ['De acuerdo. Escribe tu nueva pregunta y la buscaré en la base de conocimiento.'],
@@ -347,7 +355,7 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(conversation.last_question, '¿Cuál es el horario de atención?')
         self.assertEqual(conversation.flow_state, 'waiting_confirmation')
         self.assertIsNone(conversation.case_conversation)
-        self.assertIn('Encontré la respuesta a tu nueva pregunta.', responses[0])
+        self.assertIn('Encontré la respuesta a tu nueva pregunta.', _text(responses[0]))
 
     def test_low_confidence_allows_retrying_with_a_new_question(self):
         handle_message('573001112249', 'Hola')
@@ -375,7 +383,7 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(generate_response.call_count, 2)
         self.assertEqual(conversation.last_question, '¿Cuál es el horario de atención?')
         self.assertEqual(conversation.flow_state, 'waiting_confirmation')
-        self.assertIn('Encontré la respuesta a tu nueva pregunta.', responses[0])
+        self.assertIn('Encontré la respuesta a tu nueva pregunta.', _text(responses[0]))
         self.assertIsNone(conversation.case_conversation)
 
     def test_new_message_after_ended_conversation_creates_new_chat(self):
@@ -411,7 +419,7 @@ class WhatsAppFlowTests(TestCase):
         self.assertNotEqual(new_conversation.pk, previous.pk)
         self.assertEqual(new_conversation.status, ChatConversation.STATUS_ACTIVE)
         self.assertEqual(new_conversation.flow_state, 'waiting_question')
-        self.assertIn('ayudarte', response[0])
+        self.assertIn('ayudarte', _text(response[0]))
         self.assertEqual(len(response), 1)
         self.assertFalse(
             _manager(CaseConversation).filter(
@@ -441,8 +449,8 @@ class WhatsAppFlowTests(TestCase):
             ).count(),
             2,
         )
-        self.assertIn('La conversación nueva sigue activa.', next_response[0])
-        self.assertIn('¿Tienes otra duda', next_response[1])
+        self.assertIn('La conversación nueva sigue activa.', _text(next_response[0]))
+        self.assertIn('¿Tienes otra duda', _text(next_response[1]))
 
     def test_inconsistent_ended_flow_starts_a_new_chat_instead_of_staying_closed(self):
         previous = _manager(ChatConversation).create(
@@ -473,9 +481,9 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(conversations.count(), 2)
         self.assertEqual(previous.status, ChatConversation.STATUS_ENDED)
         self.assertEqual(len(response), 1)
-        self.assertIn('ayudarte', response[0])
-        self.assertIn('La conversación nueva está activa.', next_response[0])
-        self.assertIn('¿Tienes otra duda', next_response[1])
+        self.assertIn('ayudarte', _text(response[0]))
+        self.assertIn('La conversación nueva está activa.', _text(next_response[0]))
+        self.assertIn('¿Tienes otra duda', _text(next_response[1]))
         self.assertNotIn('Esta conversación ya está cerrada', ' '.join(response))
 
     def test_whatsapp_webhook_sends_answer_and_follow_up_separately(self):
@@ -568,7 +576,7 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(previous.flow_state, 'ended')
         self.assertNotEqual(conversations.first().pk, previous.pk)
         self.assertEqual(conversations.first().status, ChatConversation.STATUS_ACTIVE)
-        self.assertIn('ayudarte', response[0])
+        self.assertIn('ayudarte', _text(response[0]))
         self.assertEqual(len(response), 1)
         self.assertEqual(conversations.first().flow_state, 'waiting_question')
 
@@ -580,7 +588,7 @@ class WhatsAppFlowTests(TestCase):
         )
         self.assertNotEqual(new_case.pk, previous_case.pk)
         self.assertEqual(new_case.status, CaseConversation.Status.PENDIENTE)
-        self.assertIn(new_case.ticket_number, ticket_responses[1])
+        self.assertIn(new_case.ticket_number, _text(ticket_responses[1]))
         self.assertEqual(
             _manager(CaseConversation).filter(channel__code='whatsapp').count(),
             2,
@@ -618,7 +626,7 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
         self.assertEqual(conversation.flow_state, 'waiting_confirmation')
         self.assertEqual(conversation.last_question, '¿Dónde consulto el calendario?')
-        self.assertIn('El bot sigue disponible.', response[0])
+        self.assertIn('El bot sigue disponible.', _text(response[0]))
 
     def test_open_advisor_case_keeps_existing_chat_available(self):
         handle_message('573001112242', 'Hola')
@@ -650,7 +658,7 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
         self.assertEqual(conversation.flow_state, 'waiting_confirmation')
         self.assertEqual(conversation.last_question, '¿Ya revisaron mi solicitud?')
-        self.assertIn('¿tienes otra duda', response[1].lower())
+        self.assertIn('¿tienes otra duda', _text(response[1]).lower())
 
     @override_settings(META_VERIFY_TOKEN='test-token')
     def test_webhook_verification(self):
@@ -732,8 +740,8 @@ class WhatsAppInactivityTests(TestCase):
         self.assertNotEqual(new_conversation.pk, previous.pk)
         self.assertEqual(new_conversation.last_question, '')
         self.assertEqual(new_conversation.status, ChatConversation.STATUS_ACTIVE)
-        self.assertIn('inactividad', responses[0])
-        self.assertIn('ayudarte', responses[1])
+        self.assertIn('inactividad', _text(responses[0]))
+        self.assertIn('ayudarte', _text(responses[1]))
         self.assertEqual(len(responses), 2)
         self.assertEqual(new_conversation.flow_state, 'waiting_question')
 
@@ -743,7 +751,7 @@ class WhatsAppInactivityTests(TestCase):
         )
         new_conversation.refresh_from_db()
         self.assertEqual(new_conversation.last_question, 'Necesito ayuda con mi matrícula')
-        self.assertIn('Respuesta en el chat reiniciado.', question_response[0])
+        self.assertIn('Respuesta en el chat reiniciado.', _text(question_response[0]))
 
     @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
     def test_closes_and_notifies_inactive_whatsapp_conversation(self, send_text):
@@ -782,7 +790,7 @@ class WhatsAppInactivityTests(TestCase):
         self.assertEqual(user_conversations.count(), 2)
         self.assertNotEqual(conversations.first().pk, conversation.pk)
         self.assertEqual(conversations.first().status, ChatConversation.STATUS_ACTIVE)
-        self.assertIn('ayudarte', response[0])
+        self.assertIn('ayudarte', _text(response[0]))
 
     @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
     def test_keeps_recent_whatsapp_conversation_active(self, send_text):
