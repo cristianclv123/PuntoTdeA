@@ -32,6 +32,11 @@ INACTIVITY_NOTICE = (
     'después de 5 minutos de inactividad.'
 )
 
+# Patrón para detectar URLs en un mensaje de texto. Cuando una respuesta
+# contiene una URL, se envía como mensaje aparte para que WhatsApp genere
+# la preview automática (miniatura + título del sitio).
+_URL_PATTERN = re.compile(r'https?://\S+', re.IGNORECASE)
+
 
 def _manager(model):
     return getattr(model, '_default_manager')
@@ -398,6 +403,27 @@ def send_text(recipient: str, text: str) -> bool:
     return result.success
 
 
+def _send_text_with_link_preview(recipient: str, text: str) -> None:
+    """Envía texto y, si contiene una URL, la manda como mensaje aparte.
+
+    WhatsApp Cloud API solo genera la preview automática (miniatura + título)
+    cuando la URL llega en un mensaje de texto sin más contenido que la estropee.
+    Si el texto es solo una URL o termina en una URL, la separamos para que la
+    preview se genere. El aviso de inactividad siempre va al final en su propio
+    mensaje para no interferir.
+    """
+    urls = _URL_PATTERN.findall(text or '')
+    non_url_parts = _URL_PATTERN.sub('', (text or '')).strip()
+    # Si la URL está al final o es lo único relevante, la separame para que
+    # WhatsApp genere la preview.
+    send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+    # Además, si hay URL en el texto, también se envía sola como mensaje extra
+    # para garantizar que la preview se genere (algunas cuentas requieren que la
+    # URL vaya sola).
+    for url in urls:
+        send_text(recipient, url)
+
+
 def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
     """Envía un mensaje estructurado que puede incluir imagen de una FAQ.
 
@@ -450,7 +476,7 @@ def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
         if INACTIVITY_NOTICE:
             send_text(recipient, INACTIVITY_NOTICE)
         return
-    send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+    _send_text_with_link_preview(recipient, text)
 
 
 def process_webhook(payload: dict[str, Any]) -> int:
@@ -464,7 +490,7 @@ def process_webhook(payload: dict[str, Any]) -> int:
             if isinstance(reply, dict):
                 _send_reply(sender, reply)
             else:
-                send_text(sender, f'{reply}\n\n{INACTIVITY_NOTICE}')
+                _send_text_with_link_preview(sender, reply)
         processed += 1
     return processed
 
