@@ -11,11 +11,15 @@ from typing import Any
 from django.conf import settings
 from django.utils import timezone
 
-from communications.adapters.meta_adapter import send_text_message
+from communications.adapters.meta_adapter import (
+    send_image_message,
+    send_text_message,
+    upload_whatsapp_media,
+)
 from communications.models import Contact
 from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
-from ..models import ChatConversation
+from ..models import ChatConversation, FAQ
 from .case_status import CaseStatusAPIError, get_case_status
 from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
 from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
@@ -189,7 +193,7 @@ def _submit_question(
     conversation: ChatConversation,
     workflow: ChatbotWorkflow,
     question: str,
-) -> list[str]:
+) -> list[dict[str, Any]]:
     result = workflow.submit_question(question)
     if result.get('valid') and result.get('needs_human_attention'):
         follow_up = (
@@ -201,10 +205,17 @@ def _submit_question(
         conversation.messages[-1]['content'] = follow_up
         conversation.messages[-1].pop('awaiting_advisor', None)
         conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
-        return [follow_up]
+        return [{'text': follow_up}]
+    image_faq_id = result.get('image_faq_id') if result.get('valid') else None
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
-        return [result['answer_message'], result['follow_up_message']]
-    return [result['message']]
+        replies = []
+        if image_faq_id:
+            replies.append({'text': result['answer_message'], 'image_faq_id': image_faq_id})
+        else:
+            replies.append({'text': result['answer_message']})
+        replies.append({'text': result['follow_up_message']})
+        return replies
+    return [{'text': result['message']}]
 
 
 def _create_low_confidence_ticket(conversation: ChatConversation, sender: str) -> str:
@@ -387,6 +398,61 @@ def send_text(recipient: str, text: str) -> bool:
     return result.success
 
 
+def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
+    """Envía un mensaje estructurado que puede incluir imagen de una FAQ.
+
+    Si ``reply`` contiene ``image_faq_id``, sube la imagen a Meta para obtener
+    un ``media_id`` y la envía como mensaje de imagen antes que el texto.
+    """
+    image_faq_id = reply.get('image_faq_id')
+    text = reply.get('text', '')
+    if image_faq_id:
+        try:
+            faq = FAQ.objects.get(pk=image_faq_id)
+        except FAQ.DoesNotExist:
+            logger.warning('FAQ %s no encontrada para enviar imagen.', image_faq_id)
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        image_bytes = faq.get_image_bytes()
+        if not image_bytes:
+            logger.warning('FAQ %s no tiene imagen en BD a pesar del flag.', image_faq_id)
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        upload_result = upload_whatsapp_media(
+            image_bytes,
+            filename=faq.image_name or 'imagen.jpg',
+            content_type=faq.image_content_type or 'image/jpeg',
+        )
+        if not upload_result.success:
+            logger.warning(
+                'No fue posible subir imagen de FAQ %s a Meta: %s',
+                image_faq_id,
+                upload_result.error,
+            )
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        caption = (text or '').strip()
+        image_result = send_image_message(
+            recipient,
+            upload_result.provider_message_id,
+            caption=caption,
+        )
+        if not image_result.success:
+            logger.warning(
+                'No fue posible enviar imagen de FAQ %s a %s: %s',
+                image_faq_id,
+                recipient,
+                image_result.error,
+            )
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        # La imagen ya incluye el caption; el aviso de inactividad va aparte.
+        if INACTIVITY_NOTICE:
+            send_text(recipient, INACTIVITY_NOTICE)
+        return
+    send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+
+
 def process_webhook(payload: dict[str, Any]) -> int:
     processed = 0
     for sender, text, external_message_id in _messages(payload):
@@ -395,7 +461,10 @@ def process_webhook(payload: dict[str, Any]) -> int:
             text,
             external_message_id=external_message_id,
         ):
-            send_text(sender, f'{reply}\n\n{INACTIVITY_NOTICE}')
+            if isinstance(reply, dict):
+                _send_reply(sender, reply)
+            else:
+                send_text(sender, f'{reply}\n\n{INACTIVITY_NOTICE}')
         processed += 1
     return processed
 

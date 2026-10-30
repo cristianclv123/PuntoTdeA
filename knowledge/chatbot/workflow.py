@@ -65,6 +65,7 @@ class ChatbotWorkflow:
             valid=True,
             answer_message=answer_message,
             follow_up_message=FOLLOW_UP_MESSAGE,
+            image_faq_id=response.get('image_faq_id'),
         )
         result.update(response)
         result['message'] = answer

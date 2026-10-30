@@ -214,6 +214,7 @@ def answer_query(question: str) -> dict[str, Any]:
             'confidence': 0.0,
             'needs_human_attention': True,
             'sources': [],
+            'image_faq_id': None,
         }
 
     results = search_knowledge(question, limit=5)
@@ -221,11 +222,15 @@ def answer_query(question: str) -> dict[str, Any]:
         best_result = max(results, key=lambda result: float(result.get('score', 0.0)))
         confidence = evaluate_confidence(question, best_result)
         answer = best_result.get('summary') or best_result.get('content') or 'No encontré una respuesta formulada.'
+        image_faq_id = None
+        if best_result.get('source_type') == 'faq' and best_result.get('image_url'):
+            image_faq_id = best_result.get('id')
         return {
             'answer': answer,
             'confidence': confidence,
             'needs_human_attention': confidence < settings.KNOWLEDGE_SETTINGS.get('MIN_CONFIDENCE', 0.7),
             'sources': results,
+            'image_faq_id': image_faq_id,
         }
 
     return {
@@ -233,4 +238,5 @@ def answer_query(question: str) -> dict[str, Any]:
         'confidence': 0.0,
         'needs_human_attention': True,
         'sources': [],
+        'image_faq_id': None,
     }
