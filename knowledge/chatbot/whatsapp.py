@@ -404,8 +404,13 @@ def handle_message(
     return _submit_question(conversation, workflow, text)
 
 
-def send_text(recipient: str, text: str) -> bool:
-    result = send_text_message(recipient, text)
+def send_text(recipient: str, text: str, *, preview_url: bool = False) -> bool:
+    """Envía un mensaje de texto por WhatsApp Cloud API.
+
+    Si ``preview_url=True``, se incluye en el payload para que WhatsApp genere
+    automáticamente la preview (miniatura) de la primera URL del cuerpo.
+    """
+    result = send_text_message(recipient, text, preview_url=preview_url)
     if not result.success:
         logger.warning(
             'No fue posible enviar la respuesta de WhatsApp a %s: %s',
@@ -416,29 +421,24 @@ def send_text(recipient: str, text: str) -> bool:
 
 
 def _send_text_with_link_preview(recipient: str, text: str) -> None:
-    """Envía texto y, si contiene URLs, las separa en mensajes aparte.
+    """Envía texto y, si contiene URLs, activa ``preview_url`` para la miniatura.
 
-    WhatsApp Cloud API solo genera la preview automática (miniatura + título)
-    cuando la URL llega en un mensaje de texto **sin más texto alrededor**.
-    Si el texto tiene una URL embebida, la sacamos y mandamos dos mensajes:
-    1. El texto sin la URL + aviso de inactividad
-    2. La URL sola (para que se genere la preview)
+    WhatsApp Cloud API soporta el parámetro ``preview_url: true`` en el body del
+    mensaje de texto. Cuando está presente, WhatsApp intenta generar la preview
+    (miniatura + título) de la primera URL que encuentre en el cuerpo, incluso
+    si hay más texto alrededor.
 
-    Si el texto es solo URL(es), se mandan solas y el aviso de inactividad
-    va como tercer mensaje.
+    Si el texto contiene una URL, se envía con ``preview_url=True`` en el
+    mismo mensaje de texto (con el aviso de inactividad anexado, que no
+    interfiere con la preview).
+
+    Si no contiene URL, se envía como texto normal.
     """
     text = (text or '').strip()
     urls = _URL_PATTERN.findall(text)
-    text_without_urls = _URL_PATTERN.sub('', text).strip()
     if urls:
-        if text_without_urls:
-            send_text(recipient, f'{text_without_urls}\n\n{INACTIVITY_NOTICE}')
-        # Cada URL sola para que WhatsApp genere la preview.
-        for url in urls:
-            send_text(recipient, url)
-        # Si el texto original era solo URL(es), mandar el aviso aparte.
-        if not text_without_urls and INACTIVITY_NOTICE:
-            send_text(recipient, INACTIVITY_NOTICE)
+        # La URL va en el cuerpo con preview_url para que se genere la miniatura.
+        send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}', preview_url=True)
         return
     # Sin URLs: texto normal.
     send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
