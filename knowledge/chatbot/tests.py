@@ -221,6 +221,24 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(case_message.body, 'Necesito ayuda con mi matrícula')
         self.assertIsNone(case_conversation.assigned_to_id)
 
+    def test_ticket_confirmation_includes_business_hours_when_closed(self):
+        handle_message('573001112251', 'Hola')
+        handle_message('573001112251', 'Quiero un asesor')
+
+        with patch(
+            'knowledge.chatbot.whatsapp.get_business_schedule'
+        ) as get_schedule:
+            get_schedule.return_value.is_open.return_value = False
+            responses = handle_message(
+                '573001112251',
+                'Necesito ayuda con mi matrícula',
+            )
+
+        confirmation = _text(responses[-1])
+        self.assertIn('lunes a viernes', confirmation)
+        self.assertIn('8:00 a. m. a 5:00 p. m.', confirmation)
+        self.assertIn('atendida dentro de ese horario', confirmation)
+
     def test_pending_whatsapp_message_appends_to_case_ticket(self):
         handle_message('573001112236', 'Hola')
         handle_message('573001112236', 'Quiero un asesor')
@@ -727,7 +745,7 @@ class WhatsAppFlowTests(TestCase):
         faq = FAQ(
             question=question,
             answer='Consulta el calendario.',
-            category=Category.objects.create(name='Calendario'),
+            category=_manager(Category).create(name='Calendario'),
         )
         faq.set_image(SimpleUploadedFile(
             'calendario.png',

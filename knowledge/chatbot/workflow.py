@@ -108,7 +108,7 @@ class ChatbotWorkflow:
 
     def escalate(self, reason: str = '') -> dict[str, Any]:
         message = (
-            'Para ayudarte mejor, transferiremos esta conversación a un asesor. '
+            'Para ayudarte mejor, te contactaremos con un asesor. '
             '¿Qué solicitud deseas enviarle? Por favor, incluye también tu número '
             'de documento de identidad.'
         )
