@@ -453,9 +453,8 @@ def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
     image_faq_id = reply.get('image_faq_id')
     text = reply.get('text', '')
     if image_faq_id:
-        try:
-            faq = FAQ.objects.get(pk=image_faq_id)
-        except FAQ.DoesNotExist:
+        faq = _manager(FAQ).filter(pk=image_faq_id).first()
+        if faq is None:
             logger.warning('FAQ %s no encontrada para enviar imagen.', image_faq_id)
             send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
             return
@@ -581,7 +580,7 @@ def process_webhook(payload: dict[str, Any]) -> int:
                 _send_reply(sender, reply)
             else:
                 _send_text_with_link_preview(sender, reply)
-        processed += 1
+                processed += 1
     return processed
 
 
