@@ -79,7 +79,7 @@ Centralizados en `services/assignment.py`:
 
 Al asignar de verdad (primera toma o reclaim de staff) se envía:
 
-> Hola, soy {nombre}, asesora de soporte al cliente de Punto TdeA. ¿En qué te podemos ayudar?
+> Hola, soy {nombre}, del equipo de soporte al cliente de Punto TdeA. ¿En qué te podemos ayudar?
 
 Va por `create_outbound_message` (Meta si el canal es WhatsApp). Si Meta falla, el reclamo **sí** queda y el saludo no se persiste. Texto en `claim_greeting_body`.
 
