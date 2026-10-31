@@ -80,12 +80,39 @@
     fileInput.addEventListener("change", renderPreviews);
   }
 
+  const COMPOSER_MAX_LINES = 5;
+
+  function resizeComposer() {
+    if (!bodyInput || bodyInput.tagName !== "TEXTAREA") return;
+    bodyInput.style.height = "auto";
+    const style = window.getComputedStyle(bodyInput);
+    const line = parseFloat(style.lineHeight) || 20;
+    const pad = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+    const max = line * COMPOSER_MAX_LINES + pad;
+    const next = Math.min(bodyInput.scrollHeight, max);
+    bodyInput.style.height = next + "px";
+    bodyInput.style.overflowY = bodyInput.scrollHeight > max + 1 ? "auto" : "hidden";
+  }
+
+  if (bodyInput) {
+    bodyInput.addEventListener("input", resizeComposer);
+    bodyInput.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      if (replyForm && typeof replyForm.requestSubmit === "function") {
+        replyForm.requestSubmit();
+      }
+    });
+    resizeComposer();
+  }
+
   document.querySelectorAll(".clip-template").forEach(function (btn) {
     btn.addEventListener("click", function () {
       if (!bodyInput) return;
       const text = btn.getAttribute("data-template-body") || "";
       bodyInput.value = text;
       bodyInput.focus();
+      resizeComposer();
       closeMenu();
     });
   });

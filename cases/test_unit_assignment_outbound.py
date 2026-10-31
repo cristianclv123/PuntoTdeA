@@ -299,11 +299,63 @@ class OutboundMetaUnitTests(AssignmentOutboundFixtures):
         )
 
     @patch("cases.services.ingestion.send_text_message")
-    def test_attachment_only_skips_meta_text(self, send_text):
+    def test_whatsapp_url_enables_link_preview(self, send_text):
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.url")
+        conversation = self._conv(assigned_to=self.owner)
+        create_outbound_message(conversation, "Mira https://tdea.edu.co/calendario.")
+        send_text.assert_called_once_with(
+            "573004445566",
+            "Mira https://tdea.edu.co/calendario.",
+            preview_url=True,
+        )
+
+    @patch("cases.services.ingestion.send_media_message")
+    @patch("cases.services.ingestion.upload_whatsapp_media")
+    @patch("cases.services.ingestion.send_text_message")
+    def test_attachment_only_sends_document_not_placeholder_text(self, send_text, upload, send_media):
+        upload.return_value = SendResult(success=True, provider_message_id="media.1")
+        send_media.return_value = SendResult(success=True, provider_message_id="wamid.file")
         conversation = self._conv(assigned_to=self.owner)
         pdf = SimpleUploadedFile("acta.pdf", b"%PDF-1.4 x", content_type="application/pdf")
         message = create_outbound_message(conversation, "   ", uploaded_files=[pdf])
         send_text.assert_not_called()
+        upload.assert_called_once()
+        send_media.assert_called_once_with(
+            "573004445566",
+            media_type="document",
+            media_id="media.1",
+            filename="acta.pdf",
+        )
+        self.assertEqual(message.external_id, "wamid.file")
+        self.assertEqual(message.body, "acta.pdf")
+        self.assertEqual(message.attachments.count(), 1)
+
+    @patch("cases.services.ingestion.send_media_message")
+    @patch("cases.services.ingestion.upload_whatsapp_media")
+    @patch("cases.services.ingestion.send_text_message")
+    def test_whatsapp_image_and_text_send_both(self, send_text, upload, send_media):
+        upload.return_value = SendResult(success=True, provider_message_id="media.img")
+        send_media.return_value = SendResult(success=True, provider_message_id="wamid.img")
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.txt")
+        conversation = self._conv(assigned_to=self.owner)
+        image = SimpleUploadedFile("foto.png", b"\x89PNG\r\n", content_type="image/png")
+        message = create_outbound_message(
+            conversation,
+            "Revisa https://tdea.edu.co",
+            uploaded_files=[image],
+        )
+        send_media.assert_called_once_with(
+            "573004445566",
+            media_type="image",
+            media_id="media.img",
+            filename="foto.png",
+        )
+        send_text.assert_called_once_with(
+            "573004445566",
+            "Revisa https://tdea.edu.co",
+            preview_url=True,
+        )
+        self.assertEqual(message.external_id, "wamid.img")
         self.assertEqual(message.attachments.count(), 1)
 
     def test_empty_body_without_files_raises(self):

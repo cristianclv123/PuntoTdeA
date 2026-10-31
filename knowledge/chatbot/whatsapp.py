@@ -580,7 +580,7 @@ def process_webhook(payload: dict[str, Any]) -> int:
                 _send_reply(sender, reply)
             else:
                 _send_text_with_link_preview(sender, reply)
-                processed += 1
+        processed += 1
     return processed
 
 

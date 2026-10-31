@@ -41,7 +41,7 @@ class FAQSerializer(serializers.ModelSerializer):
         fields = [
             "id", "question", "answer", "category", "intent",
             "is_active", "order", "valid_from", "valid_until",
-            "image", "image_url",
+            "image", "image_url", "clear_image",
         ]
         read_only_fields = ["id", "image_url"]
 
@@ -51,6 +51,7 @@ class FAQSerializer(serializers.ModelSerializer):
         return reverse("knowledge:faq-image", args=[obj.pk])
 
     def create(self, validated_data):
+        validated_data.pop("clear_image", None)
         uploaded = validated_data.pop("image", None)
         instance = super().create(validated_data)
         if uploaded is not None:

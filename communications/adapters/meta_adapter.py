@@ -185,12 +185,7 @@ def upload_whatsapp_media(
     if error:
         return SendResult(success=False, error=error)
     if not file_bytes:
-        return SendResult(success=False, error="El archivo de imagen está vacío.")
-    if content_type not in {"image/jpeg", "image/png"}:
-        return SendResult(
-            success=False,
-            error="WhatsApp solo admite imágenes JPG o PNG para este envío.",
-        )
+        return SendResult(success=False, error="El archivo está vacío.")
 
     response = None
     try:
@@ -216,23 +211,49 @@ def upload_whatsapp_media(
 
 
 def send_uploaded_image_message(to: str, media_id: str, caption: str = "") -> SendResult:
-    """Envía una imagen previamente subida a Meta (por ``media_id``).
+    """Envía una imagen previamente subida a Meta (por ``media_id``)."""
+    return send_media_message(
+        to,
+        media_type="image",
+        media_id=media_id,
+        caption=caption,
+    )
 
-    Si se proporciona ``caption``, se muestra como texto bajo la imagen.
+
+def send_media_message(
+    to: str,
+    *,
+    media_type: str,
+    media_id: str,
+    caption: str = "",
+    filename: str = "",
+) -> SendResult:
+    """Envía imagen, video o documento ya subido a Meta.
+
+    El documento puede llevar ``filename`` para que WhatsApp muestre el nombre.
     """
     normalized_phone = _normalize_phone(to)
     if not normalized_phone:
         return SendResult(success=False, error="Número de teléfono vacío.")
-    payload: dict[str, Any] = {
-        "messaging_product": "whatsapp",
-        "to": normalized_phone,
-        "type": "image",
-        "image": {"id": media_id},
-    }
+    if media_type not in {"image", "video", "document"}:
+        return SendResult(success=False, error="Tipo de medio no soportado.")
+    if not (media_id or "").strip():
+        return SendResult(success=False, error="Falta el id del medio.")
+    media: dict[str, Any] = {"id": media_id}
     caption_text = (caption or "").strip()
     if caption_text:
-        payload["image"]["caption"] = caption_text
-    return _post_message(payload)
+        media["caption"] = caption_text
+    if media_type == "document" and filename:
+        media["filename"] = filename
+    return _post_message(
+        {
+            "messaging_product": "whatsapp",
+            "to": normalized_phone,
+            "type": media_type,
+            media_type: media,
+        }
+    )
+
 
 class MetaAdapter(ChannelAdapter):
     """Envío de plantillas aprobadas mediante Meta WhatsApp Cloud API."""
