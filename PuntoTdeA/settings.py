@@ -333,6 +333,11 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# La cookie de CSRF no debe leerse desde JavaScript. El token viaja en la
+# etiqueta meta csrf-token y en el campo oculto del formulario.
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = True
+
 # ImageField models exist; silence check when Pillow is not installed in local/CI.
 SILENCED_SYSTEM_CHECKS = ["fields.E210"]
 
