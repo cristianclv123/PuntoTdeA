@@ -23,6 +23,7 @@ from cases.services.ingestion import InboundPayload, ingest_inbound_message
 from ..models import ChatConversation, FAQ
 from .case_status import CaseStatusAPIError, get_case_status
 from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
+from .schedule import get_business_schedule
 from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
 
 
@@ -185,6 +186,11 @@ def _create_case_ticket(
 
 def _ticket_confirmation(conversation: ChatConversation, ticket: CaseConversation) -> str:
     message = f'He creado el ticket {ticket.ticket_number} para que un asesor atienda tu solicitud.'
+    if not get_business_schedule().is_open():
+        message += (
+            ' Nuestro horario de atención es de lunes a viernes, '
+            'de 8:00 a. m. a 5:00 p. m. Tu solicitud será atendida dentro de ese horario.'
+        )
     conversation.messages.append({
         'author': 'bot',
         'content': message,
@@ -580,7 +586,7 @@ def process_webhook(payload: dict[str, Any]) -> int:
                 _send_reply(sender, reply)
             else:
                 _send_text_with_link_preview(sender, reply)
-                processed += 1
+        processed += 1
     return processed
 
 
