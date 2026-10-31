@@ -54,6 +54,8 @@
             var input = form.querySelector('input[name="csrfmiddlewaretoken"]');
             if (input && input.value) return input.value;
         }
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta && meta.content) return meta.content;
         var cookies = document.cookie ? document.cookie.split(";") : [];
         for (var i = 0; i < cookies.length; i++) {
             var parts = cookies[i].trim().split("=");

@@ -4,11 +4,27 @@ from django.contrib import messages
 from django.db.models import Q
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 
 from cases.models import Conversation
 
 User = get_user_model()
+
+LOGIN_NEXT_SESSION_KEY = "login_next"
+LOGIN_CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "style-src 'self'",
+        "script-src 'self'",
+    ]
+)
 
 
 def home(request):
@@ -25,7 +41,7 @@ def home(request):
             status=Conversation.Status.CERRADO,
             updated_at__date=today,
         ).count()
-    return render(
+    response = render(
         request,
         "index.html",
         {
@@ -35,6 +51,32 @@ def home(request):
             },
         },
     )
+    return _no_store(response)
+
+
+def _no_store(response):
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    return response
+
+
+def _lock_login(response):
+    response["Content-Security-Policy"] = LOGIN_CONTENT_SECURITY_POLICY
+    return _no_store(response)
+
+
+def _safe_next(request, raw: str) -> str:
+    """Solo acepta una ruta interna. No se vuelve a escribir en el HTML."""
+    candidate = (raw or "").strip()
+    if not candidate:
+        return ""
+    if url_has_allowed_host_and_scheme(
+        candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return candidate
+    return ""
 
 
 def _resolve_user(identifier: str):
@@ -53,38 +95,39 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard:index")
 
-    error = ""
-    identifier = ""
-    if request.method == "POST":
-        identifier = (request.POST.get("username") or "").strip()
-        password = request.POST.get("password") or ""
-        remember = bool(request.POST.get("remember"))
-        user_obj = _resolve_user(identifier)
-        user = None
-        if user_obj is not None:
-            user = authenticate(request, username=user_obj.username, password=password)
-        if user is None:
-            error = "Credenciales inválidas. Verifica usuario/correo y contraseña."
+    if request.method == "GET":
+        safe_next = _safe_next(request, request.GET.get("next", ""))
+        if safe_next:
+            request.session[LOGIN_NEXT_SESSION_KEY] = safe_next
         else:
-            login(request, user)
-            if remember:
-                request.session.set_expiry(60 * 60 * 24 * 14)
-            else:
-                request.session.set_expiry(0)
-            next_url = request.GET.get("next") or request.POST.get("next") or ""
-            if next_url.startswith("/") and not next_url.startswith("//"):
-                return redirect(next_url)
-            return redirect("dashboard:index")
+            request.session.pop(LOGIN_NEXT_SESSION_KEY, None)
+        return _lock_login(render(request, "login.html", {"error": ""}))
 
-    return render(
-        request,
-        "login.html",
-        {
-            "error": error,
-            "username": identifier,
-            "next": request.GET.get("next", ""),
-        },
-    )
+    identifier = (request.POST.get("username") or "").strip()
+    password = request.POST.get("password") or ""
+    remember = bool(request.POST.get("remember"))
+    user_obj = _resolve_user(identifier)
+    user = None
+    if user_obj is not None:
+        user = authenticate(request, username=user_obj.username, password=password)
+    if user is None:
+        return _lock_login(
+            render(
+                request,
+                "login.html",
+                {"error": "Credenciales inválidas. Verifica usuario/correo y contraseña."},
+            )
+        )
+
+    login(request, user)
+    if remember:
+        request.session.set_expiry(60 * 60 * 24 * 14)
+    else:
+        request.session.set_expiry(0)
+    posted_next = _safe_next(request, request.POST.get("next", ""))
+    stored_next = _safe_next(request, request.session.get(LOGIN_NEXT_SESSION_KEY, ""))
+    request.session.pop(LOGIN_NEXT_SESSION_KEY, None)
+    return redirect(posted_next or stored_next or "dashboard:index")
 
 
 @require_http_methods(["POST", "GET"])
