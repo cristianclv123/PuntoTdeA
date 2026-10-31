@@ -141,8 +141,8 @@ class ClaimConversationUnitTests(AssignmentOutboundFixtures):
         )
         self.assertEqual(greeting.body, expected)
         self.assertIn("Ana Dueña", expected)
-        self.assertIn("asesora de soporte al cliente de Punto TdeA", expected)
-        self.assertIn("hablando con un asesor", expected)
+        self.assertIn("del equipo de soporte al cliente de Punto TdeA", expected)
+        self.assertIn("hablando con alguien del equipo", expected)
 
         claim_conversation(conversation.id, self.owner)
         send_text.assert_called_once()
