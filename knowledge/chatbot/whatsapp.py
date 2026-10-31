@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from communications.adapters.meta_adapter import (
     send_image_message,
+    send_uploaded_image_message,
     send_text_message,
     upload_whatsapp_media,
 )
@@ -209,9 +210,16 @@ def _submit_question(
         conversation.flow_state = 'waiting_low_confidence_choice'
         conversation.messages[-1]['content'] = follow_up
         conversation.messages[-1].pop('awaiting_advisor', None)
+        conversation.messages[-1].pop('image_url', None)
+        conversation.messages[-1].pop('image_source_id', None)
+        conversation.messages[-1].pop('source_question', None)
         conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
         return [{'text': follow_up}]
-    image_faq_id = result.get('image_faq_id') if result.get('valid') else None
+    image_faq_id = (
+        result.get('image_faq_id') or result.get('image_source_id')
+        if result.get('valid')
+        else None
+    )
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
         replies = []
         if image_faq_id:
@@ -332,8 +340,10 @@ def handle_message(
             return [inactivity_result['message'], greeting]
         return [greeting]
 
-    state = conversation.flow_state
-    if state == 'pending' and conversation.case_conversation_id is not None:
+    if (
+        conversation.case_conversation_id is not None
+        and ticket_status != CaseConversation.Status.CERRADO
+    ):
         _forward_inbound_to_case(
             conversation,
             sender,
@@ -341,6 +351,8 @@ def handle_message(
             external_message_id,
         )
         return []
+
+    state = conversation.flow_state
     if state == 'waiting_question':
         if _requests_advisor(text):
             replies = [workflow.escalate('El usuario solicitó atención humana.')['message']]
@@ -441,9 +453,8 @@ def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
     image_faq_id = reply.get('image_faq_id')
     text = reply.get('text', '')
     if image_faq_id:
-        try:
-            faq = FAQ.objects.get(pk=image_faq_id)
-        except FAQ.DoesNotExist:
+        faq = _manager(FAQ).filter(pk=image_faq_id).first()
+        if faq is None:
             logger.warning('FAQ %s no encontrada para enviar imagen.', image_faq_id)
             send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
             return
@@ -466,7 +477,7 @@ def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
             send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
             return
         caption = (text or '').strip()
-        image_result = send_image_message(
+        image_result = send_uploaded_image_message(
             recipient,
             upload_result.provider_message_id,
             caption=caption,
@@ -487,19 +498,89 @@ def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
     _send_text_with_link_preview(recipient, text)
 
 
+def send_image(
+    recipient: str,
+    image_data: bytes,
+    filename: str,
+    content_type: str,
+    caption: str = '',
+) -> bool:
+    result = send_image_message(
+        recipient,
+        image_data,
+        filename,
+        content_type,
+        caption,
+    )
+    if not result.success:
+        logger.warning(
+            'No fue posible enviar la imagen de WhatsApp a %s: %s',
+            recipient,
+            result.error,
+        )
+    return result.success
+
+
+def _question_image(sender: str, question: str) -> FAQ | None:
+    conversation = _manager(ChatConversation).filter(
+        channel='whatsapp',
+        external_user_id=sender,
+    ).order_by('-updated_at', '-created_at').first()
+    if conversation is None or conversation.last_question != question:
+        return None
+    for message in reversed(conversation.messages):
+        image_source_id = message.get('image_source_id')
+        if message.get('source_question') == question and image_source_id:
+            faq = _manager(FAQ).filter(pk=image_source_id, is_active=True).first()
+            if faq and faq.has_image:
+                return faq
+    return None
+
+
+def send_replies(
+    sender: str,
+    question: str,
+    replies: list[str | dict[str, Any]],
+    add_inactivity_notice: bool = False,
+) -> None:
+    """Envía las respuestas del flujo sin cambiar su orden y adjunta la FAQ coincidente."""
+    faq = _question_image(sender, question)
+    image_sent = False
+    for index, reply in enumerate(replies):
+        if isinstance(reply, dict):
+            _send_reply(sender, reply)
+            continue
+        text_message = (
+            f'{reply}\n\n{INACTIVITY_NOTICE}' if add_inactivity_notice else reply
+        )
+        if index == 0 and faq:
+            image_sent = send_image(
+                sender,
+                faq.get_image_bytes() or b'',
+                faq.image_name,
+                faq.image_content_type,
+                reply[:1024],
+            )
+            if image_sent and len(reply) > 1024:
+                send_text(sender, reply[1024:])
+        if index > 0 or not image_sent:
+                send_text(sender, text_message)
+
+
 def process_webhook(payload: dict[str, Any]) -> int:
     processed = 0
     for sender, text, external_message_id in _messages(payload):
-        for reply in handle_message(
+        replies = handle_message(
             sender,
             text,
             external_message_id=external_message_id,
-        ):
+        )
+        for reply in replies:
             if isinstance(reply, dict):
                 _send_reply(sender, reply)
             else:
                 _send_text_with_link_preview(sender, reply)
-        processed += 1
+                processed += 1
     return processed
 
 

@@ -2,9 +2,10 @@ import json
 import hashlib
 import hmac
 from datetime import timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase, override_settings
@@ -14,9 +15,14 @@ from rest_framework.test import APIClient
 
 from cases.models import Conversation as CaseConversation, Message as CaseMessage
 from communications.models import Contact
-from ..models import ChatConversation
+from ..models import Category, ChatConversation, FAQ
 from .case_status import get_case_status
-from .whatsapp import close_inactive_whatsapp_conversations, handle_message, process_webhook
+from .whatsapp import (
+    INACTIVITY_NOTICE,
+    close_inactive_whatsapp_conversations,
+    handle_message,
+    process_webhook,
+)
 
 
 def _manager(model):
@@ -197,7 +203,9 @@ class WhatsAppFlowTests(TestCase):
 
     def test_user_can_request_advisor_and_get_a_case_ticket(self):
         handle_message('573001112234', 'Hola')
-        self.assertIn('transferiremos', handle_message('573001112234', 'Quiero un asesor')[0])
+        advisor_prompt = handle_message('573001112234', 'Quiero un asesor')[0]
+        self.assertIn('transferiremos', advisor_prompt)
+        self.assertIn('documento de identidad', advisor_prompt)
         responses = handle_message('573001112234', 'Necesito ayuda con mi matrícula')
         conversation = _manager(ChatConversation).get(external_user_id='573001112234')
         case_conversation = _manager(CaseConversation).get(
@@ -594,7 +602,7 @@ class WhatsAppFlowTests(TestCase):
             2,
         )
 
-    def test_remote_open_case_keeps_whatsapp_conversation_available(self):
+    def test_remote_open_case_forwards_message_without_bot_reply(self):
         handle_message('573001112248', 'Hola')
         handle_message('573001112248', 'Quiero un asesor')
         handle_message('573001112248', 'Necesito revisar mi solicitud')
@@ -610,39 +618,39 @@ class WhatsAppFlowTests(TestCase):
                 'knowledge.chatbot.whatsapp.get_case_status',
                 return_value=CaseConversation.Status.PENDIENTE,
             ),
-            patch(
-                'knowledge.chatbot.workflow.generate_response',
-                return_value={
-                    'answer': 'El bot sigue disponible.',
-                    'confidence': 0.9,
-                    'needs_human_attention': False,
-                    'sources': [],
-                },
-            ),
+            patch('knowledge.chatbot.workflow.generate_response') as generate_response,
         ):
             response = handle_message('573001112248', '¿Dónde consulto el calendario?')
 
         conversation.refresh_from_db()
+        conversation.case_conversation.refresh_from_db()
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
-        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
-        self.assertEqual(conversation.last_question, '¿Dónde consulto el calendario?')
-        self.assertIn('El bot sigue disponible.', _text(response[0]))
+        self.assertEqual(conversation.flow_state, 'help_options')
+        self.assertEqual(response, [])
+        self.assertTrue(
+            _manager(CaseMessage).filter(
+                conversation=conversation.case_conversation,
+                direction=CaseMessage.Direction.INBOUND,
+                body='¿Dónde consulto el calendario?',
+            ).exists()
+        )
+        generate_response.assert_not_called()
 
-    def test_open_advisor_case_keeps_existing_chat_available(self):
+    def test_open_advisor_case_forwards_every_message_without_bot_reply(self):
         handle_message('573001112242', 'Hola')
         handle_message('573001112242', 'Quiero un asesor')
         handle_message('573001112242', 'Necesito revisar mi solicitud')
 
-        with patch(
-            'knowledge.chatbot.workflow.generate_response',
-            return_value={
-                'answer': 'Puedes consultar el estado de tu solicitud con un asesor.',
-                'confidence': 0.9,
-                'needs_human_attention': False,
-                'sources': [],
-            },
-        ):
-            response = handle_message('573001112242', '¿Ya revisaron mi solicitud?')
+        first_response = handle_message(
+            '573001112242',
+            '¿Ya revisaron mi solicitud?',
+            'wamid.case-follow-up.1',
+        )
+        second_response = handle_message(
+            '573001112242',
+            'Adjunto más información sobre mi solicitud.',
+            'wamid.case-follow-up.2',
+        )
 
         conversation = _manager(ChatConversation).get(
             channel='whatsapp',
@@ -655,10 +663,18 @@ class WhatsAppFlowTests(TestCase):
             ).count(),
             1,
         )
+        case_messages = _manager(CaseMessage).filter(
+            conversation=conversation.case_conversation,
+            direction=CaseMessage.Direction.INBOUND,
+        )
         self.assertEqual(conversation.status, ChatConversation.STATUS_ACTIVE)
-        self.assertEqual(conversation.flow_state, 'waiting_confirmation')
-        self.assertEqual(conversation.last_question, '¿Ya revisaron mi solicitud?')
-        self.assertIn('¿tienes otra duda', _text(response[1]).lower())
+        self.assertEqual(conversation.flow_state, 'help_options')
+        self.assertEqual(first_response, [])
+        self.assertEqual(second_response, [])
+        self.assertTrue(case_messages.filter(body='¿Ya revisaron mi solicitud?').exists())
+        self.assertTrue(
+            case_messages.filter(body='Adjunto más información sobre mi solicitud.').exists()
+        )
 
     @override_settings(META_VERIFY_TOKEN='test-token')
     def test_webhook_verification(self):
@@ -696,6 +712,79 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['processed'], 1)
         send.assert_called_once()
+
+    @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
+    @patch('knowledge.chatbot.whatsapp.send_uploaded_image_message')
+    @patch('knowledge.chatbot.whatsapp.upload_whatsapp_media')
+    def test_webhook_sends_the_image_attached_to_the_answer(
+        self,
+        upload_whatsapp_media,
+        send_image_message,
+        send_text,
+    ):
+        sender = '573001112233'
+        question = '¿Cómo consulto el calendario?'
+        faq = FAQ(
+            question=question,
+            answer='Consulta el calendario.',
+            category=Category.objects.create(name='Calendario'),
+        )
+        faq.set_image(SimpleUploadedFile(
+            'calendario.png',
+            b'faq-image-content',
+            content_type='image/png',
+        ))
+        faq.save()
+        handle_message(sender, 'Hola')
+        upload_whatsapp_media.return_value = Mock(
+            success=True,
+            provider_message_id='media-faq-image',
+        )
+        send_image_message.return_value = Mock(success=True, error='')
+        payload = {
+            'entry': [{'changes': [{'value': {'messages': [{
+                'id': 'wamid.inbound.image-test',
+                'from': sender,
+                'type': 'text',
+                'text': {'body': question},
+            }]}}]}],
+        }
+
+        with patch(
+            'knowledge.chatbot.workflow.generate_response',
+            return_value={
+                'answer': faq.answer,
+                'confidence': 0.95,
+                'needs_human_attention': False,
+                'sources': [],
+                'image_url': reverse('knowledge:faq-image', kwargs={'pk': faq.pk}),
+                'image_source_id': faq.pk,
+            },
+        ):
+            self.assertEqual(process_webhook(payload), 1)
+
+        upload_whatsapp_media.assert_called_once_with(
+            b'faq-image-content',
+            filename='calendario.png',
+            content_type='image/png',
+        )
+        send_image_message.assert_called_once_with(
+            sender,
+            'media-faq-image',
+            caption=faq.answer,
+        )
+        self.assertEqual(
+            send_text.call_args_list,
+            [
+                call(sender, INACTIVITY_NOTICE),
+                call(
+                    sender,
+                    '¿Tienes otra duda, necesitas hablar con un asesor? '
+                    'Responde sí para continuar o no si ya no necesitas ayuda.\n\n'
+                    + INACTIVITY_NOTICE,
+                ),
+            ],
+        )
 
 
 class WhatsAppInactivityTests(TestCase):
