@@ -404,24 +404,32 @@ def send_text(recipient: str, text: str) -> bool:
 
 
 def _send_text_with_link_preview(recipient: str, text: str) -> None:
-    """Envía texto y, si contiene una URL, la manda como mensaje aparte.
+    """Envía texto y, si contiene URLs, las separa en mensajes aparte.
 
     WhatsApp Cloud API solo genera la preview automática (miniatura + título)
-    cuando la URL llega en un mensaje de texto sin más contenido que la estropee.
-    Si el texto es solo una URL o termina en una URL, la separamos para que la
-    preview se genere. El aviso de inactividad siempre va al final en su propio
-    mensaje para no interferir.
+    cuando la URL llega en un mensaje de texto **sin más texto alrededor**.
+    Si el texto tiene una URL embebida, la sacamos y mandamos dos mensajes:
+    1. El texto sin la URL + aviso de inactividad
+    2. La URL sola (para que se genere la preview)
+
+    Si el texto es solo URL(es), se mandan solas y el aviso de inactividad
+    va como tercer mensaje.
     """
-    urls = _URL_PATTERN.findall(text or '')
-    non_url_parts = _URL_PATTERN.sub('', (text or '')).strip()
-    # Si la URL está al final o es lo único relevante, la separame para que
-    # WhatsApp genere la preview.
+    text = (text or '').strip()
+    urls = _URL_PATTERN.findall(text)
+    text_without_urls = _URL_PATTERN.sub('', text).strip()
+    if urls:
+        if text_without_urls:
+            send_text(recipient, f'{text_without_urls}\n\n{INACTIVITY_NOTICE}')
+        # Cada URL sola para que WhatsApp genere la preview.
+        for url in urls:
+            send_text(recipient, url)
+        # Si el texto original era solo URL(es), mandar el aviso aparte.
+        if not text_without_urls and INACTIVITY_NOTICE:
+            send_text(recipient, INACTIVITY_NOTICE)
+        return
+    # Sin URLs: texto normal.
     send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
-    # Además, si hay URL en el texto, también se envía sola como mensaje extra
-    # para garantizar que la preview se genere (algunas cuentas requieren que la
-    # URL vaya sola).
-    for url in urls:
-        send_text(recipient, url)
 
 
 def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
