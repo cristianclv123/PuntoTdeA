@@ -33,6 +33,7 @@ class FAQSerializer(serializers.ModelSerializer):
     # `image` recibe el archivo (multipart) y `image_url` lo expone de solo
     # lectura; los bytes se guardan con `set_image`, nunca en MEDIA_ROOT.
     image = serializers.FileField(write_only=True, required=False)
+    clear_image = serializers.BooleanField(write_only=True, required=False)
     image_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -60,9 +61,17 @@ class FAQSerializer(serializers.ModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
+        clear_image = validated_data.pop("clear_image", False)
         uploaded = validated_data.pop("image", None)
         instance = super().update(instance, validated_data)
-        if uploaded is not None:
+        if clear_image:
+            instance.image_data = None
+            instance.image_name = ""
+            instance.image_content_type = ""
+            instance.save(update_fields=[
+                "image_data", "image_name", "image_content_type", "updated_at",
+            ])
+        elif uploaded is not None:
             instance.set_image(uploaded)
             instance.save(update_fields=[
                 "image_data", "image_name", "image_content_type", "updated_at",
