@@ -113,3 +113,8 @@ if settings.DEBUG:
     )
 
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+handler400 = "PuntoTdeA.errors.bad_request"
+handler403 = "PuntoTdeA.errors.permission_denied"
+handler404 = "PuntoTdeA.errors.page_not_found"
+handler500 = "PuntoTdeA.errors.server_error"
