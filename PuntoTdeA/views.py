@@ -27,6 +27,36 @@ LOGIN_CONTENT_SECURITY_POLICY = "; ".join(
 )
 
 
+def datos_personales(request):
+    return render(
+        request,
+        "legal/datos.html",
+        {
+            "title": "Tratamiento de datos personales",
+            "description": (
+                "Cómo el Tecnológico de Antioquia trata datos personales "
+                "en la plataforma Punto TdeA."
+            ),
+            "legal_current": "datos",
+        },
+    )
+
+
+def terminos(request):
+    return render(
+        request,
+        "legal/terminos.html",
+        {
+            "title": "Términos y condiciones del servicio",
+            "description": (
+                "Condiciones de uso de Punto TdeA, la plataforma de atención "
+                "del Tecnológico de Antioquia."
+            ),
+            "legal_current": "terminos",
+        },
+    )
+
+
 def home(request):
     """Landing pública alineada al estilo de la app."""
     qs = Conversation.objects.filter(channel__code="whatsapp")

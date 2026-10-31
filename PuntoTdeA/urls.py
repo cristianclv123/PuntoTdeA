@@ -33,6 +33,8 @@ from cases.api.views import deny_direct_attachment_media
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.home, name='home'),
+    path('tratamiento-de-datos/', views.datos_personales, name='datos-personales'),
+    path('terminos-y-condiciones/', views.terminos, name='terminos'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('perfil/', views.profile_view, name='profile'),
