@@ -429,6 +429,33 @@ def _question_image(sender: str, question: str) -> FAQ | None:
     return None
 
 
+def send_replies(
+    sender: str,
+    question: str,
+    replies: list[str],
+    add_inactivity_notice: bool = False,
+) -> None:
+    """Envía las respuestas del flujo sin cambiar su orden y adjunta la FAQ coincidente."""
+    faq = _question_image(sender, question)
+    image_sent = False
+    for index, reply in enumerate(replies):
+        text_message = (
+            f'{reply}\n\n{INACTIVITY_NOTICE}' if add_inactivity_notice else reply
+        )
+        if index == 0 and faq:
+            image_sent = send_image(
+                sender,
+                faq.get_image_bytes() or b'',
+                faq.image_name,
+                faq.image_content_type,
+                reply[:1024],
+            )
+            if image_sent and len(reply) > 1024:
+                send_text(sender, reply[1024:])
+        if index > 0 or not image_sent:
+                send_text(sender, text_message)
+
+
 def process_webhook(payload: dict[str, Any]) -> int:
     processed = 0
     for sender, text, external_message_id in _messages(payload):
@@ -437,22 +464,12 @@ def process_webhook(payload: dict[str, Any]) -> int:
             text,
             external_message_id=external_message_id,
         )
-        faq = _question_image(sender, text)
-        image_sent = False
-        for index, reply in enumerate(replies):
-            caption = f'{reply}\n\n{INACTIVITY_NOTICE}'
-            if index == 0 and faq:
-                image_sent = send_image(
-                    sender,
-                    faq.get_image_bytes() or b'',
-                    faq.image_name,
-                    faq.image_content_type,
-                    reply[:1024],
-                )
-                if image_sent and len(reply) > 1024:
-                    send_text(sender, reply[1024:])
-            if index > 0 or not image_sent:
-                send_text(sender, caption)
+        send_replies(
+            sender,
+            text,
+            replies,
+            add_inactivity_notice=True,
+        )
         processed += 1
     return processed
 

@@ -333,9 +333,9 @@ class MetaWhatsAppIntegrationTests(TestCase):
         )
         self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
 
-    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_text", return_value=True)
+    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_replies")
     @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.handle_message", return_value=["Hola"])
-    def test_webhook_sends_inbound_text_to_chatbot_once(self, handle_message, send_text):
+    def test_webhook_keeps_chatbot_replies_on_existing_flow(self, handle_message, send_replies):
         payload = {
             "entry": [
                 {
@@ -369,4 +369,4 @@ class MetaWhatsAppIntegrationTests(TestCase):
             "Hola",
             external_message_id="wamid.inbound.1",
         )
-        send_text.assert_called_once_with("573001112233", "Hola")
+        send_replies.assert_called_once_with("573001112233", "Hola", ["Hola"])
