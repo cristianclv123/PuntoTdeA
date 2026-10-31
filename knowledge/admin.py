@@ -38,16 +38,24 @@ class FAQAdminForm(forms.ModelForm):
         label='Imagen',
         widget=forms.FileInput(attrs={'accept': 'image/*'}),
     )
+    clear_image = forms.BooleanField(
+        required=False,
+        label='Eliminar imagen actual',
+    )
 
     class Meta:
         model = FAQ
         fields = [
             'question', 'answer', 'category', 'intent', 'is_active',
-            'order', 'valid_from', 'valid_until', 'image_upload',
+            'order', 'valid_from', 'valid_until', 'image_upload', 'clear_image',
         ]
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        if self.cleaned_data.get('clear_image'):
+            instance.image_data = None
+            instance.image_name = ''
+            instance.image_content_type = ''
         uploaded = self.cleaned_data.get('image_upload')
         if uploaded is not None:
             instance.set_image(uploaded)

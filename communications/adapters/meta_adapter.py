@@ -33,6 +33,13 @@ def _messages_url() -> str:
     )
 
 
+def _media_url() -> str:
+    return (
+        f"{settings.META_GRAPH_API_URL.rstrip('/')}/"
+        f"{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/media"
+    )
+
+
 def _normalize_phone(phone: str) -> str:
     """Meta espera el número E.164 sin el prefijo '+'."""
     return re.sub(r"\D", "", phone or "")
@@ -106,11 +113,65 @@ def send_text_message(to: str, text: str, *, preview_url: bool = False) -> SendR
     )
 
 
-def _media_url() -> str:
-    """Endpoint de subida de medios del número de WhatsApp."""
-    return (
-        f"{settings.META_GRAPH_API_URL.rstrip('/')}/"
-        f"{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}/media"
+def send_image_message(
+    to: str,
+    image_data: bytes,
+    filename: str,
+    content_type: str,
+    caption: str = "",
+) -> SendResult:
+    """Sube bytes de imagen almacenados en la base de datos y los envía con texto."""
+    normalized_phone = _normalize_phone(to)
+    if not normalized_phone:
+        return SendResult(success=False, error="Número de teléfono vacío.")
+    if not image_data:
+        return SendResult(success=False, error="El archivo de imagen está vacío.")
+
+    if content_type not in {"image/jpeg", "image/png"}:
+        return SendResult(
+            success=False,
+            error="WhatsApp solo admite imágenes JPG o PNG para este envío.",
+        )
+
+    error = _configuration_error()
+    if error:
+        return SendResult(success=False, error=error)
+
+    upload_response = None
+    try:
+        upload_response = requests.post(
+            _media_url(),
+            headers={"Authorization": f"Bearer {settings.META_ACCESS_TOKEN}"},
+            data={"messaging_product": "whatsapp"},
+            files={"file": (filename, image_data, content_type)},
+            timeout=settings.META_REQUEST_TIMEOUT,
+        )
+        upload_response.raise_for_status()
+        media_id = upload_response.json().get("id")
+    except (OSError, requests.RequestException, ValueError) as exc:
+        return SendResult(
+            success=False,
+            error=_request_error(upload_response, exc),
+        )
+
+    if not media_id:
+        return SendResult(success=False, error="Meta no devolvió el identificador de la imagen.")
+
+    image_payload: dict[str, Any] = {"id": media_id}
+    if caption.strip():
+        if len(caption.strip()) > 1024:
+            return SendResult(
+                success=False,
+                error="La respuesta supera el límite de 1024 caracteres del pie de imagen.",
+            )
+        image_payload["caption"] = caption.strip()
+    return _post_message(
+        {
+            "messaging_product": "whatsapp",
+            "to": normalized_phone,
+            "type": "image",
+            "image": image_payload,
+        }
     )
 
 
@@ -119,15 +180,12 @@ def upload_whatsapp_media(
     filename: str = "imagen.jpg",
     content_type: str = "image/jpeg",
 ) -> SendResult:
-    """Sube un archivo binario al almacén de medios de WhatsApp Cloud API.
-
-    Meta retorna un ``id`` (media_id) que puede usarse en mensajes de imagen
-    durante los siguientes 30 días. El endpoint es ``POST /{phone-number-id}/media``
-    con ``multipart/form-data``.
-    """
+    """Sube un archivo binario al almacén de medios de WhatsApp Cloud API."""
     error = _configuration_error()
     if error:
         return SendResult(success=False, error=error)
+    if not file_bytes:
+        return SendResult(success=False, error="El archivo está vacío.")
 
     response = None
     try:
@@ -152,7 +210,7 @@ def upload_whatsapp_media(
     return SendResult(success=True, provider_message_id=str(media_id))
 
 
-def send_image_message(to: str, media_id: str, caption: str = "") -> SendResult:
+def send_uploaded_image_message(to: str, media_id: str, caption: str = "") -> SendResult:
     """Envía una imagen previamente subida a Meta (por ``media_id``)."""
     return send_media_message(
         to,

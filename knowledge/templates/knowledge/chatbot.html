@@ -16,6 +16,7 @@
     h1 { margin: 0; font-size: 24px; } .status { margin-top: 4px; color: #cbe7dc; font: 14px Arial, sans-serif; }
     .messages { display: flex; flex-direction: column; gap: 14px; min-height: 430px; max-height: 56vh; padding: 26px; overflow-y: auto; background: var(--paper); }
     .bubble { max-width: min(78%, 620px); padding: 13px 16px; border-radius: 4px 16px 16px 16px; line-height: 1.45; font-size: 17px; white-space: pre-wrap; }
+    .bubble-image { display: block; max-width: 100%; height: auto; margin-top: 10px; }
     .bot { align-self: flex-start; background: #fff; border: 1px solid var(--line); } .user { align-self: flex-end; color: #fff; background: var(--blue); border-radius: 16px 4px 16px 16px; }
     .controls { padding: 18px 22px 22px; border-top: 1px solid var(--line); background: #fff; }
     .quick-actions { display: flex; gap: 10px; margin-bottom: 12px; } button { cursor: pointer; border: 0; font: 600 15px Arial, sans-serif; }
@@ -52,7 +53,20 @@
     const input = document.getElementById('question');
     const confirmationActions = document.getElementById('confirmation-actions');
     const helpActions = document.getElementById('help-actions');
-    const addMessage = (text, author) => { const bubble = document.createElement('div'); bubble.className = `bubble ${author}`; bubble.textContent = text; messages.appendChild(bubble); messages.scrollTop = messages.scrollHeight; };
+    const addMessage = (text, author, imageUrl = '') => {
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${author}`;
+      bubble.textContent = text;
+      if (imageUrl && author === 'bot') {
+        const image = document.createElement('img');
+        image.className = 'bubble-image';
+        image.src = imageUrl;
+        image.alt = 'Imagen relacionada con la respuesta';
+        bubble.appendChild(image);
+      }
+      messages.appendChild(bubble);
+      messages.scrollTop = messages.scrollHeight;
+    };
     const showActionsFor = (state) => {
       const showConfirmation = state === 'waiting_confirmation';
       const showHelp = state === 'help_options';
@@ -66,7 +80,7 @@
       const response = await fetch('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) { addMessage(data.error || 'No fue posible procesar tu mensaje.', 'bot'); return; }
-      if (data.message) addMessage(data.message, 'bot');
+      if (data.message) addMessage(data.message, 'bot', data.image_url);
       showActionsFor(data.state);
       if (data.state === 'ended') {
         form.hidden = true;

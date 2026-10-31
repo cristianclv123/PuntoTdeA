@@ -58,6 +58,14 @@ class ChatbotWorkflow:
         state = 'waiting_confirmation'
         self.conversation.flow_state = state
         self._add_message('bot', answer, awaiting_advisor=needs_human_attention)
+        image_url = response.get('image_url')
+        if image_url:
+            self.conversation.messages[-1]['image_url'] = image_url
+            self.conversation.messages[-1]['source_question'] = question
+        image_source_id = response.get('image_source_id')
+        if image_source_id:
+            self.conversation.messages[-1]['image_source_id'] = image_source_id
+            self.conversation.messages[-1]['source_question'] = question
         self._save()
         result = self._result(
             state,
@@ -99,7 +107,11 @@ class ChatbotWorkflow:
         return self._result('ended', message, inactivity=True)
 
     def escalate(self, reason: str = '') -> dict[str, Any]:
-        message = 'Para ayudarte mejor, transferiremos esta conversación a un asesor. ¿Qué solicitud deseas enviarle?'
+        message = (
+            'Para ayudarte mejor, transferiremos esta conversación a un asesor. '
+            '¿Qué solicitud deseas enviarle? Por favor, incluye también tu número '
+            'de documento de identidad.'
+        )
         self.conversation.escalation_reason = reason.strip()
         self.conversation.flow_state = 'waiting_advisor_question'
         self._add_message('bot', message)

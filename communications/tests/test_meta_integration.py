@@ -3,11 +3,12 @@ import hmac
 import json
 from unittest.mock import Mock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from communications.adapters.base import TemplateRef
-from communications.adapters.meta_adapter import MetaAdapter
+from communications.adapters.meta_adapter import MetaAdapter, send_image_message
 from communications.models import (
     AudienceSegment,
     BroadcastRecipient,
@@ -101,6 +102,45 @@ class MetaWhatsAppIntegrationTests(TestCase):
         post.assert_not_called()
 
     @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_uploads_and_sends_image_with_caption(self, post):
+        upload_response = Mock()
+        upload_response.json.return_value = {"id": "media-image-1"}
+        upload_response.raise_for_status.return_value = None
+        message_response = Mock()
+        message_response.json.return_value = {"messages": [{"id": "wamid.image.1"}]}
+        message_response.raise_for_status.return_value = None
+        post.side_effect = [upload_response, message_response]
+
+        result = send_image_message(
+            "+573001112233",
+            b"image-content",
+            "calendario.png",
+            "image/png",
+            "Consulta el calendario académico.",
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.provider_message_id, "wamid.image.1")
+        self.assertEqual(post.call_count, 2)
+        self.assertIn("/v21.0/123456789/media", post.call_args_list[0].args[0])
+        self.assertEqual(
+            post.call_args_list[0].kwargs["data"],
+            {"messaging_product": "whatsapp"},
+        )
+        self.assertEqual(
+            post.call_args_list[1].kwargs["json"],
+            {
+                "messaging_product": "whatsapp",
+                "to": "573001112233",
+                "type": "image",
+                "image": {
+                    "id": "media-image-1",
+                    "caption": "Consulta el calendario académico.",
+                },
+            },
+        )
+
+    @patch("communications.adapters.meta_adapter.requests.post")
     def test_meta_adapter_sends_static_text_header_and_body_parameters(self, post):
         response = Mock()
         response.json.return_value = {"messages": [{"id": "wamid.outbound.header"}]}
@@ -149,6 +189,18 @@ class MetaWhatsAppIntegrationTests(TestCase):
                 },
             },
         )
+
+    @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_rejects_unsupported_image_type(self, post):
+        result = send_image_message(
+            "+573001112233",
+            b"image-content",
+            "calendario.gif",
+            "image/gif",
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("JPG o PNG", result.error)
 
     @patch("communications.adapters.meta_adapter.requests.post")
     def test_meta_adapter_rejects_text_header_without_text(self, post):
@@ -281,9 +333,9 @@ class MetaWhatsAppIntegrationTests(TestCase):
         )
         self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
 
-    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_text", return_value=True)
+    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_replies")
     @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.handle_message", return_value=["Hola"])
-    def test_webhook_sends_inbound_text_to_chatbot_once(self, handle_message, send_text):
+    def test_webhook_keeps_chatbot_replies_on_existing_flow(self, handle_message, send_replies):
         payload = {
             "entry": [
                 {
@@ -317,4 +369,4 @@ class MetaWhatsAppIntegrationTests(TestCase):
             "Hola",
             external_message_id="wamid.inbound.1",
         )
-        send_text.assert_called_once_with("573001112233", "Hola")
+        send_replies.assert_called_once_with("573001112233", "Hola", ["Hola"])
