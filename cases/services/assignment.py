@@ -55,9 +55,12 @@ def claim_greeting_body(user) -> str:
     )
 
 
-CLOSE_NOTICE = (
-    "El asesor ya cerró el caso. Si necesitas más ayuda, escríbenos de nuevo."
-)
+def close_notice_body(conversation: Conversation) -> str:
+    ticket = conversation.ticket_number or f"TDEA-{conversation.pk:06d}"
+    return (
+        f"El asesor ya cerró el caso {ticket}. "
+        "Si necesitas más ayuda, escríbenos de nuevo."
+    )
 
 
 def _send_customer_text(conversation: Conversation, body: str, user, *, log_label: str) -> None:
@@ -91,7 +94,7 @@ def _send_claim_greeting(conversation: Conversation, user) -> None:
 def _send_close_notice(conversation: Conversation, user) -> None:
     _send_customer_text(
         conversation,
-        CLOSE_NOTICE,
+        close_notice_body(conversation),
         user,
         log_label="el aviso de cierre",
     )

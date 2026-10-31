@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
+from corsheaders.defaults import default_headers
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -101,9 +102,11 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "PuntoTdeA.errors.ErrorPageMiddleware",
 ]
 
 ROOT_URLCONF = "PuntoTdeA.urls"
+CSRF_FAILURE_VIEW = "PuntoTdeA.errors.csrf_failure"
 
 TEMPLATES = [
     {
@@ -118,6 +121,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "PuntoTdeA.context_processors.module_access",
             ],
         },
     },
@@ -232,6 +236,11 @@ SPECTACULAR_SETTINGS = {
 _cors_origins = os.environ.get("WIDGET_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    *default_headers,
+    "x-widget-credential",
+    "x-integration-token",
+]
 
 
 META_VERIFY_TOKEN = os.environ.get("META_VERIFY_TOKEN", "")
@@ -265,6 +274,9 @@ ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
 # La UI de campanas entra con la sesion del navegador; este token cubre a los
 # consumidores de servicio (BFF) cuando DEBUG=False.
 INTERNAL_API_TOKEN = os.environ.get("INTERNAL_API_TOKEN", "")
+
+# Token independiente para la integración externa de ingesta web de Cases.
+CASES_WEB_WEBHOOK_TOKEN = os.environ.get("CASES_WEB_WEBHOOK_TOKEN", "")
 
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"

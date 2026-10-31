@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.templatetags.static import static
 from django.test import TestCase
 from django.urls import reverse
@@ -16,6 +17,12 @@ class CampaignWizardPageTests(TestCase):
 
     def test_campaign_new_renders_audience_picker(self):
         user = User.objects.create_user(username="camp", password="secret")
+        user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="communications",
+                codename="access_communications",
+            )
+        )
         self.client.force_login(user)
 
         response = self.client.get(reverse("communications:campaign_new"))

@@ -1,6 +1,5 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,6 +9,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from cases.constants import channel_ui, status_tag_class
 from cases.models import CaseComment, Conversation, Department, Message, ReplyTemplate
+from cases.permissions import CASES_PERMISSION
 from cases.services.assignment import (
     ClaimError,
     CloseError,
@@ -22,6 +22,7 @@ from cases.services.assignment import (
 from cases.services.attachments import ACCEPT_ATTR
 from cases.services.case_events import advisor_label
 from cases.services.ingestion import create_outbound_message
+from PuntoTdeA.access import module_access_required
 
 User = get_user_model()
 
@@ -253,13 +254,13 @@ def _bandeja_list_context(request, selected_id=None):
     }
 
 
-@login_required
+@module_access_required(CASES_PERMISSION, module_name="Cases")
 def bandeja(request):
     context = _bandeja_list_context(request)
     return render(request, "cases/bandeja.html", context)
 
 
-@login_required
+@module_access_required(CASES_PERMISSION, module_name="Cases")
 @require_POST
 def claim_case(request, case_id):
     try:
@@ -410,7 +411,7 @@ def _handle_reply(request, conversation: Conversation):
     return True
 
 
-@login_required
+@module_access_required(CASES_PERMISSION, module_name="Cases")
 @require_http_methods(["GET", "POST"])
 def caso_detail(request, case_id):
     conversation = get_object_or_404(

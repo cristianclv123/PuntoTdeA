@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.urls import reverse
 
@@ -7,6 +8,12 @@ class CampaignPagesTests(TestCase):
     def setUp(self):
         user = get_user_model().objects.create_user(
             username="campaign-pages-user"
+        )
+        user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="communications",
+                codename="access_communications",
+            )
         )
         self.client.force_login(user)
 

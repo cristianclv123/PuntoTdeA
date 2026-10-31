@@ -11,7 +11,12 @@ from typing import Any
 from django.conf import settings
 from django.utils import timezone
 
-from communications.adapters.meta_adapter import send_image_message, send_text_message
+from communications.adapters.meta_adapter import (
+    send_image_message,
+    send_uploaded_image_message,
+    send_text_message,
+    upload_whatsapp_media,
+)
 from communications.models import Contact
 from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
@@ -27,6 +32,11 @@ INACTIVITY_NOTICE = (
     'Si no recibimos respuesta, el chat se cerrará automáticamente '
     'después de 5 minutos de inactividad.'
 )
+
+# Patrón para detectar URLs en un mensaje de texto. Cuando una respuesta
+# contiene una URL, se envía como mensaje aparte para que WhatsApp genere
+# la preview automática (miniatura + título del sitio).
+_URL_PATTERN = re.compile(r'https?://\S+', re.IGNORECASE)
 
 
 def _manager(model):
@@ -189,7 +199,7 @@ def _submit_question(
     conversation: ChatConversation,
     workflow: ChatbotWorkflow,
     question: str,
-) -> list[str]:
+) -> list[dict[str, Any]]:
     result = workflow.submit_question(question)
     if result.get('valid') and result.get('needs_human_attention'):
         follow_up = (
@@ -204,10 +214,21 @@ def _submit_question(
         conversation.messages[-1].pop('image_source_id', None)
         conversation.messages[-1].pop('source_question', None)
         conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
-        return [follow_up]
+        return [{'text': follow_up}]
+    image_faq_id = (
+        result.get('image_faq_id') or result.get('image_source_id')
+        if result.get('valid')
+        else None
+    )
     if result.get('valid') and result.get('follow_up_message') == FOLLOW_UP_MESSAGE:
-        return [result['answer_message'], result['follow_up_message']]
-    return [result['message']]
+        replies = []
+        if image_faq_id:
+            replies.append({'text': result['answer_message'], 'image_faq_id': image_faq_id})
+        else:
+            replies.append({'text': result['answer_message']})
+        replies.append({'text': result['follow_up_message']})
+        return replies
+    return [{'text': result['message']}]
 
 
 def _create_low_confidence_ticket(conversation: ChatConversation, sender: str) -> str:
@@ -319,8 +340,10 @@ def handle_message(
             return [inactivity_result['message'], greeting]
         return [greeting]
 
-    state = conversation.flow_state
-    if state == 'pending' and conversation.case_conversation_id is not None:
+    if (
+        conversation.case_conversation_id is not None
+        and ticket_status != CaseConversation.Status.CERRADO
+    ):
         _forward_inbound_to_case(
             conversation,
             sender,
@@ -328,6 +351,8 @@ def handle_message(
             external_message_id,
         )
         return []
+
+    state = conversation.flow_state
     if state == 'waiting_question':
         if _requests_advisor(text):
             replies = [workflow.escalate('El usuario solicitó atención humana.')['message']]
@@ -390,6 +415,90 @@ def send_text(recipient: str, text: str) -> bool:
     return result.success
 
 
+def _send_text_with_link_preview(recipient: str, text: str) -> None:
+    """Envía texto y, si contiene URLs, las separa en mensajes aparte.
+
+    WhatsApp Cloud API solo genera la preview automática (miniatura + título)
+    cuando la URL llega en un mensaje de texto **sin más texto alrededor**.
+    Si el texto tiene una URL embebida, la sacamos y mandamos dos mensajes:
+    1. El texto sin la URL + aviso de inactividad
+    2. La URL sola (para que se genere la preview)
+
+    Si el texto es solo URL(es), se mandan solas y el aviso de inactividad
+    va como tercer mensaje.
+    """
+    text = (text or '').strip()
+    urls = _URL_PATTERN.findall(text)
+    text_without_urls = _URL_PATTERN.sub('', text).strip()
+    if urls:
+        if text_without_urls:
+            send_text(recipient, f'{text_without_urls}\n\n{INACTIVITY_NOTICE}')
+        # Cada URL sola para que WhatsApp genere la preview.
+        for url in urls:
+            send_text(recipient, url)
+        # Si el texto original era solo URL(es), mandar el aviso aparte.
+        if not text_without_urls and INACTIVITY_NOTICE:
+            send_text(recipient, INACTIVITY_NOTICE)
+        return
+    # Sin URLs: texto normal.
+    send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+
+
+def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
+    """Envía un mensaje estructurado que puede incluir imagen de una FAQ.
+
+    Si ``reply`` contiene ``image_faq_id``, sube la imagen a Meta para obtener
+    un ``media_id`` y la envía como mensaje de imagen antes que el texto.
+    """
+    image_faq_id = reply.get('image_faq_id')
+    text = reply.get('text', '')
+    if image_faq_id:
+        try:
+            faq = FAQ.objects.get(pk=image_faq_id)
+        except FAQ.DoesNotExist:
+            logger.warning('FAQ %s no encontrada para enviar imagen.', image_faq_id)
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        image_bytes = faq.get_image_bytes()
+        if not image_bytes:
+            logger.warning('FAQ %s no tiene imagen en BD a pesar del flag.', image_faq_id)
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        upload_result = upload_whatsapp_media(
+            image_bytes,
+            filename=faq.image_name or 'imagen.jpg',
+            content_type=faq.image_content_type or 'image/jpeg',
+        )
+        if not upload_result.success:
+            logger.warning(
+                'No fue posible subir imagen de FAQ %s a Meta: %s',
+                image_faq_id,
+                upload_result.error,
+            )
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        caption = (text or '').strip()
+        image_result = send_uploaded_image_message(
+            recipient,
+            upload_result.provider_message_id,
+            caption=caption,
+        )
+        if not image_result.success:
+            logger.warning(
+                'No fue posible enviar imagen de FAQ %s a %s: %s',
+                image_faq_id,
+                recipient,
+                image_result.error,
+            )
+            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+            return
+        # La imagen ya incluye el caption; el aviso de inactividad va aparte.
+        if INACTIVITY_NOTICE:
+            send_text(recipient, INACTIVITY_NOTICE)
+        return
+    _send_text_with_link_preview(recipient, text)
+
+
 def send_image(
     recipient: str,
     image_data: bytes,
@@ -432,13 +541,16 @@ def _question_image(sender: str, question: str) -> FAQ | None:
 def send_replies(
     sender: str,
     question: str,
-    replies: list[str],
+    replies: list[str | dict[str, Any]],
     add_inactivity_notice: bool = False,
 ) -> None:
     """Envía las respuestas del flujo sin cambiar su orden y adjunta la FAQ coincidente."""
     faq = _question_image(sender, question)
     image_sent = False
     for index, reply in enumerate(replies):
+        if isinstance(reply, dict):
+            _send_reply(sender, reply)
+            continue
         text_message = (
             f'{reply}\n\n{INACTIVITY_NOTICE}' if add_inactivity_notice else reply
         )
@@ -464,12 +576,11 @@ def process_webhook(payload: dict[str, Any]) -> int:
             text,
             external_message_id=external_message_id,
         )
-        send_replies(
-            sender,
-            text,
-            replies,
-            add_inactivity_notice=True,
-        )
+        for reply in replies:
+            if isinstance(reply, dict):
+                _send_reply(sender, reply)
+            else:
+                _send_text_with_link_preview(sender, reply)
         processed += 1
     return processed
 

@@ -3,6 +3,7 @@ from django.db.models import Count, Q
 from django.shortcuts import render
 from django.utils import timezone
 
+from PuntoTdeA.access import user_has_explicit_permission
 from cases.models import Conversation
 from communications.services import dashboard_service
 
@@ -144,12 +145,30 @@ def _advisor_workload():
 
 @login_required
 def index(request):
+    can_access_cases = user_has_explicit_permission(
+        request.user,
+        "cases.access_cases",
+    )
+    can_access_communications = user_has_explicit_permission(
+        request.user,
+        "communications.access_communications",
+    )
     context = {
         "active_nav": "dashboard",
-        "metric_cards": _case_metrics(),
-        "workload_rows": _advisor_workload(),
-        "campaign_metrics": dashboard_service.campaign_kpis(),
-        "recent_campaigns": dashboard_service.recent_campaigns(),
-        "campaign_activity": dashboard_service.recent_activity(),
+        "can_access_cases": can_access_cases,
+        "can_access_communications": can_access_communications,
+        "metric_cards": _case_metrics() if can_access_cases else [],
+        "workload_rows": _advisor_workload() if can_access_cases else [],
+        "campaign_metrics": (
+            dashboard_service.campaign_kpis() if can_access_communications else []
+        ),
+        "recent_campaigns": (
+            dashboard_service.recent_campaigns() if can_access_communications else []
+        ),
+        "campaign_activity": (
+            dashboard_service.recent_activity()
+            if can_access_communications
+            else []
+        ),
     }
     return render(request, "dashboard/index.html", context)

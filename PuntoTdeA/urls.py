@@ -28,6 +28,7 @@ from communications.meta_console_views import validate_credentials as meta_conso
 from communications.meta_console_views import window_status as meta_console_window
 from communications.webhooks.meta_webhook import whatsapp_webhook
 from . import views
+from cases.api.views import deny_direct_attachment_media
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -102,4 +103,18 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += staticfiles_urlpatterns()
+
+    urlpatterns.append(
+        path(
+            "media/cases/attachments/<path:path>",
+            deny_direct_attachment_media,
+            name="cases-direct-attachment-denied",
+        )
+    )
+
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+handler400 = "PuntoTdeA.errors.bad_request"
+handler403 = "PuntoTdeA.errors.permission_denied"
+handler404 = "PuntoTdeA.errors.page_not_found"
+handler500 = "PuntoTdeA.errors.server_error"

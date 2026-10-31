@@ -168,6 +168,65 @@ def send_image_message(
     )
 
 
+def upload_whatsapp_media(
+    file_bytes: bytes,
+    filename: str = "imagen.jpg",
+    content_type: str = "image/jpeg",
+) -> SendResult:
+    """Sube un archivo binario al almacén de medios de WhatsApp Cloud API."""
+    error = _configuration_error()
+    if error:
+        return SendResult(success=False, error=error)
+    if not file_bytes:
+        return SendResult(success=False, error="El archivo de imagen está vacío.")
+    if content_type not in {"image/jpeg", "image/png"}:
+        return SendResult(
+            success=False,
+            error="WhatsApp solo admite imágenes JPG o PNG para este envío.",
+        )
+
+    response = None
+    try:
+        response = requests.post(
+            _media_url(),
+            headers={"Authorization": f"Bearer {settings.META_ACCESS_TOKEN}"},
+            data={"messaging_product": "whatsapp"},
+            files={"file": (filename, file_bytes, content_type)},
+            timeout=settings.META_REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        body = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        return SendResult(success=False, error=_request_error(response, exc))
+
+    media_id = body.get("id", "")
+    if not media_id:
+        return SendResult(
+            success=False,
+            error="Meta no devolvió el ID del medio subido.",
+        )
+    return SendResult(success=True, provider_message_id=str(media_id))
+
+
+def send_uploaded_image_message(to: str, media_id: str, caption: str = "") -> SendResult:
+    """Envía una imagen previamente subida a Meta (por ``media_id``).
+
+    Si se proporciona ``caption``, se muestra como texto bajo la imagen.
+    """
+    normalized_phone = _normalize_phone(to)
+    if not normalized_phone:
+        return SendResult(success=False, error="Número de teléfono vacío.")
+    payload: dict[str, Any] = {
+        "messaging_product": "whatsapp",
+        "to": normalized_phone,
+        "type": "image",
+        "image": {"id": media_id},
+    }
+    caption_text = (caption or "").strip()
+    if caption_text:
+        payload["image"]["caption"] = caption_text
+    return _post_message(payload)
+
 class MetaAdapter(ChannelAdapter):
     """Envío de plantillas aprobadas mediante Meta WhatsApp Cloud API."""
 

@@ -1,8 +1,9 @@
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
+from .decorators import communications_required
 
-@login_required
+
+@communications_required
 def campaigns(request):
     context = {
         "active_nav": "campaigns",
@@ -11,7 +12,7 @@ def campaigns(request):
     return render(request, "communications/campanas.html", context)
 
 
-@login_required
+@communications_required
 def campaign_new(request):
     return render(
         request,
@@ -20,7 +21,7 @@ def campaign_new(request):
     )
 
 
-@login_required
+@communications_required
 def campaign_detail(request):
     return render(
         request,
@@ -28,7 +29,7 @@ def campaign_detail(request):
         {"nav_section": "campaigns", "active_nav": "campaigns"},
     )
 
-@login_required
+@communications_required
 def templates(request):
     return render(
         request,
@@ -36,7 +37,7 @@ def templates(request):
         {"nav_section": "templates", "active_nav": "templates"},
     )
 
-@login_required
+@communications_required
 def segments(request):
     return render(
         request,

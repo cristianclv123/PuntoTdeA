@@ -6,7 +6,9 @@ import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.contrib.messages import get_messages
+from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.templatetags.static import static
 from django.test import TestCase, override_settings
@@ -47,6 +49,12 @@ class AnnouncementViewsTests(TestCase):
         user = get_user_model().objects.create_user(
             username="tester", password="clave-segura"
         )
+        announcement_content_type = ContentType.objects.get_for_model(Announcement)
+        permission = Permission.objects.get(
+            content_type=announcement_content_type,
+            codename="access_announcements",
+        )
+        user.user_permissions.add(permission)
         self.client.force_login(user)
 
         self._media = tempfile.mkdtemp()

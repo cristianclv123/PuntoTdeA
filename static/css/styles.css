@@ -3486,6 +3486,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   overflow: hidden;
 }
 
+.notif-panel[hidden] {
+  display: none;
+}
+
 .notif-panel-head {
   display: flex;
   align-items: flex-start;
