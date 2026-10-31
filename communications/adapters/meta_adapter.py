@@ -82,19 +82,26 @@ def _post_message(payload: dict[str, Any]) -> SendResult:
     return SendResult(success=True, provider_message_id=message_id)
 
 
-def send_text_message(to: str, text: str) -> SendResult:
-    """Envía una respuesta de texto del chatbot por el número configurado."""
+def send_text_message(to: str, text: str, *, preview_url: bool = False) -> SendResult:
+    """Envía una respuesta de texto del chatbot por el número configurado.
+
+    Si ``preview_url`` es ``true``, WhatsApp intenta generar una preview de la
+    primera URL que encuentre en el cuerpo del mensaje (miniatura + título).
+    """
     normalized_phone = _normalize_phone(to)
     if not normalized_phone:
         return SendResult(success=False, error="Número de teléfono vacío.")
     if not (text or "").strip():
         return SendResult(success=False, error="El texto del mensaje está vacío.")
+    text_payload: dict[str, Any] = {"body": text.strip()}
+    if preview_url:
+        text_payload["preview_url"] = True
     return _post_message(
         {
             "messaging_product": "whatsapp",
             "to": normalized_phone,
             "type": "text",
-            "text": {"body": text.strip()},
+            "text": text_payload,
         }
     )
 
