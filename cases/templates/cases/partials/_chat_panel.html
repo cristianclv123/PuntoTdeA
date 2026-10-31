@@ -1,4 +1,5 @@
 {% load icons %}
+{% load chat %}
 <div class="chat-column">
   <div class="chat-header wa-chat-header">
     <div class="chat-header-left">
@@ -55,7 +56,10 @@
           {% if m.from_agent %}
           <div class="bubble-sender">Asesor</div>
           {% endif %}
-          {% if m.text %}<div class="bubble-text">{{ m.text }}</div>{% endif %}
+          {% if m.text %}
+          <div class="bubble-text">{{ m.text|linkify }}</div>
+          {{ m.text|link_preview }}
+          {% endif %}
           {% if m.attachments %}
           <div class="bubble-attachments">
             {% for att in m.attachments %}
@@ -143,8 +147,8 @@
       </div>
       <input class="composer-file-input" type="file" name="attachments" id="attachment-input"
         accept="{{ attachment_accept }}" multiple hidden>
-      <input class="composer-field" type="text" name="body" id="reply-body" placeholder="Escribe tu respuesta..."
-        autocomplete="off">
+      <textarea class="composer-field" name="body" id="reply-body" rows="1"
+        placeholder="Escribe tu respuesta..." autocomplete="off"></textarea>
       <button class="composer-send" type="submit" aria-label="Enviar">
         {% icon 'send' size=18 %}
       </button>

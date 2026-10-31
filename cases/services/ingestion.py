@@ -1,4 +1,6 @@
+import mimetypes
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from django.core.exceptions import ValidationError
@@ -7,8 +9,14 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from cases.models import Channel, Contact, Conversation, Message
+from cases.services.message_links import first_http_url
 from cases.services.realtime import broadcast_new_message
-from communications.adapters.meta_adapter import MetaAdapter, send_text_message
+from communications.adapters.meta_adapter import (
+    MetaAdapter,
+    send_media_message,
+    send_text_message,
+    upload_whatsapp_media,
+)
 
 
 @dataclass
@@ -159,7 +167,80 @@ def _render_template_body(template, params: dict | None) -> str:
     return text.strip()
 
 
-def _dispatch_whatsapp(*, conversation: Conversation, body: str, template=None, template_params=None) -> str:
+_WHATSAPP_IMAGES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+_WHATSAPP_VIDEOS = {
+    ".mp4": "video/mp4",
+    ".3gp": "video/3gpp",
+    ".3gpp": "video/3gpp",
+}
+
+
+def _whatsapp_media_type(filename: str, content_type: str) -> tuple[str, str]:
+    extension = Path(filename or "").suffix.lower()
+    if extension in _WHATSAPP_IMAGES:
+        return "image", _WHATSAPP_IMAGES[extension]
+    if extension in _WHATSAPP_VIDEOS:
+        return "video", _WHATSAPP_VIDEOS[extension]
+    guessed, _encoding = mimetypes.guess_type(filename or "")
+    mime = (content_type or "").split(";", 1)[0].strip() or guessed or "application/octet-stream"
+    return "document", mime
+
+
+def _read_upload(uploaded) -> bytes:
+    payload = uploaded.read()
+    if hasattr(uploaded, "seek"):
+        uploaded.seek(0)
+    return payload
+
+
+def _file_label(files) -> str:
+    names = [Path(getattr(uploaded, "name", "") or "archivo").name for uploaded in files]
+    return ", ".join(name for name in names if name)
+
+
+def _send_whatsapp_files(phone: str, files) -> str:
+    first_id = ""
+    for uploaded in files:
+        filename = Path(getattr(uploaded, "name", "") or "archivo").name
+        kind, mime = _whatsapp_media_type(
+            filename,
+            getattr(uploaded, "content_type", "") or "",
+        )
+        uploaded_media = upload_whatsapp_media(
+            _read_upload(uploaded),
+            filename=filename,
+            content_type=mime,
+        )
+        if not uploaded_media.success:
+            raise ValidationError(
+                uploaded_media.error or "No se pudo subir el archivo a WhatsApp."
+            )
+        sent = send_media_message(
+            phone,
+            media_type=kind,
+            media_id=uploaded_media.provider_message_id,
+            filename=filename,
+        )
+        if not sent.success:
+            raise ValidationError(sent.error or "No se pudo enviar el archivo por WhatsApp.")
+        if not first_id:
+            first_id = sent.provider_message_id or ""
+    return first_id
+
+
+def _dispatch_whatsapp(
+    *,
+    conversation: Conversation,
+    body: str,
+    template=None,
+    template_params=None,
+    files=None,
+) -> str:
     phone = _contact_phone(conversation)
     if template is not None:
         result = MetaAdapter().send_template_message(phone, template, template_params or {})
@@ -169,13 +250,19 @@ def _dispatch_whatsapp(*, conversation: Conversation, body: str, template=None, 
 
     if _channel_code(conversation) != "whatsapp":
         return ""
-    if not (body or "").strip():
-        return ""
 
-    result = send_text_message(phone, body)
+    file_list = [item for item in (files or []) if item]
+    provider_id = _send_whatsapp_files(phone, file_list) if file_list else ""
+    text = (body or "").strip()
+    if not text:
+        return provider_id
+    if first_http_url(text):
+        result = send_text_message(phone, text, preview_url=True)
+    else:
+        result = send_text_message(phone, text)
     if not result.success:
         raise ValidationError(result.error or "No se pudo enviar el mensaje por WhatsApp.")
-    return result.provider_message_id or ""
+    return provider_id or result.provider_message_id or ""
 
 
 @transaction.atomic
@@ -208,12 +295,13 @@ def create_outbound_message(
         body=text,
         template=template,
         template_params=template_params,
+        files=files,
     )
 
     message = Message.objects.create(
         conversation=conversation,
         direction=Message.Direction.OUTBOUND,
-        body=text or ("📎 Archivo adjunto" if files else ""),
+        body=text or _file_label(files),
         external_id=provider_id,
         sent_at=sent_at,
     )
