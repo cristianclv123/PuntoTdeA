@@ -95,6 +95,7 @@ MIDDLEWARE = [
     # whitenoise sirve los estaticos de collectstatic; debe ir tras
     # SecurityMiddleware y antes de cualquier middleware que pueda responder.
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "cases.security.CasesContentSecurityPolicyMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -344,7 +345,8 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = _env_flag("DJANGO_SECURE_SSL_REDIRECT", "true")
-    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "0"))
+    # Un año. El valor 0 dejaba las páginas de casos sin Strict-Transport-Security.
+    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = "same-origin"
     X_FRAME_OPTIONS = "SAMEORIGIN"

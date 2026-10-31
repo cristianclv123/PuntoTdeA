@@ -1,6 +1,56 @@
 /* ==========================================================================
    Punto TdeA — design tokens & shared styles
+   Anton y Montserrat se sirven desde el propio sitio (SIL OFL) para no
+   depender de una hoja externa sin integridad.
    ========================================================================== */
+
+@font-face {
+  font-family: "Anton";
+  src: url("../fonts/Anton-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Bold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
 
 * , *::before, *::after { box-sizing: border-box; }
 
@@ -2094,6 +2144,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   white-space: nowrap;
 }
 .note-text { font-size: 12px; color: var(--text-secondary); line-height: 18px; }
+.note-text-empty { color: var(--text-muted); }
 
 .note-input {
   background: var(--bg);

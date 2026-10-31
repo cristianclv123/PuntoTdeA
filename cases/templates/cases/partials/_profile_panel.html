@@ -115,7 +115,7 @@
         <div class="note-text">{{ comment.body }}</div>
       </div>
     {% empty %}
-      <div class="note-text" style="color: var(--text-muted);">Sin comentarios internos aún.</div>
+      <div class="note-text note-text-empty">Sin comentarios internos aún.</div>
     {% endfor %}
 
     {% if not case_is_closed %}
