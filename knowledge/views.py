@@ -79,6 +79,10 @@ def chatbot(request):
         if conversation.flow_state != 'help_options':
             return JsonResponse({'error': 'Primero debes recibir una respuesta y confirmar que necesitas más ayuda.'}, status=400)
         result = workflow.escalate(payload.get('reason', ''))
+    elif action == 'advisor_document':
+        if conversation.flow_state != 'waiting_advisor_document':
+            return JsonResponse({'error': 'Primero debes solicitar un asesor.'}, status=400)
+        result = workflow.submit_advisor_document(payload.get('document_number', ''))
     elif action == 'advisor_question':
         result = workflow.submit_advisor_question(payload.get('question', ''))
     else:

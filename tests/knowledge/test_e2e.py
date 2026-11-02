@@ -29,6 +29,7 @@ class KnowledgeE2ETests(TestCase):
     def test_pedir_asesor_crea_ticket_en_cases(self):
         handle_message("573000111223", "Hola")
         handle_message("573000111223", "Quiero hablar con un asesor")
+        handle_message("573000111223", "1234567890")
         responses = handle_message("573000111223", "No pude matricularme")
         case = CaseConversation.objects.get(
             channel__code="whatsapp",
@@ -39,10 +40,9 @@ class KnowledgeE2ETests(TestCase):
         self.assertEqual(bot.case_conversation_id, case.id)
         self.assertEqual(bot.status, ChatConversation.STATUS_ACTIVE)
         self.assertEqual(bot.flow_state, "help_options")
-        self.assertEqual(
-            CaseMessage.objects.get(conversation=case).body,
-            "No pude matricularme",
-        )
+        body = CaseMessage.objects.get(conversation=case).body
+        self.assertIn("Documento de identidad: 1234567890", body)
+        self.assertIn("Solicitud: No pude matricularme", body)
 
     @patch(
         "knowledge.chatbot.workflow.generate_response",
@@ -65,9 +65,10 @@ class KnowledgeE2ETests(TestCase):
         self.assertIn("documento de identidad", advisor_prompt)
         self.assertFalse(CaseConversation.objects.filter(external_thread_id="573000111224").exists())
 
+        handle_message("573000111224", "1234567890")
         responses = handle_message(
             "573000111224",
-            "Necesito ayuda con mi matrícula, documento 1234567890",
+            "Necesito ayuda con mi matrícula",
         )
         case = CaseConversation.objects.get(
             channel__code="whatsapp",
@@ -75,5 +76,6 @@ class KnowledgeE2ETests(TestCase):
         )
         self.assertTrue(any("TDEA-" in (r if isinstance(r, str) else r.get('text', '')) for r in responses))
         body = CaseMessage.objects.get(conversation=case).body
-        self.assertIn("Necesito ayuda con mi matrícula, documento 1234567890", body)
-        self.assertIn("Tema muy específico que el bot no cubre", body)
+        self.assertIn("Documento de identidad: 1234567890", body)
+        self.assertIn("Solicitud: Necesito ayuda con mi matrícula", body)
+        self.assertIn("Pregunta original: Tema muy específico que el bot no cubre", body)

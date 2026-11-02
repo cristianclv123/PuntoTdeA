@@ -75,22 +75,38 @@
       confirmationActions.style.display = showConfirmation ? 'flex' : 'none';
       helpActions.style.display = showHelp ? 'flex' : 'none';
     };
+    let currentState = '';
     const send = async (payload, visibleText = '') => {
       if (visibleText) addMessage(visibleText, 'user');
       const response = await fetch('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) { addMessage(data.error || 'No fue posible procesar tu mensaje.', 'bot'); return; }
+      currentState = data.state || '';
       if (data.message) addMessage(data.message, 'bot', data.image_url);
-      showActionsFor(data.state);
-      if (data.state === 'ended') {
+      showActionsFor(currentState);
+      if (currentState === 'ended') {
         form.hidden = true;
         confirmationActions.hidden = true;
         helpActions.hidden = true;
         window.setTimeout(() => { window.location.href = '/'; }, 900);
       }
-      if (data.state === 'pending') { form.hidden = true; confirmationActions.hidden = true; helpActions.hidden = true; }
+      if (currentState === 'pending') { form.hidden = true; confirmationActions.hidden = true; helpActions.hidden = true; }
     };
-    form.addEventListener('submit', (event) => { event.preventDefault(); const value = input.value.trim(); if (!value) return; input.value = ''; send({ action: 'question', question: value }, value); });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const value = input.value.trim();
+      if (!value) return;
+      input.value = '';
+      let payload;
+      if (currentState === 'waiting_advisor_document') {
+        payload = { action: 'advisor_document', document_number: value };
+      } else if (currentState === 'waiting_advisor_question') {
+        payload = { action: 'advisor_question', question: value };
+      } else {
+        payload = { action: 'question', question: value };
+      }
+      send(payload, value);
+    });
     document.querySelectorAll('[data-help]').forEach((button) => button.addEventListener('click', () => {
       showActionsFor('');
       send({ action: 'confirm', needs_more_help: button.dataset.help === 'yes' }, button.textContent);

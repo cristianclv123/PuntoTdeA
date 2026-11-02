@@ -129,7 +129,13 @@ class ChatbotWorkflowTests(TestCase):
 
     def test_advisor_request_during_business_hours_is_pending(self):
         self.workflow.submit_question('No puedo resolver mi caso')
-        self.workflow.escalate('La respuesta requiere revisión humana')
+        escalate_result = self.workflow.escalate('La respuesta requiere revisión humana')
+        self.assertEqual(escalate_result['state'], 'waiting_advisor_document')
+
+        document_result = self.workflow.submit_advisor_document('1234567890')
+        self.assertEqual(document_result['state'], 'waiting_advisor_question')
+        self.assertEqual(self.conversation.advisor_document_number, '1234567890')
+
         result = self.workflow.submit_advisor_question(
             'Necesito que revisen mi caso', datetime(2026, 9, 18, 15, 0, tzinfo=datetime_timezone.utc)
         )
@@ -139,6 +145,7 @@ class ChatbotWorkflowTests(TestCase):
 
     def test_advisor_request_outside_business_hours_is_pending(self):
         self.workflow.escalate('No hay respuesta disponible')
+        self.workflow.submit_advisor_document('1234567890')
         result = self.workflow.submit_advisor_question(
             'Quiero hablar con un asesor', datetime(2026, 9, 19, 20, 0, tzinfo=datetime_timezone.utc)
         )

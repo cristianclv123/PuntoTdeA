@@ -210,9 +210,10 @@ you'll have to resolve it by phone, and that resolution isn't written yet.
 | --- | --- |
 | `waiting_question` | Treats it as the question, answers, → `waiting_confirmation` |
 | `waiting_confirmation` | Buttons `chat_more` → `help_options`, `chat_advisor` → escalate, `chat_finish` → `ended`. Text `sí`/`s`/`yes` (or `otra consulta`) → `help_options`; `no`/`n` (or `finalizar`) → `ended`. **Anything else re-asks and doesn't advance** |
-| `waiting_low_confidence_choice` | Buttons `lowconf_advisor` → asks for the advisor message and document (`waiting_advisor_question`, then ticket); `lowconf_question` → `waiting_question`. Text `sí`/`asesor` or `no`/`otra pregunta` also works |
+| `waiting_low_confidence_choice` | Buttons `lowconf_advisor` → asks for the advisor document (`waiting_advisor_document`), then the request; `lowconf_question` → `waiting_question`. Text `sí`/`asesor` or `no`/`otra pregunta` also works |
 | `help_options` | Buttons `help_advisor` → escalate; `help_question` → prompt. Text containing `asesor`, `humano` or `persona` escalates; otherwise treated as a new question |
-| `waiting_advisor_question` | Stores the request, status `pending` → `pending` |
+| `waiting_advisor_document` | Asks for the ID number, then → `waiting_advisor_question` |
+| `waiting_advisor_question` | Asks for the request, creates the ticket, status `pending` → `pending` |
 | `ended` / `pending` | Fixed "already closed" reply |
 
 Unknown state: starts over and submits the text as a question. A button or list

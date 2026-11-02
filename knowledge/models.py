@@ -193,6 +193,11 @@ class ChatConversation(BaseKnowledgeModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
     messages = models.JSONField(default=list, blank=True)
     escalation_reason = models.TextField(blank=True)
+    advisor_document_number = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Número de documento para el asesor',
+    )
     advisor_question = models.TextField(blank=True)
     escalated_at = models.DateTimeField(null=True, blank=True)
     # Control de inactividad 5 + 2 minutos. Ver knowledge/chatbot/inactivity.py.

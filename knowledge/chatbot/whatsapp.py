@@ -621,18 +621,24 @@ def handle_message(
                 'buttons': HELP_BUTTONS,
             }]
         return _submit_question(conversation, workflow, text)
+    if state == 'waiting_advisor_document':
+        result = workflow.submit_advisor_document(text)
+        return [result['message']]
     if state == 'waiting_advisor_question':
         result = workflow.submit_advisor_question(text)
         if result.get('valid'):
             reason = conversation.escalation_reason or 'El usuario solicitó atención humana.'
-            body = text
-            if (
-                conversation.last_question
-                and conversation.escalation_reason == LOW_CONFIDENCE_REASON
-            ):
-                # La ruta de baja confianza no pudo responder la pregunta
-                # original; la adjuntamos para que el asesor tenga el contexto.
-                body = f'{text}\n\nPregunta original: {conversation.last_question}'
+            body_parts = []
+            if conversation.advisor_document_number:
+                body_parts.append(
+                    f'Documento de identidad: {conversation.advisor_document_number}'
+                )
+            body_parts.append(f'Solicitud: {text}')
+            if conversation.last_question:
+                body_parts.append(
+                    f'Pregunta original: {conversation.last_question}'
+                )
+            body = '\n\n'.join(body_parts)
             ticket = _create_case_ticket(
                 conversation, sender, body, reason, external_message_id,
             )

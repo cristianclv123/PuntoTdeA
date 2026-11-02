@@ -98,8 +98,8 @@ mensaje separado y también acepta texto (`sí`/`no`, `asesor`, `otra consulta`)
 Si el usuario finaliza, cualquier mensaje posterior inicia una conversación nueva.
 Las decisiones de baja confianza y de `help_options` también usan botones; una
 selección vieja de otro estado no avanza el flujo. Al pedir asesor, el bot
-solicita el mensaje y el número de documento antes de crear el ticket; la
-pregunta original de baja confianza se adjunta al caso.
+solicita primero el número de documento y luego el mensaje antes de crear el
+ticket. La pregunta original se adjunta al caso.
 
 Las conversaciones de WhatsApp activas reciben **un** aviso a los cinco minutos
 sin actividad y se cierran dos minutos después (siete en total) si el usuario no

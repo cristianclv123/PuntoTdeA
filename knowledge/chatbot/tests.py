@@ -73,6 +73,7 @@ class WhatsAppFlowTests(TestCase):
     def test_knowledge_ticket_status_endpoint_proxies_associated_case(self):
         handle_message('573001112249', 'Hola')
         handle_message('573001112249', 'Quiero un asesor')
+        handle_message('573001112249', '1234567890')
         handle_message('573001112249', 'Necesito ayuda con matrícula')
         conversation = _manager(ChatConversation).get(
             channel='whatsapp',
@@ -218,6 +219,10 @@ class WhatsAppFlowTests(TestCase):
         advisor_prompt = handle_message('573001112234', 'Quiero un asesor')[0]
         self.assertIn('contactaremos', advisor_prompt)
         self.assertIn('documento de identidad', advisor_prompt)
+
+        document_prompt = handle_message('573001112234', '1234567890')[0]
+        self.assertIn('solicitud', document_prompt.lower())
+
         responses = handle_message('573001112234', 'Necesito ayuda con mi matrícula')
         conversation = _manager(ChatConversation).get(external_user_id='573001112234')
         case_conversation = _manager(CaseConversation).get(
@@ -230,12 +235,14 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(conversation.flow_state, 'help_options')
         self.assertTrue(conversation.messages[-1]['awaiting_advisor'])
         case_message = _manager(CaseMessage).get(conversation=case_conversation)
-        self.assertEqual(case_message.body, 'Necesito ayuda con mi matrícula')
+        self.assertIn('Documento de identidad: 1234567890', case_message.body)
+        self.assertIn('Solicitud: Necesito ayuda con mi matrícula', case_message.body)
         self.assertIsNone(case_conversation.assigned_to_id)
 
     def test_ticket_confirmation_includes_business_hours_when_closed(self):
         handle_message('573001112251', 'Hola')
         handle_message('573001112251', 'Quiero un asesor')
+        handle_message('573001112251', '1234567890')
 
         with patch(
             'knowledge.chatbot.whatsapp.get_business_schedule'
@@ -254,6 +261,7 @@ class WhatsAppFlowTests(TestCase):
     def test_pending_whatsapp_message_appends_to_case_ticket(self):
         handle_message('573001112236', 'Hola')
         handle_message('573001112236', 'Quiero un asesor')
+        handle_message('573001112236', '1234567890')
         handle_message('573001112236', 'Necesito ayuda con mi matrícula')
         chat = _manager(ChatConversation).get(external_user_id='573001112236')
         chat.status = ChatConversation.STATUS_PENDING
@@ -271,7 +279,9 @@ class WhatsAppFlowTests(TestCase):
                 'body', flat=True
             )
         )
-        self.assertIn('Necesito ayuda con mi matrícula', bodies)
+        self.assertTrue(
+            any('Necesito ayuda con mi matrícula' in body for body in bodies)
+        )
         self.assertIn('Sigo esperando, es urgente', bodies)
         self.assertIsNone(case_conversation.assigned_to_id)
         chat.refresh_from_db()
@@ -280,6 +290,7 @@ class WhatsAppFlowTests(TestCase):
     def test_pending_message_is_forwarded_to_open_advisor_case(self):
         handle_message('573001112243', 'Hola')
         handle_message('573001112243', 'Quiero un asesor')
+        handle_message('573001112243', '1234567890')
         handle_message('573001112243', 'Necesito revisar mi solicitud')
 
         conversation = _manager(ChatConversation).get(
@@ -351,16 +362,17 @@ class WhatsAppFlowTests(TestCase):
         advisor_prompt = handle_message('573001112235', 'Sí')[0]
         conversation.refresh_from_db()
         self.assertIn('documento de identidad', advisor_prompt)
-        self.assertEqual(conversation.flow_state, 'waiting_advisor_question')
+        self.assertEqual(conversation.flow_state, 'waiting_advisor_document')
         self.assertIsNone(conversation.case_conversation)
         self.assertEqual(
             _manager(CaseConversation).filter(channel__code='whatsapp').count(),
             0,
         )
 
+        handle_message('573001112235', '1234567890')
         ticket_response = handle_message(
             '573001112235',
-            'Necesito ayuda con mi matrícula, documento 1234567890',
+            'Necesito ayuda con mi matrícula',
         )
         conversation.refresh_from_db()
         self.assertIn('He creado el ticket', _text(ticket_response[1]))
@@ -370,8 +382,9 @@ class WhatsAppFlowTests(TestCase):
         case_message = _manager(CaseMessage).get(
             conversation=conversation.case_conversation,
         )
-        self.assertIn('Necesito ayuda con mi matrícula, documento 1234567890', case_message.body)
-        self.assertIn('Pregunta sin respuesta', case_message.body)
+        self.assertIn('Documento de identidad: 1234567890', case_message.body)
+        self.assertIn('Solicitud: Necesito ayuda con mi matrícula', case_message.body)
+        self.assertIn('Pregunta original: Pregunta sin respuesta', case_message.body)
 
     def test_low_confidence_no_choice_returns_to_question_entry(self):
         handle_message('573001112250', 'Hola')
@@ -588,6 +601,7 @@ class WhatsAppFlowTests(TestCase):
     def test_new_message_after_advisor_closes_case_creates_new_chat(self):
         handle_message('573001112241', 'Hola')
         handle_message('573001112241', 'Quiero un asesor')
+        handle_message('573001112241', '1234567890')
         handle_message('573001112241', 'Necesito revisar mi solicitud')
         previous = _manager(ChatConversation).get(
             channel='whatsapp',
@@ -626,6 +640,7 @@ class WhatsAppFlowTests(TestCase):
         self.assertEqual(conversations.first().flow_state, 'waiting_question')
 
         handle_message('573001112241', 'Quiero un asesor')
+        handle_message('573001112241', '1234567890')
         ticket_responses = handle_message('573001112241', 'Necesito una nueva revisión')
         new_case = _manager(CaseConversation).get(
             channel__code='whatsapp',
@@ -642,6 +657,7 @@ class WhatsAppFlowTests(TestCase):
     def test_remote_open_case_forwards_message_without_bot_reply(self):
         handle_message('573001112248', 'Hola')
         handle_message('573001112248', 'Quiero un asesor')
+        handle_message('573001112248', '1234567890')
         handle_message('573001112248', 'Necesito revisar mi solicitud')
         conversation = _manager(ChatConversation).get(
             channel='whatsapp',
@@ -676,6 +692,7 @@ class WhatsAppFlowTests(TestCase):
     def test_open_advisor_case_forwards_every_message_without_bot_reply(self):
         handle_message('573001112242', 'Hola')
         handle_message('573001112242', 'Quiero un asesor')
+        handle_message('573001112242', '1234567890')
         handle_message('573001112242', 'Necesito revisar mi solicitud')
 
         first_response = handle_message(
@@ -1114,7 +1131,7 @@ class WhatsAppInteractiveChoiceTests(TestCase):
         self.assertIn('finalizado', send_text.call_args.args[1])
 
     @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
-    def test_list_reply_requests_an_advisor(self, send_text):
+    def test_list_reply_requests_advisor_document(self, send_text):
         sender = '573001112261'
         conversation = self._conversation(
             sender,
@@ -1132,11 +1149,11 @@ class WhatsAppInteractiveChoiceTests(TestCase):
         process_webhook(payload)
 
         conversation.refresh_from_db()
-        self.assertEqual(conversation.flow_state, 'waiting_advisor_question')
-        self.assertIn('asesor', send_text.call_args.args[1])
+        self.assertEqual(conversation.flow_state, 'waiting_advisor_document')
+        self.assertIn('documento de identidad', send_text.call_args.args[1])
 
     @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
-    def test_low_confidence_button_requests_message_and_document(self, send_text):
+    def test_low_confidence_button_requests_document(self, send_text):
         sender = '573001112267'
         conversation = self._conversation(
             sender,
@@ -1154,7 +1171,7 @@ class WhatsAppInteractiveChoiceTests(TestCase):
         process_webhook(payload)
 
         conversation.refresh_from_db()
-        self.assertEqual(conversation.flow_state, 'waiting_advisor_question')
+        self.assertEqual(conversation.flow_state, 'waiting_advisor_document')
         self.assertIn('documento de identidad', send_text.call_args.args[1])
         self.assertIsNone(conversation.case_conversation)
 
