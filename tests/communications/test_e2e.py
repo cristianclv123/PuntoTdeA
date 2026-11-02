@@ -67,7 +67,10 @@ class CommunicationsWebhookE2ETests(TestCase):
         )
         self.assertEqual(res.status_code, 200)
         handle.assert_called_once_with(
-            "573001112233", "Hola", external_message_id="wamid.e2e.in"
+            "573001112233",
+            "Hola",
+            external_message_id="wamid.e2e.in",
+            interactive_id="",
         )
         send_text.assert_called_once_with("573001112233", "Hola")
         self.assertTrue(

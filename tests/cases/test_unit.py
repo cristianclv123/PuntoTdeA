@@ -60,7 +60,7 @@ class CasesUnitTests(TestCase):
         claim_conversation(conv.id, self.owner)
         body = claim_greeting_body(self.owner)
         send.assert_called_once_with("573001000000", body)
-        self.assertIn("Ana López", body)
+        self.assertIn("Hola, soy Ana", body)
 
     def test_claim_not_found(self):
         with self.assertRaises(ClaimError) as ctx:

@@ -35,7 +35,7 @@ configuración en Meta, ver
 | Módulo | Lo que recibe de la integración |
 | --- | --- |
 | Campañas | Envío de plantillas aprobadas (`MetaAdapter`), `provider_message_id` guardado y estados de entrega (`sent`/`delivered`/`read`/`failed`) aplicados automáticamente vía webhook. |
-| Bot | Mensajes de texto entrantes ya filtrados y des-duplicados, entregados a `handle_message(sender, text)`; respuestas enviadas con `send_text`. |
+| Bot | Mensajes de texto e interactivos entrantes ya filtrados y des-duplicados, entregados a `handle_message(sender, text, external_message_id, interactive_id)`; respuestas enviadas con `send_replies`. |
 | Plantillas / Segmentos | El envío depende de que sus registros cumplan ciertas condiciones (plantilla `approved`, parámetros completos, `opt_in` respetado). |
 | Despliegue | Variables en `.env`, asistente de configuración, comando de diagnóstico y páginas de consola. |
 
@@ -45,7 +45,7 @@ configuración en Meta, ver
 
 | Archivo | Qué hace | Quién lo usa |
 | --- | --- | --- |
-| `communications/adapters/meta_adapter.py` | Cliente de Graph API: `send_text_message()` y `MetaAdapter.send_template_message()`. | Bot (`send_text`) y campañas (`send_campaign`). |
+| `communications/adapters/meta_adapter.py` | Cliente de Graph API: `send_text_message()`, `send_interactive_buttons()`, `send_interactive_list()` y `MetaAdapter.send_template_message()`. | Bot (`send_replies`) y campañas (`send_campaign`). |
 | `communications/adapters/base.py` | Contratos `ChannelAdapter` y `SendResult`. | La capa de envío. |
 | `communications/webhooks/meta_webhook.py` | Webhook único: firma, idempotencia, ruteo entrantes/estados. | Meta (lo llama desde afuera). |
 | `communications/services/campaign_service.py` | `send_campaign()`, pausa/reanuda/cancela. | Módulo de campañas. |
@@ -55,7 +55,7 @@ configuración en Meta, ver
 | `communications/meta_console_views.py` | Páginas Prueba de integración y Configuración. | Operación / pruebas manuales. |
 | `communications/management/commands/` | `check_meta_whatsapp`, `seed_demo_whatsapp`, `cleanup_whatsapp_events`. | Diagnóstico, datos demo, retención. |
 | `configurar_meta.ps1` / `limpiar_retencion.ps1` | Asistente de configuración y limpieza de retención. | Despliegue. |
-| `knowledge/chatbot/whatsapp.py` | Seam del bot: `handle_message()` y `send_text()`. | Módulo del bot. |
+| `knowledge/chatbot/whatsapp.py` | Seam del bot: `handle_message()` y `send_replies()`. | Módulo del bot. |
 
 ---
 
@@ -231,13 +231,18 @@ no deshace ningún estado ya aplicado al destinatario.
 ```python
 from knowledge.chatbot import whatsapp as chatbot_whatsapp
 
-replies = chatbot_whatsapp.handle_message(sender, text)   # -> list[str]
+replies = chatbot_whatsapp.handle_message(
+    sender,
+    text,
+    external_message_id=wamid,
+    interactive_id="",  # id del botón/fila si el mensaje es interactivo
+)   # -> list[str | dict]
 ```
 
 Eso es todo el contrato. El webhook ya extrajo `sender` (el `from` de Meta,
-solo dígitos) y `text`, ya filtró los mensajes no textuales, y envía cada
-string del resultado por `send_text`. El módulo del bot **nunca ve** el
-payload, la firma ni la capa HTTP.
+solo dígitos), el `text`/título y el `id` de los mensajes interactivos, y envía
+cada respuesta con `send_replies` (texto, imagen o botones/lista). El módulo del
+bot **nunca ve** el payload, la firma ni la capa HTTP.
 
 ### 5.2 Identidad e idempotencia
 
@@ -250,17 +255,26 @@ payload, la firma ni la capa HTTP.
 ### 5.3 Máquina de estados (resumen)
 
 `flow_state` de la conversación: `waiting_question` → `waiting_confirmation`
-→ `help_options` → `waiting_advisor_question`. En `ended`/`pending` responde
-«ya cerrado». Con estado desconocido, reinicia y envía el texto como pregunta.
+→ `help_options` → `waiting_advisor_document` → `waiting_advisor_question`.
+También existe `waiting_low_confidence_choice` (asesor vs. nueva pregunta); al
+elegir asesor pasa por `waiting_advisor_document` y `waiting_advisor_question`.
+En `ended`/`pending` responde «ya cerrado». Con estado desconocido, reinicia y
+envía el texto como pregunta.
+
+Las decisiones usan botones de WhatsApp (`chat_more`, `chat_advisor`,
+`chat_finish`, `lowconf_advisor`, `lowconf_question`, `help_question`,
+`help_advisor`). El webhook entrega el `id`; si el usuario responde por texto,
+se aceptan los títulos y las palabras clave. Una selección de otro estado no
+avanza el flujo.
 
 ### 5.4 Dos comportamientos que parecen bugs
 
 1. **El primer mensaje se descarta.** En una conversación nueva el bot
    devuelve el saludo y no mira el texto: el primer turno tiene que ser un
    saludo, la pregunta se procesa del segundo en adelante.
-2. **En `waiting_confirmation` solo sirve sí/no.** Cualquier otra respuesta
-   re-pregunta («Respóndeme sí o no…») y **ese mensaje no se guarda** en el
-   historial.
+2. **En `waiting_confirmation` el texto libre re-pregunta.** Si no es una
+   opción válida (sí/no, otra consulta, asesor o finalizar), el bot repite la
+   pregunta con botones y **ese mensaje no se guarda** en el historial.
 
 ### 5.5 Probar el flujo completo
 
@@ -335,8 +349,9 @@ Recordá `docker compose up -d --force-recreate web` tras tocar `.env`.
 - No crear un segundo webhook ni una ruta paralela. Hay uno solo.
 - No re-validar `X-Hub-Signature-256`: ya se valida y es obligatoria.
 - No llamar a Graph API directamente: pasar por `MetaAdapter` o
-  `chatbot_whatsapp.send_text`. Una llamada directa se salta
-  `provider_message_id` y los estados de entrega dejan de funcionar.
+  `chatbot_whatsapp.send_replies` (o `send_text` si es solo texto). Una llamada
+  directa se salta `provider_message_id` y los estados de entrega dejan de
+  funcionar.
 - No escribir `provider_message_id` a mano.
 - `sent` solo significa que Meta aceptó el mensaje; la entrega la confirman los
   estados (`delivered`/`read`), y el `read` puede no llegar nunca.

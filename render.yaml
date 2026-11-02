@@ -18,9 +18,9 @@ services:
     dockerContext: .
     region: oregon
     plan: free
-    # Render despliega esta rama: `dev`, que es la rama de integracion. Los
-    # administradores del repo pueden hacer push directo a `dev`; para el resto
-    # del equipo se recomienda PR.
+    # Render despliega esta rama: `feature/JCFS/ChatbotFlujoInactivoDesciones`,
+    # para validar el flujo de inactividad y decisiones antes de integrarlo a
+    # `dev`. Cuando este validado, volver a `dev` (y actualizar el panel).
     #
     # OJO: hay DOS ramas distintas en juego y cambiar solo una no hace nada.
     #   1. Esta linea (`branch:`) -> de que rama despliega el SERVICIO.
@@ -28,7 +28,7 @@ services:
     #      Render este render.yaml.
     # Para pasar a produccion hay que tocar las dos: esta linea a `main` y la
     # del panel a `main`.
-    branch: dev
+    branch: feature/JCFS/ChatbotFlujoInactivoDesciones
     # El deploy solo arranca si los checks de GitHub Actions estan en verde.
     autoDeployTrigger: checksPass
     # SIN `dockerCommand` a proposito. Render ejecuta ese valor como una sola
@@ -65,6 +65,14 @@ services:
         value: "0"
       # El contenedor no tiene disco persistente (ver nota de media abajo).
       - key: MEDIA_UPLOADS_ENABLED
+        value: "true"
+      # Schedulers dentro del propio proceso web, igual que en Docker local.
+      # En plan free no hay workers ni Cron Jobs. Ojo: el contenedor se duerme
+      # tras 15 min sin trafico, asi que los ciclos pueden retrasarse si no hay
+      # webhooks/visitas que lo despierten.
+      - key: ENABLE_INACTIVITY_SCHEDULER
+        value: "true"
+      - key: ENABLE_CAMPAIGN_SCHEDULER
         value: "true"
 
       # --- Base de datos y canal layers ---
