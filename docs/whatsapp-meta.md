@@ -147,10 +147,10 @@ deshabilitados (Meta no las deja editar ni eliminar: `2388094`).
 
 ## Chatbot
 
-Cada mensaje de texto entrante del número configurado se entrega al flujo
-existente de `knowledge.chatbot`; su respuesta se envía por Graph API. Los
-mensajes no textuales se aceptan pero se ignoran hasta que el equipo del bot
-defina su tratamiento.
+Cada mensaje de texto o interactivo (`button_reply`/`list_reply`) del número
+configurado se entrega al flujo existente de `knowledge.chatbot`; su respuesta se
+envía por Graph API. Imágenes, audios, documentos y otros tipos interactivos se
+aceptan pero se ignoran hasta que el equipo del bot defina su tratamiento.
 
 Los identificadores de los mensajes entrantes y de los cambios de estado se
 guardan en `WhatsAppWebhookEvent`. Esto evita responder dos veces cuando Meta
@@ -236,15 +236,16 @@ lógica se ejecuta y se guarda, pero la respuesta no te llega al celular.
 Dos detalles del entorno que confunden al probar:
 
 - La respuesta a la pregunta sale de la base de conocimiento. Si está vacía el
-  bot informa que no encontró una respuesta confiable y pregunta si deseas
-  comunicarte con un asesor. Responde **sí** para crear un ticket con la pregunta
-  original o **no** para escribir una pregunta nueva. No se crea el ticket antes
-  de confirmar. Carga contenido con
+  bot informa que no encontró una respuesta confiable y ofrece dos botones:
+  **Sí, asesor** (crea el ticket con la pregunta original) o **No, otra
+  pregunta**. Responde también por texto si lo prefieres. No se crea el ticket
+  antes de confirmar. Carga contenido con
   `docker compose exec -T web python manage.py seed_knowledge`.
 - El cierre por escalado cambia según el horario de atención configurado: fuera
   de horario el bot dice que la solicitud queda pendiente.
-- Cada respuesta del bot informa que el chat se cerrará automáticamente después
-  de 5 minutos si no recibe una nueva respuesta del usuario.
+- Las preguntas de decisión usan botones de WhatsApp (máximo 3) y aceptan texto
+  como respaldo. El aviso de inactividad se envía **una sola vez** a los 5
+  minutos; si el usuario no responde, el chat se cierra a los 7 minutos.
 
 ### Resumen en JSON
 

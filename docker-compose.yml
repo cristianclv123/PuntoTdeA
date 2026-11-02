@@ -7,6 +7,10 @@ x-app-environment: &app-environment
   - DB_HOST=db
   - DB_PORT=5432
   - REDIS_URL=redis://redis:6379/0
+  # Los schedulers corren SIEMPRE dentro del proceso web, igual en local y en
+  # Render. No hay servicios aparte.
+  - ENABLE_INACTIVITY_SCHEDULER=true
+  - ENABLE_CAMPAIGN_SCHEDULER=true
   - WIDGET_ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
   # Credenciales de Meta WhatsApp Cloud API: se definen en .env, nunca aquí.
   - META_VERIFY_TOKEN=${META_VERIFY_TOKEN:-}
@@ -56,12 +60,5 @@ services:
     depends_on:
       - db
       - redis
-  scheduler:
-    <<: *django-app
-    command: python manage.py run_scheduled_campaigns --interval 30
-    depends_on:
-      - db
-    restart: unless-stopped
-
 volumes:
   postgres_data:

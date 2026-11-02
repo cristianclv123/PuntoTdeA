@@ -69,7 +69,7 @@ communications/
 
 - GET: verificación `hub.mode` + `META_VERIFY_TOKEN`.
 - POST: firma `X-Hub-Signature-256` con `META_APP_SECRET`.
-- Textos inbound → `chatbot_whatsapp.handle_message` + `send_text` por cada reply.
+- Textos e interactivos inbound (`button_reply`/`list_reply`) → `chatbot_whatsapp.handle_message` + `send_replies` por cada reply.
 - Status (sent/delivered/read/failed) → actualiza `BroadcastRecipient` por wamid.
 
 Health: `GET /api/whatsapp/health/`, parte de la consola protegida: requiere sesión staff y permiso explícito de Communications. Sin sesión responde 302 al login. Render acepta respuestas 2xx y 3xx para su health check (ver `docs/despliegue-render.md`), por eso la ruta actual funciona sin hacer público el estado de la integración.
@@ -91,6 +91,13 @@ Por destinatario `pending`:
 Plantilla: `status=approved`, `meta_template_name` real en Meta, idioma, params `{{n}}`, header media si aplica.
 
 UI: listado, nueva, detalle, plantillas, audiencias, interacciones, test-send.
+
+### Campañas programadas
+
+Las campañas en estado `scheduled` se envían solas con el scheduler incrustado
+en el proceso web (`ENABLE_CAMPAIGN_SCHEDULER=true`), cada 30 s. El comando
+`run_scheduled_campaigns --interval 30` sigue disponible para
+systemd/supervisor/cron.
 
 ### Personalización desde Excel
 

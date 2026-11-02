@@ -140,7 +140,7 @@ class ClaimConversationUnitTests(AssignmentOutboundFixtures):
             direction=Message.Direction.OUTBOUND,
         )
         self.assertEqual(greeting.body, expected)
-        self.assertIn("Ana Dueña", expected)
+        self.assertIn("Hola, soy Ana", expected)
         self.assertIn("del equipo de soporte al cliente de Punto TdeA", expected)
         self.assertIn("hablando con alguien del equipo", expected)
 

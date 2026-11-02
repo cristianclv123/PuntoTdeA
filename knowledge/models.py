@@ -195,6 +195,13 @@ class ChatConversation(BaseKnowledgeModel):
     escalation_reason = models.TextField(blank=True)
     advisor_question = models.TextField(blank=True)
     escalated_at = models.DateTimeField(null=True, blank=True)
+    # Control de inactividad 5 + 2 minutos. Ver knowledge/chatbot/inactivity.py.
+    last_user_activity_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='Última actividad del usuario'
+    )
+    inactivity_warned_at = models.DateTimeField(
+        null=True, blank=True, verbose_name='Aviso de inactividad enviado'
+    )
 
     class Meta:
         ordering = ['-created_at']

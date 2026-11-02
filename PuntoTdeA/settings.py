@@ -271,6 +271,12 @@ ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "true" if DEBUG else "false",
 ).lower() in {"1", "true", "yes"}
 
+# En Render free no hay workers ni Cron Jobs. Con estos flags los schedulers
+# corren dentro del propio proceso web (Daphne) como hilos demonio, igual en
+# local y en Render.
+ENABLE_INACTIVITY_SCHEDULER = _env_flag("ENABLE_INACTIVITY_SCHEDULER", "false")
+ENABLE_CAMPAIGN_SCHEDULER = _env_flag("ENABLE_CAMPAIGN_SCHEDULER", "false")
+
 # Token compartido con el BFF para la API interna (/campanas/api/).
 # La UI de campanas entra con la sesion del navegador; este token cubre a los
 # consumidores de servicio (BFF) cuando DEBUG=False.

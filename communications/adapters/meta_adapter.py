@@ -113,6 +113,208 @@ def send_text_message(to: str, text: str, *, preview_url: bool = False) -> SendR
     )
 
 
+# Límites oficiales de WhatsApp Cloud API para mensajes interactivos.
+MAX_INTERACTIVE_BUTTONS = 3
+MAX_BUTTON_TITLE_LENGTH = 20
+MAX_LIST_ROWS = 10
+MAX_ROW_TITLE_LENGTH = 24
+MAX_ROW_DESCRIPTION_LENGTH = 72
+MAX_SECTION_TITLE_LENGTH = 24
+MAX_LIST_BUTTON_LENGTH = 20
+MAX_INTERACTIVE_BODY_LENGTH = 1024
+MAX_INTERACTIVE_HEADER_LENGTH = 60
+MAX_INTERACTIVE_FOOTER_LENGTH = 60
+
+
+def _interactive_envelope(
+    normalized_phone: str,
+    body_text: str,
+    *,
+    header_text: str = "",
+    footer_text: str = "",
+) -> tuple[dict[str, Any], str]:
+    """Arma el sobre común de los mensajes interactivos y valida longitudes."""
+    body = (body_text or "").strip()
+    if not body:
+        return {}, "El cuerpo del mensaje interactivo está vacío."
+    if len(body) > MAX_INTERACTIVE_BODY_LENGTH:
+        return {}, "El cuerpo del mensaje interactivo supera los 1024 caracteres."
+
+    interactive: dict[str, Any] = {"body": {"text": body}}
+    header = (header_text or "").strip()
+    if header:
+        if len(header) > MAX_INTERACTIVE_HEADER_LENGTH:
+            return {}, "El encabezado supera los 60 caracteres."
+        interactive["header"] = {"type": "text", "text": header}
+    footer = (footer_text or "").strip()
+    if footer:
+        if len(footer) > MAX_INTERACTIVE_FOOTER_LENGTH:
+            return {}, "El pie supera los 60 caracteres."
+        interactive["footer"] = {"text": footer}
+
+    return {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": normalized_phone,
+        "type": "interactive",
+        "interactive": interactive,
+    }, ""
+
+
+def send_interactive_buttons(
+    to: str,
+    body_text: str,
+    buttons: list[dict[str, str]],
+    *,
+    header_text: str = "",
+    footer_text: str = "",
+) -> SendResult:
+    """Envía hasta 3 botones de respuesta rápida (``reply buttons``).
+
+    Cada botón es ``{"id": "...", "title": "..."}``. El ``id`` es el valor
+    estable que llega al webhook; el ``title`` es solo lo que ve el usuario.
+    """
+    normalized_phone = _normalize_phone(to)
+    if not normalized_phone:
+        return SendResult(success=False, error="Número de teléfono vacío.")
+    if not 1 <= len(buttons) <= MAX_INTERACTIVE_BUTTONS:
+        return SendResult(
+            success=False,
+            error="WhatsApp admite entre 1 y 3 botones de respuesta.",
+        )
+
+    payload, error = _interactive_envelope(
+        normalized_phone,
+        body_text,
+        header_text=header_text,
+        footer_text=footer_text,
+    )
+    if error:
+        return SendResult(success=False, error=error)
+
+    action_buttons = []
+    seen_ids = set()
+    for button in buttons:
+        button_id = (button.get("id") or "").strip()
+        title = (button.get("title") or "").strip()
+        if not button_id or not title:
+            return SendResult(success=False, error="Cada botón necesita id y título.")
+        if button_id in seen_ids:
+            return SendResult(success=False, error="Los identificadores de botón deben ser únicos.")
+        if len(title) > MAX_BUTTON_TITLE_LENGTH:
+            return SendResult(
+                success=False,
+                error="El título de un botón supera los 20 caracteres.",
+            )
+        seen_ids.add(button_id)
+        action_buttons.append(
+            {"type": "reply", "reply": {"id": button_id, "title": title}}
+        )
+
+    payload["interactive"]["type"] = "button"
+    payload["interactive"]["action"] = {"buttons": action_buttons}
+    return _post_message(payload)
+
+
+def send_interactive_list(
+    to: str,
+    body_text: str,
+    button_label: str,
+    sections: list[dict[str, Any]],
+    *,
+    header_text: str = "",
+    footer_text: str = "",
+) -> SendResult:
+    """Envía un mensaje de lista (``list message``) con hasta 10 opciones.
+
+    ``sections`` es ``[{"title": "...", "rows": [{"id", "title",
+    "description"}]}]``. El ``id`` de cada fila es el valor estable que recibe
+    el webhook.
+    """
+    normalized_phone = _normalize_phone(to)
+    if not normalized_phone:
+        return SendResult(success=False, error="Número de teléfono vacío.")
+    label = (button_label or "").strip()
+    if not label or len(label) > MAX_LIST_BUTTON_LENGTH:
+        return SendResult(
+            success=False,
+            error="La etiqueta del botón de la lista debe tener entre 1 y 20 caracteres.",
+        )
+
+    payload, error = _interactive_envelope(
+        normalized_phone,
+        body_text,
+        header_text=header_text,
+        footer_text=footer_text,
+    )
+    if error:
+        return SendResult(success=False, error=error)
+
+    total_rows = 0
+    seen_ids = set()
+    action_sections = []
+    for section in sections:
+        rows = []
+        section_title = (section.get("title") or "").strip()
+        if len(section_title) > MAX_SECTION_TITLE_LENGTH:
+            return SendResult(
+                success=False,
+                error="El título de una sección supera los 24 caracteres.",
+            )
+        for row in section.get("rows") or []:
+            row_id = (row.get("id") or "").strip()
+            title = (row.get("title") or "").strip()
+            description = (row.get("description") or "").strip()
+            if not row_id or not title:
+                return SendResult(
+                    success=False,
+                    error="Cada fila de la lista necesita id y título.",
+                )
+            if row_id in seen_ids:
+                return SendResult(
+                    success=False,
+                    error="Los identificadores de fila deben ser únicos.",
+                )
+            if len(title) > MAX_ROW_TITLE_LENGTH:
+                return SendResult(
+                    success=False,
+                    error="El título de una fila supera los 24 caracteres.",
+                )
+            if len(description) > MAX_ROW_DESCRIPTION_LENGTH:
+                return SendResult(
+                    success=False,
+                    error="La descripción de una fila supera los 72 caracteres.",
+                )
+            seen_ids.add(row_id)
+            total_rows += 1
+            row_payload = {"id": row_id, "title": title}
+            if description:
+                row_payload["description"] = description
+            rows.append(row_payload)
+        if not rows:
+            return SendResult(
+                success=False,
+                error="Cada sección de la lista debe tener al menos una fila.",
+            )
+        section_payload: dict[str, Any] = {"rows": rows}
+        if section_title:
+            section_payload["title"] = section_title
+        action_sections.append(section_payload)
+
+    if not 1 <= total_rows <= MAX_LIST_ROWS:
+        return SendResult(
+            success=False,
+            error="WhatsApp admite entre 1 y 10 opciones en una lista.",
+        )
+
+    payload["interactive"]["type"] = "list"
+    payload["interactive"]["action"] = {
+        "button": label,
+        "sections": action_sections,
+    }
+    return _post_message(payload)
+
+
 def send_image_message(
     to: str,
     image_data: bytes,

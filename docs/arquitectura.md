@@ -58,7 +58,7 @@ Meta Cloud API
 POST /api/whatsapp/webhook/     (communications.webhooks.meta_webhook)
         │
         ├─ estados de entrega ──► BroadcastRecipient (campañas)
-        └─ texto inbound ──────► knowledge.chatbot.whatsapp.handle_message
+        └─ inbound (texto/interactivo) ─► knowledge.chatbot.whatsapp.handle_message
                                       │
                                       ├─ RAG / FAQ
                                       └─ si escala ──► cases.ingest_inbound_message

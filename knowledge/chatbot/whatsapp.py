@@ -5,16 +5,19 @@ import hmac
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from django.conf import settings
+from django.db.models import F
 from django.utils import timezone
 
 from communications.adapters.meta_adapter import (
     send_image_message,
-    send_uploaded_image_message,
+    send_interactive_buttons,
+    send_interactive_list,
     send_text_message,
+    send_uploaded_image_message,
     upload_whatsapp_media,
 )
 from communications.models import Contact
@@ -22,17 +25,45 @@ from cases.models import Conversation as CaseConversation
 from cases.services.ingestion import InboundPayload, ingest_inbound_message
 from ..models import ChatConversation, FAQ
 from .case_status import CaseStatusAPIError, get_case_status
-from .inactivity import INACTIVITY_TIMEOUT, close_if_inactive
+from .inactivity import (
+    INACTIVITY_CLOSE_TIMEOUT,
+    INACTIVITY_WARNING_TIMEOUT,
+    backfill_last_user_activity,
+    close_expired_conversation,
+    close_if_inactive,
+    warn_if_inactive,
+)
 from .schedule import get_business_schedule
 from .workflow import FOLLOW_UP_MESSAGE, ChatbotWorkflow
 
 
 logger = logging.getLogger(__name__)
 
-INACTIVITY_NOTICE = (
-    'Si no recibimos respuesta, el chat se cerrará automáticamente '
-    'después de 5 minutos de inactividad.'
-)
+# Identificadores estables de las opciones interactivas. El webhook recibe el
+# ``id`` y no depende del texto visible (que puede cambiar sin romper el flujo).
+CHAT_MORE = 'chat_more'
+CHAT_ADVISOR = 'chat_advisor'
+CHAT_FINISH = 'chat_finish'
+LOW_CONFIDENCE_ADVISOR = 'lowconf_advisor'
+LOW_CONFIDENCE_QUESTION = 'lowconf_question'
+HELP_QUESTION = 'help_question'
+HELP_ADVISOR = 'help_advisor'
+
+CONFIRMATION_BUTTONS = [
+    {'id': CHAT_MORE, 'title': 'Otra consulta'},
+    {'id': CHAT_ADVISOR, 'title': 'Hablar con asesor'},
+    {'id': CHAT_FINISH, 'title': 'Finalizar'},
+]
+
+LOW_CONFIDENCE_BUTTONS = [
+    {'id': LOW_CONFIDENCE_ADVISOR, 'title': 'Sí, asesor'},
+    {'id': LOW_CONFIDENCE_QUESTION, 'title': 'No, otra pregunta'},
+]
+
+HELP_BUTTONS = [
+    {'id': HELP_QUESTION, 'title': 'Escribir pregunta'},
+    {'id': HELP_ADVISOR, 'title': 'Hablar con asesor'},
+]
 
 # Patrón para detectar URLs en un mensaje de texto. Cuando una respuesta
 # contiene una URL, se envía como mensaje aparte para que WhatsApp genere
@@ -61,16 +92,41 @@ def validate_signature(raw_body: bytes, signature_header: str | None) -> bool:
 
 
 def _messages(payload: dict[str, Any]):
+    """Itera mensajes entrantes textuales e interactivos.
+
+    Devuelve ``(sender, text, external_message_id, interactive_id)``. En los
+    mensajes interactivos ``text`` es el título visible (para compatibilidad
+    con las respuestas de texto) e ``interactive_id`` es el identificador
+    estable del botón o de la fila de la lista.
+    """
     for entry in payload.get('entry', []):
         for change in entry.get('changes', []):
             value = change.get('value') or {}
             for message in value.get('messages') or []:
-                if message.get('type') != 'text':
+                message_type = message.get('type')
+                sender = (message.get('from') or '').strip()
+                external_message_id = (message.get('id') or '').strip()
+                if not sender:
                     continue
-                text = ((message.get('text') or {}).get('body') or '').strip()
-                sender = message.get('from', '').strip()
-                if text and sender:
-                    yield sender, text, (message.get('id') or '').strip()
+
+                if message_type == 'text':
+                    text = ((message.get('text') or {}).get('body') or '').strip()
+                    if text:
+                        yield sender, text, external_message_id, ''
+                    continue
+
+                if message_type != 'interactive':
+                    continue
+
+                interactive = message.get('interactive') or {}
+                kind = interactive.get('type')
+                if kind not in {'button_reply', 'list_reply'}:
+                    continue
+                data = interactive.get(kind) or {}
+                choice_id = (data.get('id') or '').strip()
+                title = (data.get('title') or '').strip()
+                if choice_id or title:
+                    yield sender, title, external_message_id, choice_id
 
 
 def _is_yes(text: str) -> bool:
@@ -81,9 +137,58 @@ def _is_no(text: str) -> bool:
     return text.lower().strip() in {'no', 'n'}
 
 
+def _is_finish(text: str) -> bool:
+    return text.lower().strip() in {
+        'no',
+        'n',
+        'finalizar',
+        'terminar',
+        'finalizar conversación',
+        'finalizar conversacion',
+    }
+
+
+def _is_more_question(text: str) -> bool:
+    return text.lower().strip() in {
+        'si',
+        'sí',
+        's',
+        'yes',
+        'otra consulta',
+        'otra pregunta',
+        'no, otra pregunta',
+        'continuar',
+        'escribir pregunta',
+    }
+
+
 def _requests_advisor(text: str) -> bool:
     normalized = text.lower()
     return any(word in normalized for word in ('asesor', 'humano', 'persona'))
+
+
+def _choice_alias(state: str, text: str) -> str:
+    """Traduce el número de la opción cuando el envío interactivo falla.
+
+    El respaldo de botones/lista envía las opciones numeradas. Si el usuario
+    responde con ese número, se reutiliza la misma acción del botón.
+    """
+    aliases = {
+        'waiting_confirmation': {
+            '1': CHAT_MORE,
+            '2': CHAT_ADVISOR,
+            '3': CHAT_FINISH,
+        },
+        'waiting_low_confidence_choice': {
+            '1': LOW_CONFIDENCE_ADVISOR,
+            '2': LOW_CONFIDENCE_QUESTION,
+        },
+        'help_options': {
+            '1': HELP_QUESTION,
+            '2': HELP_ADVISOR,
+        },
+    }
+    return aliases.get(state, {}).get((text or '').strip(), '')
 
 
 def _find_contact(sender: str) -> Contact | None:
@@ -210,8 +315,7 @@ def _submit_question(
     if result.get('valid') and result.get('needs_human_attention'):
         follow_up = (
             'No encontré una respuesta confiable a tu pregunta. '
-            '¿Deseas comunicarte con un asesor? Responde sí para crear un ticket '
-            'o no para escribir una nueva pregunta.'
+            '¿Deseas comunicarte con un asesor?'
         )
         conversation.flow_state = 'waiting_low_confidence_choice'
         conversation.messages[-1]['content'] = follow_up
@@ -220,7 +324,7 @@ def _submit_question(
         conversation.messages[-1].pop('image_source_id', None)
         conversation.messages[-1].pop('source_question', None)
         conversation.save(update_fields=['messages', 'flow_state', 'updated_at'])
-        return [{'text': follow_up}]
+        return [{'text': follow_up, 'buttons': LOW_CONFIDENCE_BUTTONS}]
     image_faq_id = (
         result.get('image_faq_id') or result.get('image_source_id')
         if result.get('valid')
@@ -232,7 +336,10 @@ def _submit_question(
             replies.append({'text': result['answer_message'], 'image_faq_id': image_faq_id})
         else:
             replies.append({'text': result['answer_message']})
-        replies.append({'text': result['follow_up_message']})
+        replies.append({
+            'text': result['follow_up_message'],
+            'buttons': CONFIRMATION_BUTTONS,
+        })
         return replies
     return [{'text': result['message']}]
 
@@ -263,11 +370,98 @@ def _case_ticket_status(conversation: ChatConversation) -> str | None:
     return status
 
 
+def _append_bot_prompt(
+    conversation: ChatConversation,
+    message: str,
+    state: str | None = None,
+) -> None:
+    conversation.messages.append({
+        'author': 'bot',
+        'content': message,
+        'created_at': timezone.now().isoformat(),
+    })
+    update_fields = ['messages', 'updated_at']
+    if state is not None:
+        conversation.flow_state = state
+        update_fields.append('flow_state')
+    conversation.save(update_fields=update_fields)
+
+
+def _handle_interactive_choice(
+    conversation: ChatConversation,
+    workflow: ChatbotWorkflow,
+    sender: str,
+    choice_id: str,
+) -> list[str | dict[str, Any]] | None:
+    """Ejecuta la acción del botón o fila de lista seleccionada.
+
+    Devuelve ``None`` cuando el ``id`` no pertenece al estado actual; en ese
+    caso el llamador responde con un recordatorio en vez de interpretar el
+    título como una pregunta nueva.
+    """
+    state = conversation.flow_state
+
+    if state == 'waiting_confirmation':
+        if choice_id == CHAT_FINISH:
+            return [workflow.confirm_more_help(False)['message']]
+        if choice_id == CHAT_ADVISOR:
+            return [workflow.escalate(
+                'El usuario solicitó atención humana después de recibir una respuesta.'
+            )['message']]
+        if choice_id == CHAT_MORE:
+            message = workflow.confirm_more_help(True)['message']
+            return [{'text': message, 'buttons': HELP_BUTTONS}]
+
+    elif state == 'waiting_low_confidence_choice':
+        if choice_id == LOW_CONFIDENCE_ADVISOR:
+            return [_create_low_confidence_ticket(conversation, sender)]
+        if choice_id == LOW_CONFIDENCE_QUESTION:
+            message = (
+                'De acuerdo. Escribe tu nueva pregunta y la buscaré en la base '
+                'de conocimiento.'
+            )
+            _append_bot_prompt(conversation, message, 'waiting_question')
+            return [message]
+
+    elif state == 'help_options':
+        if choice_id == HELP_ADVISOR:
+            return [workflow.escalate(
+                'El usuario solicitó atención humana después de recibir una respuesta.'
+            )['message']]
+        if choice_id == HELP_QUESTION:
+            message = 'Escribe tu pregunta y la buscaré en la base de conocimiento.'
+            _append_bot_prompt(conversation, message)
+            return [message]
+
+    return None
+
+
+def _stale_interactive_reply(conversation: ChatConversation) -> list[str | dict[str, Any]]:
+    """Respuesta para una selección que ya no corresponde al estado actual."""
+    state = conversation.flow_state
+    if state == 'waiting_confirmation':
+        return [{'text': FOLLOW_UP_MESSAGE, 'buttons': CONFIRMATION_BUTTONS}]
+    if state == 'waiting_low_confidence_choice':
+        return [{
+            'text': '¿Deseas comunicarte con un asesor?',
+            'buttons': LOW_CONFIDENCE_BUTTONS,
+        }]
+    if state == 'help_options':
+        return [{
+            'text': 'Puedes escribir tu pregunta o elegir una opción.',
+            'buttons': HELP_BUTTONS,
+        }]
+    if state == 'waiting_question':
+        return ['Escribe tu pregunta y la buscaré en la base de conocimiento.']
+    return ['Tu selección ya no está disponible. Escribe tu mensaje para continuar.']
+
+
 def handle_message(
     sender: str,
     text: str,
     external_message_id: str = '',
-) -> list[str]:
+    interactive_id: str = '',
+) -> list[str | dict[str, Any]]:
     contact = _find_contact(sender)
     conversations = _manager(ChatConversation).filter(
         channel='whatsapp',
@@ -279,7 +473,7 @@ def handle_message(
     if conversation is None:
         conversation = conversations.order_by('-updated_at', '-created_at').first()
     start_new_conversation = conversation is None
-    inactivity_result = None
+    expired_result = None
     ticket_status = _case_ticket_status(conversation) if conversation else None
 
     if conversation and ticket_status == CaseConversation.Status.CERRADO:
@@ -318,9 +512,20 @@ def handle_message(
         start_new_conversation = True
 
     if conversation and conversation.status == ChatConversation.STATUS_ACTIVE:
-        inactivity_result = close_if_inactive(conversation)
-        if inactivity_result is not None:
+        expired_result = close_expired_conversation(conversation)
+        if expired_result is not None:
             start_new_conversation = True
+        else:
+            # Cada mensaje entrante reinicia el ciclo y cancela un cierre que
+            # estuviera pendiente después del aviso de inactividad.
+            now = timezone.now()
+            conversation.last_user_activity_at = now
+            conversation.inactivity_warned_at = None
+            conversation.save(update_fields=[
+                'last_user_activity_at',
+                'inactivity_warned_at',
+                'updated_at',
+            ])
 
     if conversation and conversation.status == ChatConversation.STATUS_ENDED:
         start_new_conversation = True
@@ -331,6 +536,7 @@ def handle_message(
             external_user_id=sender,
             status=ChatConversation.STATUS_ACTIVE,
             contact=contact,
+            last_user_activity_at=timezone.now(),
         )
 
     if contact and not conversation.contact_id:
@@ -342,8 +548,8 @@ def handle_message(
     greeting = None
     if new_conversation:
         greeting = workflow.start()['message']
-        if inactivity_result is not None:
-            return [inactivity_result['message'], greeting]
+        if expired_result is not None:
+            return [expired_result['message'], greeting]
         return [greeting]
 
     if (
@@ -358,21 +564,39 @@ def handle_message(
         )
         return []
 
+    if interactive_id:
+        handled = _handle_interactive_choice(
+            conversation,
+            workflow,
+            sender,
+            interactive_id,
+        )
+        if handled is not None:
+            return handled
+        return _stale_interactive_reply(conversation)
+
+    alias = _choice_alias(conversation.flow_state, text)
+    if alias:
+        handled = _handle_interactive_choice(
+            conversation,
+            workflow,
+            sender,
+            alias,
+        )
+        if handled is not None:
+            return handled
+
     state = conversation.flow_state
     if state == 'waiting_question':
         if _requests_advisor(text):
             replies = [workflow.escalate('El usuario solicitó atención humana.')['message']]
         else:
             replies = _submit_question(conversation, workflow, text)
-        if new_conversation and greeting:
-            replies.insert(0, greeting)
-        if inactivity_result is not None:
-            replies.insert(0, inactivity_result['message'])
         return replies
     if state == 'waiting_low_confidence_choice':
         if _is_yes(text) or _requests_advisor(text):
             return [_create_low_confidence_ticket(conversation, sender)]
-        if _is_no(text):
+        if _is_no(text) or _is_more_question(text):
             message = 'De acuerdo. Escribe tu nueva pregunta y la buscaré en la base de conocimiento.'
             conversation.flow_state = 'waiting_question'
             conversation.messages.append({
@@ -386,14 +610,23 @@ def handle_message(
     if state == 'waiting_confirmation':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
-        if _is_yes(text):
-            return [workflow.confirm_more_help(True)['message']]
-        if _is_no(text):
+        if _is_more_question(text):
+            message = workflow.confirm_more_help(True)['message']
+            return [{'text': message, 'buttons': HELP_BUTTONS}]
+        if _is_finish(text):
             return [workflow.confirm_more_help(False)['message']]
-        return ['Responde sí si necesitas otra pregunta o un asesor, o no si ya quedó resuelta tu duda.']
+        return [{
+            'text': FOLLOW_UP_MESSAGE,
+            'buttons': CONFIRMATION_BUTTONS,
+        }]
     if state == 'help_options':
         if _requests_advisor(text):
             return [workflow.escalate('El usuario solicitó atención humana después de recibir una respuesta.')['message']]
+        if _is_more_question(text):
+            return [{
+                'text': 'Escribe tu pregunta y la buscaré en la base de conocimiento.',
+                'buttons': HELP_BUTTONS,
+            }]
         return _submit_question(conversation, workflow, text)
     if state == 'waiting_advisor_question':
         result = workflow.submit_advisor_question(text)
@@ -433,21 +666,80 @@ def _send_text_with_link_preview(recipient: str, text: str) -> None:
     mensaje de texto. Cuando está presente, WhatsApp intenta generar la preview
     (miniatura + título) de la primera URL que encuentre en el cuerpo, incluso
     si hay más texto alrededor.
-
-    Si el texto contiene una URL, se envía con ``preview_url=True`` en el
-    mismo mensaje de texto (con el aviso de inactividad anexado, que no
-    interfiere con la preview).
-
-    Si no contiene URL, se envía como texto normal.
     """
     text = (text or '').strip()
-    urls = _URL_PATTERN.findall(text)
-    if urls:
-        # La URL va en el cuerpo con preview_url para que se genere la miniatura.
-        send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}', preview_url=True)
+    if _URL_PATTERN.search(text):
+        send_text(recipient, text, preview_url=True)
         return
-    # Sin URLs: texto normal.
-    send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
+    send_text(recipient, text)
+
+
+def _buttons_as_text(text: str, buttons: list[dict[str, str]]) -> str:
+    """Respaldo legible si WhatsApp rechaza el mensaje interactivo."""
+    options = '\n'.join(
+        f'{index}. {button.get("title", "")}'
+        for index, button in enumerate(buttons, start=1)
+    )
+    return f'{text}\n\n{options}'
+
+
+def _list_as_text(
+    text: str,
+    button_label: str,
+    sections: list[dict[str, Any]],
+) -> str:
+    lines = [text, f'\n{button_label}:']
+    for section in sections:
+        title = (section.get('title') or '').strip()
+        if title:
+            lines.append(f'\n{title}')
+        for row in section.get('rows') or []:
+            lines.append(f'- {row.get("title", "")}')
+    return '\n'.join(lines)
+
+
+def _send_options(recipient: str, reply: dict[str, Any]) -> bool:
+    """Envía botones o lista y devuelve ``True`` si el mensaje era interactivo.
+
+    Si Meta rechaza el interactivo, cae a un texto con las mismas opciones para
+    no dejar al usuario sin respuesta.
+    """
+    text = reply.get('text', '')
+    buttons = reply.get('buttons') or []
+    list_payload = reply.get('list') or {}
+
+    if buttons:
+        result = send_interactive_buttons(recipient, text, buttons)
+        if not result.success:
+            logger.warning(
+                'No fue posible enviar botones a %s: %s. Se envía texto de respaldo.',
+                recipient,
+                result.error,
+            )
+            send_text(recipient, _buttons_as_text(text, buttons))
+        return True
+
+    if list_payload:
+        button_label = list_payload.get('button') or 'Ver opciones'
+        sections = list_payload.get('sections') or []
+        result = send_interactive_list(
+            recipient,
+            text,
+            button_label,
+            sections,
+            header_text=list_payload.get('header_text', ''),
+            footer_text=list_payload.get('footer_text', ''),
+        )
+        if not result.success:
+            logger.warning(
+                'No fue posible enviar la lista a %s: %s. Se envía texto de respaldo.',
+                recipient,
+                result.error,
+            )
+            send_text(recipient, _list_as_text(text, button_label, sections))
+        return True
+
+    return False
 
 
 def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
@@ -458,48 +750,47 @@ def _send_reply(recipient: str, reply: dict[str, Any]) -> None:
     """
     image_faq_id = reply.get('image_faq_id')
     text = reply.get('text', '')
+    is_interactive = bool(reply.get('buttons') or reply.get('list'))
     if image_faq_id:
         faq = _manager(FAQ).filter(pk=image_faq_id).first()
         if faq is None:
             logger.warning('FAQ %s no encontrada para enviar imagen.', image_faq_id)
-            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
-            return
-        image_bytes = faq.get_image_bytes()
-        if not image_bytes:
-            logger.warning('FAQ %s no tiene imagen en BD a pesar del flag.', image_faq_id)
-            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
-            return
-        upload_result = upload_whatsapp_media(
-            image_bytes,
-            filename=faq.image_name or 'imagen.jpg',
-            content_type=faq.image_content_type or 'image/jpeg',
-        )
-        if not upload_result.success:
-            logger.warning(
-                'No fue posible subir imagen de FAQ %s a Meta: %s',
-                image_faq_id,
-                upload_result.error,
-            )
-            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
-            return
-        caption = (text or '').strip()
-        image_result = send_uploaded_image_message(
-            recipient,
-            upload_result.provider_message_id,
-            caption=caption,
-        )
-        if not image_result.success:
-            logger.warning(
-                'No fue posible enviar imagen de FAQ %s a %s: %s',
-                image_faq_id,
-                recipient,
-                image_result.error,
-            )
-            send_text(recipient, f'{text}\n\n{INACTIVITY_NOTICE}')
-            return
-        # La imagen ya incluye el caption; el aviso de inactividad va aparte.
-        if INACTIVITY_NOTICE:
-            send_text(recipient, INACTIVITY_NOTICE)
+        else:
+            image_bytes = faq.get_image_bytes()
+            if not image_bytes:
+                logger.warning('FAQ %s no tiene imagen en BD a pesar del flag.', image_faq_id)
+            else:
+                upload_result = upload_whatsapp_media(
+                    image_bytes,
+                    filename=faq.image_name or 'imagen.jpg',
+                    content_type=faq.image_content_type or 'image/jpeg',
+                )
+                if not upload_result.success:
+                    logger.warning(
+                        'No fue posible subir imagen de FAQ %s a Meta: %s',
+                        image_faq_id,
+                        upload_result.error,
+                    )
+                else:
+                    # Con opciones interactivas, el texto va en el interactivo
+                    # para no duplicarlo en el pie de la imagen.
+                    caption = '' if is_interactive else (text or '').strip()
+                    image_result = send_uploaded_image_message(
+                        recipient,
+                        upload_result.provider_message_id,
+                        caption=caption,
+                    )
+                    if image_result.success:
+                        if is_interactive:
+                            _send_options(recipient, reply)
+                        return
+                    logger.warning(
+                        'No fue posible enviar imagen de FAQ %s a %s: %s',
+                        image_faq_id,
+                        recipient,
+                        image_result.error,
+                    )
+    if _send_options(recipient, reply):
         return
     _send_text_with_link_preview(recipient, text)
 
@@ -547,7 +838,6 @@ def send_replies(
     sender: str,
     question: str,
     replies: list[str | dict[str, Any]],
-    add_inactivity_notice: bool = False,
 ) -> None:
     """Envía las respuestas del flujo sin cambiar su orden y adjunta la FAQ coincidente."""
     faq = _question_image(sender, question)
@@ -556,9 +846,6 @@ def send_replies(
         if isinstance(reply, dict):
             _send_reply(sender, reply)
             continue
-        text_message = (
-            f'{reply}\n\n{INACTIVITY_NOTICE}' if add_inactivity_notice else reply
-        )
         if index == 0 and faq:
             image_sent = send_image(
                 sender,
@@ -570,16 +857,17 @@ def send_replies(
             if image_sent and len(reply) > 1024:
                 send_text(sender, reply[1024:])
         if index > 0 or not image_sent:
-                send_text(sender, text_message)
+            send_text(sender, reply)
 
 
 def process_webhook(payload: dict[str, Any]) -> int:
     processed = 0
-    for sender, text, external_message_id in _messages(payload):
+    for sender, text, external_message_id, interactive_id in _messages(payload):
         replies = handle_message(
             sender,
             text,
             external_message_id=external_message_id,
+            interactive_id=interactive_id,
         )
         for reply in replies:
             if isinstance(reply, dict):
@@ -590,22 +878,67 @@ def process_webhook(payload: dict[str, Any]) -> int:
     return processed
 
 
-def close_inactive_whatsapp_conversations(current_time: datetime | None = None) -> int:
+def process_inactivity(current_time: datetime | None = None) -> dict[str, int]:
+    """Procesa el ciclo 5 + 2 minutos para las conversaciones de WhatsApp.
+
+    Pensado para ejecutarse periódicamente (cada minuto). El primer paso envía
+    el aviso; el segundo cierra las conversaciones que no respondieron. Los
+    ``UPDATE`` condicionales de ``warn_if_inactive`` y ``close_if_inactive``
+    evitan avisos y cierres duplicados entre procesos.
+    """
     current_time = current_time or timezone.now()
-    cutoff = current_time - INACTIVITY_TIMEOUT
-    conversations = _manager(ChatConversation).filter(
+    backfill_last_user_activity()
+    summary = {'warned': 0, 'closed': 0}
+
+    warning_cutoff = current_time - INACTIVITY_WARNING_TIMEOUT
+    service_window_start = current_time - timedelta(hours=24)
+    pending_warning = _manager(ChatConversation).filter(
         channel='whatsapp',
         status=ChatConversation.STATUS_ACTIVE,
-        updated_at__lte=cutoff,
-    )
-    closed_count = 0
-    for conversation in conversations.iterator():
+        inactivity_warned_at__isnull=True,
+        last_user_activity_at__lte=warning_cutoff,
+        # Fuera de la ventana de 24 h de Meta no se puede enviar texto libre.
+        last_user_activity_at__gte=service_window_start,
+    ).order_by('pk')
+    for conversation in pending_warning.iterator():
+        result = warn_if_inactive(conversation, current_time)
+        if result is None:
+            continue
+        if send_text(conversation.external_user_id, result['message']):
+            summary['warned'] += 1
+        else:
+            # Si Meta rechazó el aviso, liberar el reclamo para reintentarlo en
+            # la siguiente pasada en vez de cerrar sin haber avisado.
+            _manager(ChatConversation).filter(
+                pk=conversation.pk,
+                inactivity_warned_at=current_time,
+            ).update(inactivity_warned_at=None)
+
+    closing_cutoff = current_time - INACTIVITY_CLOSE_TIMEOUT
+    pending_close = _manager(ChatConversation).filter(
+        channel='whatsapp',
+        status=ChatConversation.STATUS_ACTIVE,
+        inactivity_warned_at__isnull=False,
+        inactivity_warned_at__lte=closing_cutoff,
+        last_user_activity_at__lte=F('inactivity_warned_at'),
+    ).order_by('pk')
+    for conversation in pending_close.iterator():
         result = close_if_inactive(conversation, current_time)
         if result is None:
             continue
-        send_text(conversation.external_user_id, result['message'])
-        closed_count += 1
-    return closed_count
+        if (
+            conversation.last_user_activity_at
+            and conversation.last_user_activity_at >= service_window_start
+        ):
+            send_text(conversation.external_user_id, result['message'])
+        summary['closed'] += 1
+
+    return summary
+
+
+def close_inactive_whatsapp_conversations(current_time: datetime | None = None) -> int:
+    """Compatibilidad: devuelve solo cuántas conversaciones se cerraron."""
+    return process_inactivity(current_time)['closed']
 
 
 def parse_json(raw_body: bytes) -> dict[str, Any]:

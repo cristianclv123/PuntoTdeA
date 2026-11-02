@@ -12,8 +12,8 @@ from .validation import validate_question
 
 
 FOLLOW_UP_MESSAGE = (
-    '¿Tienes otra duda, necesitas hablar con un asesor? '
-    'Responde sí para continuar o no si ya no necesitas ayuda.'
+    '¿Tienes otra duda o necesitas hablar con un asesor? '
+    'También puedes finalizar la conversación.'
 )
 
 
@@ -96,10 +96,9 @@ class ChatbotWorkflow:
         return self._result(state, message)
 
     def close_for_inactivity(self) -> dict[str, Any]:
-        message = (
-            'La conversación se cerró por inactividad después de 5 minutos. '
-            'Cuando quieras, puedes escribirnos de nuevo.'
-        )
+        from .inactivity import INACTIVITY_CLOSED_MESSAGE
+
+        message = INACTIVITY_CLOSED_MESSAGE
         self.conversation.status = ChatConversation.STATUS_ENDED
         self.conversation.flow_state = 'ended'
         self._add_message('bot', message)
