@@ -52,7 +52,7 @@ Reindex calendario: `POST /api/knowledge/reindex-academic-calendar/`.
 | --- | --- |
 | `waiting_question` | Pregunta del usuario |
 | `waiting_confirmation` | ¿Otra consulta, hablar con asesor o finalizar? (botones; el texto `sí`/`no` sigue funcionando) |
-| `waiting_low_confidence_choice` | ¿Asesor o nueva pregunta? (botones) |
+| `waiting_low_confidence_choice` | ¿Asesor o nueva pregunta? (botones). Al elegir asesor, pide mensaje y documento antes de crear el ticket |
 | `help_options` | Nueva pregunta o asesor (botones) |
 | `waiting_advisor_question` | Texto para el asesor (después de pedir humano) |
 | `pending` | Ticket en bandeja; inbound se anexa al caso, sin respuesta del bot |

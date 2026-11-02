@@ -60,6 +60,20 @@ class KnowledgeE2ETests(TestCase):
         responses = handle_message("573000111224", "Tema muy específico que el bot no cubre")
         first = responses[0] if isinstance(responses[0], str) else responses[0].get("text", "")
         self.assertIn("¿Deseas comunicarte con un asesor?", first)
-        responses = handle_message("573000111224", "Sí")
-        self.assertTrue(CaseConversation.objects.filter(external_thread_id="573000111224").exists())
+
+        advisor_prompt = handle_message("573000111224", "Sí")[0]
+        self.assertIn("documento de identidad", advisor_prompt)
+        self.assertFalse(CaseConversation.objects.filter(external_thread_id="573000111224").exists())
+
+        responses = handle_message(
+            "573000111224",
+            "Necesito ayuda con mi matrícula, documento 1234567890",
+        )
+        case = CaseConversation.objects.get(
+            channel__code="whatsapp",
+            external_thread_id="573000111224",
+        )
         self.assertTrue(any("TDEA-" in (r if isinstance(r, str) else r.get('text', '')) for r in responses))
+        body = CaseMessage.objects.get(conversation=case).body
+        self.assertIn("Necesito ayuda con mi matrícula, documento 1234567890", body)
+        self.assertIn("Tema muy específico que el bot no cubre", body)

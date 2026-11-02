@@ -65,6 +65,10 @@ HELP_BUTTONS = [
     {'id': HELP_ADVISOR, 'title': 'Hablar con asesor'},
 ]
 
+# Motivo que se guarda cuando la baja confianza deriva en un asesor. Permite
+# adjuntar la pregunta original al ticket sin perder el contexto.
+LOW_CONFIDENCE_REASON = 'El chatbot no encontró una respuesta con suficiente confianza.'
+
 # Patrón para detectar URLs en un mensaje de texto. Cuando una respuesta
 # contiene una URL, se envía como mensaje aparte para que WhatsApp genere
 # la preview automática (miniatura + título del sitio).
@@ -344,17 +348,6 @@ def _submit_question(
     return [{'text': result['message']}]
 
 
-def _create_low_confidence_ticket(conversation: ChatConversation, sender: str) -> str:
-    reason = 'El chatbot no encontró una respuesta con suficiente confianza.'
-    ticket = _create_case_ticket(
-        conversation,
-        sender,
-        conversation.last_question,
-        reason,
-    )
-    return _ticket_confirmation(conversation, ticket)
-
-
 def _case_ticket_status(conversation: ChatConversation) -> str | None:
     if conversation.case_conversation_id is None:
         return None
@@ -414,7 +407,7 @@ def _handle_interactive_choice(
 
     elif state == 'waiting_low_confidence_choice':
         if choice_id == LOW_CONFIDENCE_ADVISOR:
-            return [_create_low_confidence_ticket(conversation, sender)]
+            return [workflow.escalate(LOW_CONFIDENCE_REASON)['message']]
         if choice_id == LOW_CONFIDENCE_QUESTION:
             message = (
                 'De acuerdo. Escribe tu nueva pregunta y la buscaré en la base '
@@ -595,7 +588,7 @@ def handle_message(
         return replies
     if state == 'waiting_low_confidence_choice':
         if _is_yes(text) or _requests_advisor(text):
-            return [_create_low_confidence_ticket(conversation, sender)]
+            return [workflow.escalate(LOW_CONFIDENCE_REASON)['message']]
         if _is_no(text) or _is_more_question(text):
             message = 'De acuerdo. Escribe tu nueva pregunta y la buscaré en la base de conocimiento.'
             conversation.flow_state = 'waiting_question'
@@ -632,8 +625,16 @@ def handle_message(
         result = workflow.submit_advisor_question(text)
         if result.get('valid'):
             reason = conversation.escalation_reason or 'El usuario solicitó atención humana.'
+            body = text
+            if (
+                conversation.last_question
+                and conversation.escalation_reason == LOW_CONFIDENCE_REASON
+            ):
+                # La ruta de baja confianza no pudo responder la pregunta
+                # original; la adjuntamos para que el asesor tenga el contexto.
+                body = f'{text}\n\nPregunta original: {conversation.last_question}'
             ticket = _create_case_ticket(
-                conversation, sender, text, reason, external_message_id,
+                conversation, sender, body, reason, external_message_id,
             )
             return [result['message'], _ticket_confirmation(conversation, ticket)]
         return [result['message']]

@@ -29,6 +29,7 @@ from .whatsapp import (
     CHAT_MORE,
     CONFIRMATION_BUTTONS,
     HELP_BUTTONS,
+    LOW_CONFIDENCE_ADVISOR,
     LOW_CONFIDENCE_BUTTONS,
     handle_message,
     process_inactivity,
@@ -347,16 +348,30 @@ class WhatsAppFlowTests(TestCase):
             0,
         )
 
-        ticket_response = handle_message('573001112235', 'Sí')
+        advisor_prompt = handle_message('573001112235', 'Sí')[0]
         conversation.refresh_from_db()
-        self.assertIn('He creado el ticket', _text(ticket_response[0]))
+        self.assertIn('documento de identidad', advisor_prompt)
+        self.assertEqual(conversation.flow_state, 'waiting_advisor_question')
+        self.assertIsNone(conversation.case_conversation)
+        self.assertEqual(
+            _manager(CaseConversation).filter(channel__code='whatsapp').count(),
+            0,
+        )
+
+        ticket_response = handle_message(
+            '573001112235',
+            'Necesito ayuda con mi matrícula, documento 1234567890',
+        )
+        conversation.refresh_from_db()
+        self.assertIn('He creado el ticket', _text(ticket_response[1]))
         self.assertEqual(conversation.flow_state, 'help_options')
         self.assertIsNotNone(conversation.case_conversation)
         self.assertTrue(conversation.messages[-1]['awaiting_advisor'])
         case_message = _manager(CaseMessage).get(
             conversation=conversation.case_conversation,
         )
-        self.assertEqual(case_message.body, 'Pregunta sin respuesta')
+        self.assertIn('Necesito ayuda con mi matrícula, documento 1234567890', case_message.body)
+        self.assertIn('Pregunta sin respuesta', case_message.body)
 
     def test_low_confidence_no_choice_returns_to_question_entry(self):
         handle_message('573001112250', 'Hola')
@@ -1119,6 +1134,29 @@ class WhatsAppInteractiveChoiceTests(TestCase):
         conversation.refresh_from_db()
         self.assertEqual(conversation.flow_state, 'waiting_advisor_question')
         self.assertIn('asesor', send_text.call_args.args[1])
+
+    @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
+    def test_low_confidence_button_requests_message_and_document(self, send_text):
+        sender = '573001112267'
+        conversation = self._conversation(
+            sender,
+            flow_state='waiting_low_confidence_choice',
+            messages=[{'author': 'bot', 'content': '¿Deseas comunicarte con un asesor?'}],
+        )
+        payload = self._interactive_payload(
+            sender,
+            'wamid.interactive.lowconf-advisor',
+            'button_reply',
+            LOW_CONFIDENCE_ADVISOR,
+            'Sí, asesor',
+        )
+
+        process_webhook(payload)
+
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.flow_state, 'waiting_advisor_question')
+        self.assertIn('documento de identidad', send_text.call_args.args[1])
+        self.assertIsNone(conversation.case_conversation)
 
     @patch('knowledge.chatbot.whatsapp.send_text', return_value=True)
     def test_out_of_context_choice_does_not_advance_the_flow(self, send_text):

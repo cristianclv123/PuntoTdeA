@@ -256,9 +256,9 @@ bot **nunca ve** el payload, la firma ni la capa HTTP.
 
 `flow_state` de la conversación: `waiting_question` → `waiting_confirmation`
 → `help_options` → `waiting_advisor_question`. También existe
-`waiting_low_confidence_choice` (asesor vs. nueva pregunta). En `ended`/`pending`
-responde «ya cerrado». Con estado desconocido, reinicia y envía el texto como
-pregunta.
+`waiting_low_confidence_choice` (asesor vs. nueva pregunta); al elegir asesor
+también pasa por `waiting_advisor_question`. En `ended`/`pending` responde
+«ya cerrado». Con estado desconocido, reinicia y envía el texto como pregunta.
 
 Las decisiones usan botones de WhatsApp (`chat_more`, `chat_advisor`,
 `chat_finish`, `lowconf_advisor`, `lowconf_question`, `help_question`,
