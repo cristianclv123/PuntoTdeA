@@ -8,6 +8,7 @@ Django ni en las peticiones normales de la aplicación.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -44,14 +45,75 @@ class DiagnosticResult:
     error: str = ""
 
 
+def _safe_error_code(value: Any) -> str:
+    text = ""
+    if isinstance(value, int) and not isinstance(value, bool):
+        text = str(value)
+    elif isinstance(value, str) and re.fullmatch(r"\d{1,10}", value):
+        text = value
+    if not text:
+        return ""
+    for name in ("META_ACCESS_TOKEN", "META_ADS_ACCESS_TOKEN", "META_APP_SECRET", "META_VERIFY_TOKEN"):
+        secret = str(getattr(settings, name, "") or "")
+        if secret and secret in text:
+            return ""
+    return text
+
+
+def _safe_meta_identifier(value: Any) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", value):
+        return ""
+    for name in ("META_ACCESS_TOKEN", "META_ADS_ACCESS_TOKEN", "META_APP_SECRET", "META_VERIFY_TOKEN"):
+        secret = str(getattr(settings, name, "") or "")
+        if secret and secret in value:
+            return ""
+    return value
+
+
 def _graph_error(response: requests.Response) -> str:
+    status_code = getattr(response, "status_code", None)
     try:
-        error = response.json().get("error", {})
-    except (TypeError, ValueError):
-        return f"Meta API respondió HTTP {response.status_code}."
-    message = error.get("message") or "Error sin detalle."
-    code = error.get("code")
-    return f"[{code}] {message}" if code else message
+        payload = response.json()
+    except Exception:
+        return f"Meta API respondió HTTP {status_code} con una respuesta inválida."
+
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return f"Meta API respondió HTTP {status_code} con un error no estructurado."
+
+    details = []
+    code = _safe_error_code(error.get("code"))
+    subcode = _safe_error_code(error.get("error_subcode"))
+    error_type = _safe_meta_identifier(error.get("type"))
+    trace_id = _safe_meta_identifier(error.get("fbtrace_id"))
+    if code:
+        details.append(f"código {code}")
+    if subcode:
+        details.append(f"subcódigo {subcode}")
+    if error_type:
+        details.append(f"tipo {error_type}")
+    if trace_id:
+        details.append(f"seguimiento {trace_id}")
+    if status_code is not None:
+        details.insert(0, f"HTTP {status_code}")
+    suffix = f" ({', '.join(details)})" if details else ""
+    return f"Meta rechazó la solicitud{suffix}; mensaje del proveedor omitido por seguridad."
+
+
+def _request_error(exc: Exception, target: str = "Graph API") -> str:
+    if isinstance(exc, requests.Timeout):
+        return f"Tiempo de espera agotado al contactar {target}."
+    if isinstance(exc, requests.ConnectionError):
+        return f"Error de conexión al contactar {target}."
+    if isinstance(exc, requests.HTTPError):
+        return f"{target} devolvió un error HTTP."
+    if isinstance(exc, requests.RequestException):
+        return f"Error de comunicación con {target}."
+    return f"Error inesperado de comunicación con {target}."
+
+
+def _invalid_response_error() -> str:
+    return "Graph API devolvió una respuesta JSON inválida."
 
 
 def _request(path: str, params: dict[str, str]) -> requests.Response:
@@ -88,13 +150,19 @@ def check_access_token() -> DiagnosticResult:
             params={"input_token": token, "access_token": token},
             timeout=settings.META_REQUEST_TIMEOUT,
         )
-    except requests.RequestException as exc:
-        return DiagnosticResult(ok=False, summary="No se pudo contactar a Graph API.", error=str(exc))
+    except Exception as exc:
+        return DiagnosticResult(ok=False, summary="No se pudo contactar a Graph API.", error=_request_error(exc))
 
     if response.status_code != 200:
         return DiagnosticResult(ok=False, summary="Meta rechazó la consulta del token.", error=_graph_error(response))
 
-    data = response.json().get("data", {})
+    try:
+        payload = response.json()
+    except Exception:
+        return DiagnosticResult(ok=False, summary="Graph API devolvió una respuesta inválida.", error=_invalid_response_error())
+    data = payload.get("data", {}) if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        return DiagnosticResult(ok=False, summary="Graph API devolvió una respuesta inválida.", error=_invalid_response_error())
     is_valid = bool(data.get("is_valid"))
     scopes = data.get("scopes") or []
     details = {key: data.get(key) for key in TOKEN_FIELDS if key in data}
@@ -120,13 +188,18 @@ def check_phone_number() -> DiagnosticResult:
                 "access_token": _access_token(),
             },
         )
-    except requests.RequestException as exc:
-        return DiagnosticResult(ok=False, summary="No se pudo contactar a Graph API.", error=str(exc))
+    except Exception as exc:
+        return DiagnosticResult(ok=False, summary="No se pudo contactar a Graph API.", error=_request_error(exc))
 
     if response.status_code != 200:
         return DiagnosticResult(ok=False, summary="Meta rechazó la consulta del número.", error=_graph_error(response))
 
-    data = response.json()
+    try:
+        data = response.json()
+    except Exception:
+        return DiagnosticResult(ok=False, summary="Graph API devolvió una respuesta inválida.", error=_invalid_response_error())
+    if not isinstance(data, dict):
+        return DiagnosticResult(ok=False, summary="Graph API devolvió una respuesta inválida.", error=_invalid_response_error())
     details = {key: data.get(key) for key in PHONE_FIELDS if key in data}
     verified = bool(data.get("verified_name"))
     summary = (
@@ -157,8 +230,12 @@ def webhook_reachable(url: str) -> DiagnosticResult:
             },
             timeout=settings.META_REQUEST_TIMEOUT,
         )
-    except requests.RequestException as exc:
-        return DiagnosticResult(ok=False, summary="No se pudo contactar el callback.", error=str(exc))
+    except Exception as exc:
+        return DiagnosticResult(
+            ok=False,
+            summary="No se pudo contactar el callback.",
+            error=_request_error(exc, "el callback"),
+        )
 
     if response.status_code != 200:
         return DiagnosticResult(
@@ -169,7 +246,7 @@ def webhook_reachable(url: str) -> DiagnosticResult:
         return DiagnosticResult(
             ok=False,
             summary="El callback respondió, pero no devolvió el challenge.",
-            details={"body": response.text[:200]},
+            details={"challenge_received": False},
         )
     return DiagnosticResult(ok=True, summary="El callback público valida el desafío de Meta.")
 

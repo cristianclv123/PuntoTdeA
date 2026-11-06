@@ -19,9 +19,21 @@ const OutboundUI = (() => {
         bootstrap.Toast.getOrCreateInstance(el).show();
     }
 
+    function finiteNumber(value, fallback = 0) {
+        if (typeof value !== 'number' && typeof value !== 'string') return fallback;
+        if (typeof value === 'string' && value.trim() === '') return fallback;
+
+        const number = Number(value);
+        return Number.isFinite(number) ? number : fallback;
+    }
+
     function pct(part, total) {
-        if (!total) return '0%';
-        return `${Math.round((part / total) * 100)}%`;
+        const safePart = finiteNumber(part);
+        const safeTotal = finiteNumber(total);
+        if (safeTotal <= 0) return '0%';
+
+        const percentage = (safePart / safeTotal) * 100;
+        return Number.isFinite(percentage) ? `${Math.round(percentage)}%` : '0%';
     }
 
     function channelBadge(channel) {
@@ -358,7 +370,7 @@ const OutboundUI = (() => {
          * 1. Primero intentamos obtener la campaña desde Django.
          */
         try {
-            const response = await fetch(`/campanas/api/campaigns/${id}/`);
+            const response = await fetch(`/campanas/api/campaigns/${encodeURIComponent(id)}/`);
 
             if (response.ok) {
                 const data = await response.json();
@@ -418,6 +430,13 @@ const OutboundUI = (() => {
             return;
         }
 
+        const sent = finiteNumber(campaign.sent);
+        const delivered = finiteNumber(campaign.delivered);
+        const read = finiteNumber(campaign.read);
+        const clicks = finiteNumber(campaign.clicks);
+        const replies = finiteNumber(campaign.replies);
+        const totalRecipients = finiteNumber(campaign.totalRecipients);
+
         /*
          * 4. Desde aquí mantenemos prácticamente intacta
          *    la lógica visual que ya tenías.
@@ -441,7 +460,7 @@ const OutboundUI = (() => {
         root.innerHTML = `
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
             <div>
-                <h2 class="h4 mb-1">${campaign.name}</h2>
+                <h2 class="h4 mb-1">${escapeHtml(campaign.name)}</h2>
                 <div class="d-flex flex-wrap gap-2">
                     ${channelBadge(campaign.channel)}
                     ${statusPill(campaign.status)}
@@ -456,11 +475,11 @@ const OutboundUI = (() => {
 
         <div class="row g-3 mb-4">
             ${[
-                ['Enviados', campaign.sent],
-                ['Entregados', campaign.delivered],
-                ['Lectura', pct(campaign.read, campaign.delivered)],
-                ['Clics', pct(campaign.clicks, campaign.delivered)],
-                ['Respuestas', campaign.replies],
+                ['Enviados', sent],
+                ['Entregados', delivered],
+                ['Lectura', pct(read, delivered)],
+                ['Clics', pct(clicks, delivered)],
+                ['Respuestas', replies],
             ].map(([label, value]) => `
                 <div class="col">
                     <div class="kpi-card">
@@ -476,15 +495,15 @@ const OutboundUI = (() => {
                 <div class="card outbound-card">
                     <div class="card-body">
                         <h3 class="h6">Audiencias</h3>
-                        <p class="mb-1">${campaign.segments.join(', ') || 'Sin audiencia'}</p>
+                        <p class="mb-1">${escapeHtml(campaign.segments.join(', ') || 'Sin audiencia')}</p>
                         <p class="small text-muted mb-3">
-                            ${campaign.totalRecipients.toLocaleString('es-CO')} destinatarios
+                            ${totalRecipients.toLocaleString('es-CO')} destinatarios
                         </p>
                                                 
 
                         <h3 class="h6">Ejecución</h3>
                         <p class="mb-0">
-                            ${campaign.executedAt} · tipo ${campaign.type}
+                            ${escapeHtml(campaign.executedAt)} · tipo ${escapeHtml(campaign.type)}
                         </p>
                     </div>
                 </div>
@@ -497,7 +516,7 @@ const OutboundUI = (() => {
                               Plantilla
                         </h3>
                         <p class="fw-semibold mb-3">
-                            ${campaign.templateName}
+                            ${escapeHtml(campaign.templateName)}
                         </p>
 
                     <div class="phone-frame">
@@ -981,16 +1000,16 @@ const OutboundUI = (() => {
 
             document.getElementById('reviewList').innerHTML = `
                 <dt class="col-sm-4">Nombre</dt>
-                <dd class="col-sm-8">${name}</dd>
+                <dd class="col-sm-8">${escapeHtml(name)}</dd>
 
                 <dt class="col-sm-4">Canal</dt>
-                <dd class="col-sm-8">${CHANNELS[state.channel].label}</dd>
+                <dd class="col-sm-8">${escapeHtml(CHANNELS[state.channel].label)}</dd>
 
                 <dt class="col-sm-4">Audiencia</dt>
-                <dd class="col-sm-8">${audienceName}</dd>
+                <dd class="col-sm-8">${escapeHtml(audienceName)}</dd>
 
                 <dt class="col-sm-4">Plantilla</dt>
-                <dd class="col-sm-8">${tpl ? tpl.name : 'Sin seleccionar'}</dd>
+                <dd class="col-sm-8">${escapeHtml(tpl ? tpl.name : 'Sin seleccionar')}</dd>
                 `;
 
             document.getElementById('costEstimate').textContent =
