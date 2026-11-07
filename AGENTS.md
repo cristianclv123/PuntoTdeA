@@ -194,7 +194,9 @@ Entrada de arquitectura: `docs/arquitectura.md` y `docs/modulos/*.md`.
 - Índice general: `docs/README.md`. Entrada de arquitectura:
   `docs/arquitectura.md`; fichas por app en `docs/modulos/*.md`.
 - Contrato de WhatsApp para otros módulos: `docs/guia-uso-para-otros-modulos.md`.
-- Despliegue: `docs/despliegue-render.md`. Pruebas: `tests/README.md`.
+- Despliegue: `docs/Manual-despliegue-Punto-TdeA.md` (manual separado: Render,
+  Azure, AWS y servidor propio) y `docs/despliegue-render.md`. Pruebas:
+  `tests/README.md`.
 - Pruebas de la integración Meta: `docs/pruebas-integracion-meta.md` (relación
   método ↔ prueba del adapter, webhook y servicios) y
   `docs/informe-pruebas-meta.md` (lista de pruebas y lo que espera cada una).

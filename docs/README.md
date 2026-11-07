@@ -2,6 +2,10 @@
 
 Índice de la carpeta `docs/`. El código, la UI y esta documentación están en español.
 
+## Manuales
+
+- [Manual de despliegue y configuración](Manual-despliegue-Punto-TdeA.md) — instalación y despliegue en Render, Azure, AWS o servidor propio.
+
 ## Por módulo
 
 | Documento | App Django | Qué cubre |
