@@ -199,9 +199,9 @@ def _safe_meta_identifier(value: Any) -> str:
 
 def _exception_category(exc: Exception) -> str:
     if isinstance(exc, requests.Timeout):
-        return "tiempo de espera agotado"
+        return "Tiempo de espera agotado"
     if isinstance(exc, requests.ConnectionError):
-        return "error de conexión"
+        return "Error de conexión"
     if isinstance(exc, requests.HTTPError):
         return "error HTTP"
     if isinstance(exc, requests.RequestException):
