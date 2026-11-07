@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import mimetypes
 import os
 import re
@@ -30,8 +29,6 @@ import requests
 from django.conf import settings
 
 from ..models import Contact
-
-logger = logging.getLogger(__name__)
 
 # Placement de anuncios en WhatsApp Status. Es la razon de ser de este modulo.
 DEFAULT_STATUS_PLACEMENT: dict[str, Any] = {
@@ -175,39 +172,84 @@ def phones_from_segment(segment, *, only_subscribed: bool = True) -> list[str]:
 # --------------------------------------------------------------------------- #
 # Transporte
 # --------------------------------------------------------------------------- #
+def _safe_error_code(value: Any) -> str:
+    text = ""
+    if isinstance(value, int) and not isinstance(value, bool):
+        text = str(value)
+    elif isinstance(value, str) and re.fullmatch(r"\d{1,10}", value):
+        text = value
+    if not text:
+        return ""
+    for name in ("META_ACCESS_TOKEN", "META_ADS_ACCESS_TOKEN", "META_APP_SECRET", "META_VERIFY_TOKEN"):
+        secret = str(getattr(settings, name, "") or "")
+        if secret and secret in text:
+            return ""
+    return text
+
+
+def _safe_meta_identifier(value: Any) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", value):
+        return ""
+    for name in ("META_ACCESS_TOKEN", "META_ADS_ACCESS_TOKEN", "META_APP_SECRET", "META_VERIFY_TOKEN"):
+        secret = str(getattr(settings, name, "") or "")
+        if secret and secret in value:
+            return ""
+    return value
+
+
+def _exception_category(exc: Exception) -> str:
+    if isinstance(exc, requests.Timeout):
+        return "Tiempo de espera agotado"
+    if isinstance(exc, requests.ConnectionError):
+        return "Error de conexión"
+    if isinstance(exc, requests.HTTPError):
+        return "error HTTP"
+    if isinstance(exc, requests.RequestException):
+        return "error de comunicación"
+    if isinstance(exc, ValueError):
+        return "respuesta inválida"
+    return "error inesperado de comunicación"
+
+
 def _graph_error(response: requests.Response | None, exc: Exception) -> str:
-    if response is not None:
-        try:
-            error = response.json().get("error", {})
-        except (TypeError, ValueError):
-            detail = (response.text or "")[:300]
-            if detail:
-                return f"Meta Marketing API: {detail}"
-            error = {}
-        bits: list[str] = []
-        message = error.get("message", "")
-        if message:
-            bits.append(str(message))
-        for key in ("error_user_title", "error_user_msg"):
-            value = error.get(key)
-            if value and str(value) not in bits:
-                bits.append(str(value))
-        error_data = error.get("error_data")
-        if isinstance(error_data, dict):
-            blame = error_data.get("blame_field_specs") or error_data.get("blame_field")
-            if blame:
-                bits.append(f"campo: {blame}")
-        if bits:
-            text = " - ".join(bits)
-            code = error.get("code")
-            subcode = error.get("error_subcode")
-            if code:
-                text += f" (code {code}"
-                if subcode:
-                    text += f", subcode {subcode}"
-                text += ")"
-            return f"Meta Marketing API: {text}"
-    return f"Meta Marketing API: {exc}"
+    if response is None:
+        return f"Meta Marketing API: {_exception_category(exc)}."
+
+    status_code = getattr(response, "status_code", None)
+    try:
+        payload = response.json()
+    except Exception:
+        if isinstance(exc, ValueError):
+            return "Meta Marketing API: respuesta JSON inválida."
+        if status_code is not None:
+            return f"Meta Marketing API: respuesta HTTP {status_code} no interpretable."
+        return f"Meta Marketing API: {_exception_category(exc)}."
+
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        if isinstance(exc, ValueError):
+            return "Meta Marketing API: respuesta JSON inválida."
+        if status_code is not None and status_code >= 400:
+            return f"Meta Marketing API: error HTTP {status_code}; respuesta no estructurada."
+        return f"Meta Marketing API: {_exception_category(exc)}."
+
+    details = []
+    code = _safe_error_code(error.get("code"))
+    subcode = _safe_error_code(error.get("error_subcode"))
+    error_type = _safe_meta_identifier(error.get("type"))
+    trace_id = _safe_meta_identifier(error.get("fbtrace_id"))
+    if code:
+        details.append(f"código {code}")
+    if subcode:
+        details.append(f"subcódigo {subcode}")
+    if error_type:
+        details.append(f"tipo {error_type}")
+    if trace_id:
+        details.append(f"seguimiento {trace_id}")
+    if status_code is not None:
+        details.insert(0, f"HTTP {status_code}")
+    suffix = f" ({', '.join(details)})" if details else ""
+    return f"Meta Marketing API rechazó la solicitud{suffix}; mensaje del proveedor omitido por seguridad."
 
 
 def _call(
@@ -239,7 +281,7 @@ def _call(
         )
         response.raise_for_status()
         body = response.json()
-    except (requests.RequestException, ValueError) as exc:
+    except Exception as exc:
         return False, {}, _graph_error(response, exc)
     if not isinstance(body, dict):
         return False, {}, "Meta Marketing API: respuesta inesperada."
@@ -505,8 +547,8 @@ def upload_ad_image(image: Any, *, name: str = "", content_type: str = "") -> Ad
             data=data,
             files={"filename": (filename, file_obj, mime_type)},
         )
-    except OSError as exc:
-        return AdsResult(False, "No se pudo abrir la imagen.", error=str(exc))
+    except OSError:
+        return AdsResult(False, "No se pudo abrir la imagen.", error="Error de archivo local.")
     finally:
         if close_after and hasattr(file_obj, "close"):
             file_obj.close()

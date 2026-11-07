@@ -83,6 +83,31 @@ class AdsServiceHelpersTests(TestCase):
 @override_settings(**ADS_SETTINGS)
 class AdsServiceApiTests(TestCase):
     @patch("communications.services.ads_service.requests.request")
+    def test_get_page_keeps_get_method_and_query_authentication(self, request):
+        request.return_value = _ok_response({"id": "page-1", "name": "Página"})
+
+        result = ads_service.get_page()
+
+        self.assertTrue(result.ok)
+        args, kwargs = request.call_args
+        self.assertEqual(args[0], "GET")
+        self.assertTrue(args[1].endswith("/1382768948252522"))
+        self.assertEqual(kwargs["params"]["access_token"], "ads-token")
+        self.assertEqual(kwargs["params"]["fields"], "id,name,is_published")
+
+    @patch("communications.services.ads_service.requests.request")
+    @override_settings(META_APP_ID="fake-app-id", META_APP_SECRET="fake-app-secret")
+    def test_debug_token_keeps_query_authentication(self, request):
+        request.return_value = _ok_response({"data": {"is_valid": True, "scopes": ["ads_management"]}})
+
+        result = ads_service.debug_token()
+
+        self.assertTrue(result.ok)
+        _args, kwargs = request.call_args
+        self.assertEqual(kwargs["params"]["access_token"], "fake-app-id|fake-app-secret")
+        self.assertEqual(kwargs["params"]["input_token"], "ads-token")
+
+    @patch("communications.services.ads_service.requests.request")
     def test_create_campaign_posts_expected_payload(self, request):
         request.return_value = _ok_response({"id": "555"})
 
@@ -153,9 +178,10 @@ class AdsServiceApiTests(TestCase):
         result = ads_service.delete_object("52600610368322")
 
         self.assertTrue(result.ok)
-        args, _kwargs = request.call_args
+        args, kwargs = request.call_args
         self.assertEqual(args[0], "DELETE")
         self.assertTrue(args[1].endswith("/52600610368322"))
+        self.assertEqual(kwargs["params"]["access_token"], "ads-token")
 
     @patch("communications.services.ads_service.requests.request")
     def test_delete_object_without_id_never_calls_meta(self, request):
@@ -175,7 +201,10 @@ class AdsServiceApiTests(TestCase):
         result = ads_service.upload_ad_image(image, name="Aviso: promo de matricula")
 
         self.assertTrue(result.ok)
-        _args, kwargs = request.call_args
+        args, kwargs = request.call_args
+        self.assertEqual(args[0], "POST")
+        self.assertTrue(args[1].endswith("/act_1607889164123842/adimages"))
+        self.assertEqual(kwargs["params"]["access_token"], "ads-token")
         filename, _file, mime = kwargs["files"]["filename"]
         self.assertEqual(filename, "aviso.jpg")
         self.assertEqual(mime, "image/jpeg")
@@ -211,4 +240,114 @@ class AdsServiceApiTests(TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.data.get("campaign_id"), "555")
         self.assertNotIn("ad_set_id", result.data)
-        self.assertIn("Pagina no vinculada", result.error)
+        self.assertIn("error de comunicación", result.error)
+        self.assertNotIn("Pagina no vinculada", result.error)
+
+    @override_settings(
+        META_ACCESS_TOKEN="fake-meta-access-token",
+        META_ADS_ACCESS_TOKEN="fake-ads-access-token",
+        META_APP_SECRET="fake-app-secret",
+        META_VERIFY_TOKEN="fake-verify-token",
+    )
+    def test_request_exceptions_never_return_sensitive_urls_or_credentials(self):
+        sensitive_url = (
+            "https://graph.facebook.com/v21.0/act_1/campaigns?"
+            "access_token=fake-ads-access-token&app_secret=fake-app-secret"
+        )
+        cases = [
+            (requests.ConnectionError, "Error de conexión"),
+            (requests.Timeout, "Tiempo de espera agotado"),
+            (requests.HTTPError, "error HTTP"),
+            (RuntimeError, "error inesperado"),
+        ]
+        secrets = (
+            "fake-meta-access-token",
+            "fake-ads-access-token",
+            "fake-app-secret",
+            "fake-verify-token",
+        )
+
+        for exception_type, expected_category in cases:
+            with self.subTest(exception_type=exception_type.__name__):
+                with patch(
+                    "communications.services.ads_service.requests.request",
+                    side_effect=exception_type(f"falló {sensitive_url}"),
+                ):
+                    result = ads_service.create_campaign("Aviso")
+
+                self.assertFalse(result.ok)
+                self.assertIn(expected_category, result.error)
+                self.assertNotIn("graph.facebook.com", result.error)
+                for secret in secrets:
+                    self.assertNotIn(secret, result.error)
+
+    @override_settings(
+        META_ACCESS_TOKEN="fake-meta-access-token",
+        META_ADS_ACCESS_TOKEN="fake-ads-access-token",
+        META_APP_SECRET="fake-app-secret",
+        META_VERIFY_TOKEN="fake-verify-token",
+    )
+    @patch("communications.services.ads_service.requests.request")
+    def test_meta_json_error_keeps_safe_codes_but_not_untrusted_message(self, request):
+        response = Mock()
+        response.status_code = 400
+        response.json.return_value = {
+            "error": {
+                "message": "Token fake-ads-access-token rechazado",
+                "type": "OAuthException",
+                "code": 190,
+                "error_subcode": 463,
+                "fbtrace_id": "AbC-123_trace",
+            }
+        }
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "HTTP 400 https://graph.facebook.com/?access_token=fake-ads-access-token"
+        )
+        request.return_value = response
+
+        result = ads_service.create_campaign("Aviso")
+
+        self.assertFalse(result.ok)
+        self.assertIn("código 190", result.error)
+        self.assertIn("subcódigo 463", result.error)
+        self.assertIn("tipo OAuthException", result.error)
+        self.assertIn("seguimiento AbC-123_trace", result.error)
+        self.assertNotIn("graph.facebook.com", result.error)
+        for secret in (
+            "fake-meta-access-token",
+            "fake-ads-access-token",
+            "fake-app-secret",
+            "fake-verify-token",
+        ):
+            self.assertNotIn(secret, result.error)
+
+    @override_settings(
+        META_ACCESS_TOKEN="fake-meta-access-token",
+        META_ADS_ACCESS_TOKEN="fake-ads-access-token",
+        META_APP_SECRET="fake-app-secret",
+        META_VERIFY_TOKEN="fake-verify-token",
+    )
+    @patch("communications.services.ads_service.requests.request")
+    def test_non_json_http_error_does_not_return_body_or_url(self, request):
+        response = Mock()
+        response.status_code = 502
+        response.json.side_effect = ValueError("invalid json")
+        response.text = "https://graph.facebook.com/?access_token=fake-ads-access-token"
+        response.raise_for_status.side_effect = requests.HTTPError(
+            "HTTP 502 https://graph.facebook.com/?access_token=fake-ads-access-token"
+        )
+        request.return_value = response
+
+        result = ads_service.create_campaign("Aviso")
+
+        self.assertFalse(result.ok)
+        self.assertIn("HTTP 502", result.error)
+        self.assertNotIn("graph.facebook.com", result.error)
+        self.assertNotIn("access_token", result.error)
+        for secret in (
+            "fake-meta-access-token",
+            "fake-ads-access-token",
+            "fake-app-secret",
+            "fake-verify-token",
+        ):
+            self.assertNotIn(secret, result.error)
