@@ -18,9 +18,8 @@ services:
     dockerContext: .
     region: oregon
     plan: free
-    # Render despliega esta rama: `feature/JCFS/ChatbotFlujoInactivoDesciones`,
-    # para validar el flujo de inactividad y decisiones antes de integrarlo a
-    # `dev`. Cuando este validado, volver a `dev` (y actualizar el panel).
+    # Render despliega esta rama: `dev`. Para pasar a produccion, volver a
+    # `main` (y actualizar el panel).
     #
     # OJO: hay DOS ramas distintas en juego y cambiar solo una no hace nada.
     #   1. Esta linea (`branch:`) -> de que rama despliega el SERVICIO.
@@ -28,7 +27,7 @@ services:
     #      Render este render.yaml.
     # Para pasar a produccion hay que tocar las dos: esta linea a `main` y la
     # del panel a `main`.
-    branch: feature/JCFS/ChatbotFlujoInactivoDesciones
+    branch: dev
     # El deploy solo arranca si los checks de GitHub Actions estan en verde.
     autoDeployTrigger: checksPass
     # SIN `dockerCommand` a proposito. Render ejecuta ese valor como una sola

@@ -2,6 +2,10 @@
 
 Índice de la carpeta `docs/`. El código, la UI y esta documentación están en español.
 
+## Manuales
+
+- [Manual de despliegue y configuración](Manual-despliegue-Punto-TdeA.md) — instalación y despliegue en Render, Azure, AWS o servidor propio.
+
 ## Por módulo
 
 | Documento | App Django | Qué cubre |
@@ -24,6 +28,8 @@ Estas guías no se duplican aquí; son el contrato de la pasarela:
 - [Página de pruebas](pagina-pruebas-whatsapp.md)
 - [Avisos en Status](anuncios-status-whatsapp.md)
 - [Despliegue en Render](despliegue-render.md)
+- [Pruebas de la integración](pruebas-integracion-meta.md) — relación método ↔ prueba del adapter, webhook y servicios
+- [Informe de pruebas de la integración](informe-pruebas-meta.md) — lista de pruebas y lo que espera cada una
 
 Chatbot (detalle de flujo en el app): [`knowledge/README.md`](../knowledge/README.md).
 

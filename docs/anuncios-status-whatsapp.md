@@ -2,7 +2,7 @@
 
 Los avisos de PuntoTdeA se pueden publicar como **anuncios en el Status de
 WhatsApp** (historias) a traves de la **Marketing API** de Meta. No es un envio
-de mensajes: es un *placement* publicitario, distinto del canal de campanas por
+de mensajes: es un _placement_ publicitario, distinto del canal de campanas por
 plantilla (`send_campaign`).
 
 - Codigo: `communications/services/ads_service.py` (unico punto que habla con
@@ -38,6 +38,7 @@ de usuario con `ads_management`.
    clasicas). Antes de publicar Meta pide URL de politica de privacidad, icono
    y categoria. La App Review solo hace falta para usuarios sin rol en la app;
    el administrador puede crear anuncios sin ella.
+
 3. **Negocio verificado** (`verification_status: verified`) para usar un numero
    de Cloud API en anuncios.
 4. **Metodo de pago** en la cuenta de anuncios (sin el, no hay entrega).
@@ -83,11 +84,11 @@ docker compose exec -T web python manage.py create_whatsapp_status_ad \
 
 ## Referencia de errores
 
-| code / subcode        | Significado                                             |
-| --------------------- | ------------------------------------------------------- |
-| 100 / 2446886         | La Pagina no esta vinculada a una cuenta de WhatsApp.   |
-| 100 / 1885183         | La app de Meta esta en modo desarrollo (debe ser Live). |
-| 100 / 1885204         | Bid/optimization incompatibles (usar automatico).       |
+| code / subcode | Significado                                             |
+| -------------- | ------------------------------------------------------- |
+| 100 / 2446886  | La Pagina no esta vinculada a una cuenta de WhatsApp.   |
+| 100 / 1885183  | La app de Meta esta en modo desarrollo (debe ser Live). |
+| 100 / 1885204  | Bid/optimization incompatibles (usar automatico).       |
 
 ## Placement
 

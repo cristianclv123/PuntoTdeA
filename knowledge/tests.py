@@ -223,7 +223,7 @@ class FAQImageTests(TestCase):
             format='multipart',
         )
         self.assertEqual(response.status_code, 201)
-        faq = FAQ.objects.get()
+        faq = FAQ.objects.get(question='¿Cómo pago?')
         self.assertEqual(bytes(faq.image_data), b'fake-faq-image-bytes')
         self.assertEqual(faq.image_name, 'pago.png')
         self.assertEqual(faq.image_content_type, 'image/png')
@@ -256,7 +256,7 @@ class FAQImageTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 302)
-        faq = FAQ.objects.get()
+        faq = FAQ.objects.get(question='Desde admin')
         self.assertEqual(bytes(faq.image_data), b'fake-faq-image-bytes')
         self.assertEqual(faq.image_name, 'admin.png')
 

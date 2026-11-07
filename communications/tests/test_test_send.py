@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from communications.adapters.base import SendResult, TemplateRef
 from communications.models import WhatsAppWebhookEvent
-from communications.services import meta_templates
+from communications.services import meta_templates, test_send_registry
 
 
 def _meta_template(status="APPROVED", meta_id="999"):
@@ -172,3 +172,51 @@ class CampaignTestSendAPITests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(response.json()["success"])
+
+
+class RecordTestSendRegistryTests(TestCase):
+    def test_record_test_send_returns_none_without_wamid(self):
+        self.assertIsNone(
+            test_send_registry.record_test_send(
+                "+573001234567", "", "test_template", "detalle"
+            )
+        )
+        self.assertFalse(WhatsAppWebhookEvent.objects.exists())
+
+    def test_record_test_send_returns_none_when_wamid_is_none(self):
+        self.assertIsNone(
+            test_send_registry.record_test_send(
+                "+573001234567", None, "test_template", "detalle"
+            )
+        )
+        self.assertFalse(WhatsAppWebhookEvent.objects.exists())
+
+    def test_record_test_send_creates_event_with_expected_fields(self):
+        event = test_send_registry.record_test_send(
+            "+573001234567", "wamid.test.789", "test_template", "detalle"
+        )
+
+        self.assertIsNotNone(event)
+        self.assertEqual(event.event_key, "test-send:wamid.test.789")
+        self.assertEqual(event.provider_message_id, "wamid.test.789")
+        self.assertEqual(event.event_type, WhatsAppWebhookEvent.Type.STATUS)
+        self.assertEqual(event.status, "test_template")
+        self.assertEqual(
+            event.payload, {"to": "+573001234567", "detail": "detalle"}
+        )
+        self.assertIsNotNone(event.processed_at)
+
+    def test_record_test_send_duplicate_wamid_reuses_existing_event(self):
+        first = test_send_registry.record_test_send(
+            "+573001234567", "wamid.test.101", "test_template", "primer detalle"
+        )
+        second = test_send_registry.record_test_send(
+            "+573009999999", "wamid.test.101", "test_template", "segundo detalle"
+        )
+
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
+        second.refresh_from_db()
+        self.assertEqual(
+            second.payload, {"to": "+573001234567", "detail": "primer detalle"}
+        )

@@ -200,3 +200,121 @@ class MetaDiagnosticsErrorTests(SimpleTestCase):
                 "hub.challenge": "diagnostico",
             },
         )
+
+
+@override_settings(**DIAGNOSTIC_SETTINGS)
+class MetaDiagnosticsCoverageTests(SimpleTestCase):
+    """Flujos sin cubrir: clasificación de errores, resumen y configuración."""
+
+    def test_request_error_classifies_http_error(self):
+        result = meta_diagnostics._request_error(requests.HTTPError("400"))
+
+        self.assertEqual(result, "Graph API devolvió un error HTTP.")
+
+    def test_request_error_classifies_generic_request_exception(self):
+        result = meta_diagnostics._request_error(requests.RequestException("falló"))
+
+        self.assertEqual(result, "Error de comunicación con Graph API.")
+
+    def test_request_error_uses_custom_target(self):
+        result = meta_diagnostics._request_error(requests.HTTPError("400"), "el callback")
+
+        self.assertEqual(result, "el callback devolvió un error HTTP.")
+
+    @patch("communications.services.meta_diagnostics.check_phone_number")
+    @patch("communications.services.meta_diagnostics.check_access_token")
+    def test_run_all_returns_token_and_phone_results_in_order(
+        self, check_token, check_phone
+    ):
+        token_result = meta_diagnostics.DiagnosticResult(ok=True, summary="Token válido.")
+        phone_result = meta_diagnostics.DiagnosticResult(
+            ok=False, summary="Número pendiente."
+        )
+        check_token.return_value = token_result
+        check_phone.return_value = phone_result
+
+        results = meta_diagnostics.run_all()
+
+        self.assertEqual(
+            results,
+            [("Token de acceso", token_result), ("Número emisor", phone_result)],
+        )
+        check_token.assert_called_once_with()
+        check_phone.assert_called_once_with()
+
+    @patch("communications.services.meta_diagnostics.meta_config.can_receive_webhooks")
+    @patch("communications.services.meta_diagnostics.meta_config.is_fully_configured")
+    def test_is_ready_requires_both_config_and_webhook(
+        self, fully_configured, can_receive_webhooks
+    ):
+        fully_configured.return_value = True
+        can_receive_webhooks.return_value = True
+        self.assertTrue(meta_diagnostics.is_ready())
+
+        can_receive_webhooks.return_value = False
+        self.assertFalse(meta_diagnostics.is_ready())
+
+        fully_configured.return_value = False
+        can_receive_webhooks.return_value = True
+        self.assertFalse(meta_diagnostics.is_ready())
+
+        can_receive_webhooks.return_value = False
+        self.assertFalse(meta_diagnostics.is_ready())
+
+    @override_settings(META_ACCESS_TOKEN="")
+    def test_check_access_token_without_token(self):
+        result = meta_diagnostics.check_access_token()
+
+        self.assertFalse(result.ok)
+        self.assertIn("META_ACCESS_TOKEN no está configurado", result.summary)
+
+    @override_settings(WHATSAPP_PHONE_NUMBER_ID="")
+    def test_check_phone_number_without_phone_id(self):
+        result = meta_diagnostics.check_phone_number()
+
+        self.assertFalse(result.ok)
+        self.assertIn("WHATSAPP_PHONE_NUMBER_ID no está configurado", result.summary)
+
+    @override_settings(META_ACCESS_TOKEN="")
+    def test_check_phone_number_without_token(self):
+        result = meta_diagnostics.check_phone_number()
+
+        self.assertFalse(result.ok)
+        self.assertIn("META_ACCESS_TOKEN no está configurado", result.summary)
+
+    def test_check_access_token_rejects_non_dict_payload(self):
+        response = _response(body=["no es un objeto"])
+        with patch(
+            "communications.services.meta_diagnostics.requests.get",
+            return_value=response,
+        ):
+            result = meta_diagnostics.check_access_token()
+
+        self.assertFalse(result.ok)
+        self.assertIn("JSON inválida", result.error)
+
+    def test_check_phone_number_rejects_non_dict_payload(self):
+        response = _response(body=["no es un objeto"])
+        with patch(
+            "communications.services.meta_diagnostics.requests.get",
+            return_value=response,
+        ):
+            result = meta_diagnostics.check_phone_number()
+
+        self.assertFalse(result.ok)
+        self.assertIn("JSON inválida", result.error)
+
+    def test_webhook_reachable_reports_non_200_status(self):
+        for status in (404, 500):
+            with self.subTest(status=status):
+                response = _response(status=status, text="error")
+                with patch(
+                    "communications.services.meta_diagnostics.requests.get",
+                    return_value=response,
+                ):
+                    result = meta_diagnostics.webhook_reachable(
+                        "https://example.test/api/webhook/"
+                    )
+
+                self.assertFalse(result.ok)
+                self.assertIn(f"HTTP {status}", result.summary)
