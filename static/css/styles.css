@@ -1,6 +1,56 @@
 /* ==========================================================================
    Punto TdeA — design tokens & shared styles
+   Anton y Montserrat se sirven desde el propio sitio (SIL OFL) para no
+   depender de una hoja externa sin integridad.
    ========================================================================== */
+
+@font-face {
+  font-family: "Anton";
+  src: url("../fonts/Anton-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../fonts/Montserrat-Bold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
 
 * , *::before, *::after { box-sizing: border-box; }
 
@@ -1693,7 +1743,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .composer-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
 }
 
@@ -1703,7 +1753,16 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   border-radius: 10px;
   padding: 12px 16px;
   color: var(--text);
+  font-family: inherit;
   font-size: 13px;
+  line-height: 20px;
+  min-height: 44px;
+  max-height: 124px;
+  resize: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
   border: none;
   outline: 1px solid var(--border);
   outline-offset: -1px;
@@ -1847,6 +1906,49 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.bubble-text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bubble-link {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.link-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.16);
+  color: inherit;
+  text-decoration: none;
+  max-width: 280px;
+}
+
+.link-preview-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.link-preview-host {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.link-preview-url {
+  font-size: 11px;
+  opacity: 0.85;
+  overflow-wrap: anywhere;
 }
 
 .bubble-attachments {
@@ -2042,6 +2144,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   white-space: nowrap;
 }
 .note-text { font-size: 12px; color: var(--text-secondary); line-height: 18px; }
+.note-text-empty { color: var(--text-muted); }
 
 .note-input {
   background: var(--bg);

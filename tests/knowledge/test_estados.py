@@ -44,11 +44,18 @@ class KnowledgeEstadoTests(TestCase):
         wf.submit_question("Horario de clases")
         self.assertEqual(wf.confirm_more_help(True)["state"], "help_options")
 
-    def test_escalar_pide_pregunta_para_asesor_luego_pending(self):
+    def test_escalar_pide_documento_y_pregunta_para_asesor_luego_pending(self):
         conv, wf = _wf()
-        wf.escalate("Quiere humano")
+        escalate_result = wf.escalate("Quiere humano")
+        self.assertEqual(escalate_result["state"], "waiting_advisor_document")
         conv.refresh_from_db()
-        self.assertEqual(conv.flow_state, "waiting_advisor_question")
+        self.assertEqual(conv.flow_state, "waiting_advisor_document")
+
+        document_result = wf.submit_advisor_document("1234567890")
+        self.assertEqual(document_result["state"], "waiting_advisor_question")
+        conv.refresh_from_db()
+        self.assertEqual(conv.advisor_document_number, "1234567890")
+
         result = wf.submit_advisor_question(
             "Revisen mi caso de matrícula",
             datetime(2026, 9, 18, 15, 0, tzinfo=dt_tz.utc),
@@ -78,6 +85,7 @@ class KnowledgeEstadoTests(TestCase):
     def test_whatsapp_pending_deja_de_avanzar_el_flujo(self):
         handle_message("573000000001", "Hola")
         handle_message("573000000001", "Quiero un asesor")
+        handle_message("573000000001", "1234567890")
         handle_message("573000000001", "Ayuda con matrícula")
         conv = ChatConversation.objects.get(external_user_id="573000000001")
         # La app crea el ticket y conserva el chat activo (puede seguir

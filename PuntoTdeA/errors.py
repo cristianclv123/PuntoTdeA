@@ -51,7 +51,23 @@ def render_error(request, status: int, detail: str = ""):
         .replace("__HOME__", escape(HOME_URL))
         .replace("__CSS__", escape(css))
     )
-    return HttpResponse(html, status=status)
+    response = HttpResponse(html, status=status)
+    # La página de error es la que ZAP vio en rutas inexistentes de casos.
+    # No carga scripts ni hojas de terceros.
+    response["Content-Security-Policy"] = "; ".join(
+        [
+            "default-src 'self'",
+            "base-uri 'self'",
+            "object-src 'none'",
+            "frame-ancestors 'none'",
+            "form-action 'self'",
+            "img-src 'self'",
+            "font-src 'self'",
+            "style-src 'self'",
+            "script-src 'none'",
+        ]
+    )
+    return response
 
 
 def bad_request(request, exception=None):

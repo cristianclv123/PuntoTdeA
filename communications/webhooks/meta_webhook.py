@@ -112,12 +112,22 @@ def _compact_status(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _compact_inbound(message: dict[str, Any]) -> dict[str, Any]:
     """Guarda lo esencial del mensaje entrante para poder mostrarlo después."""
-    return {
+    interactive = message.get("interactive") or {}
+    interactive_type = interactive.get("type")
+    interactive_data = interactive.get(interactive_type) or {}
+    compact = {
         "from": message.get("from"),
         "type": message.get("type"),
         "text": ((message.get("text") or {}).get("body") or "")[:500],
         "timestamp": message.get("timestamp"),
     }
+    if interactive_type:
+        compact["interactive"] = {
+            "type": interactive_type,
+            "id": (interactive_data.get("id") or "")[:256],
+            "title": (interactive_data.get("title") or "")[:200],
+        }
+    return compact
 
 
 def _timestamp(value: Any):
@@ -249,13 +259,26 @@ def _process_inbound(message: dict[str, Any], phone_number_id: str) -> str:
         _finish_event(event)
         return "ignored"
 
-    if message.get("type") != "text":
+    message_type = (message.get("type") or "").strip()
+    interactive_id = ""
+    if message_type == "text":
+        text = ((message.get("text") or {}).get("body") or "").strip()
+    elif message_type == "interactive":
+        interactive = message.get("interactive") or {}
+        interactive_type = (interactive.get("type") or "").strip()
+        if interactive_type not in {"button_reply", "list_reply"}:
+            logger.info("Mensaje interactivo no soportado: %s", message_id)
+            _finish_event(event)
+            return "ignored"
+        data = interactive.get(interactive_type) or {}
+        text = (data.get("title") or "").strip()
+        interactive_id = (data.get("id") or "").strip()
+    else:
         logger.info("Mensaje no textual ignorado: %s", message_id)
         _finish_event(event)
         return "ignored"
 
-    text = ((message.get("text") or {}).get("body") or "").strip()
-    if not text:
+    if not text and not interactive_id:
         _finish_event(event)
         return "ignored"
 
@@ -264,14 +287,9 @@ def _process_inbound(message: dict[str, Any], phone_number_id: str) -> str:
             sender,
             text,
             external_message_id=message_id,
+            interactive_id=interactive_id,
         )
-        for reply in replies:
-            if isinstance(reply, dict):
-                chatbot_whatsapp._send_reply(sender, reply)
-            else:
-                result = chatbot_whatsapp.send_text(sender, reply)
-                if not result:
-                    logger.error("Meta no aceptó la respuesta del chatbot para el mensaje %s", message_id)
+        chatbot_whatsapp.send_replies(sender, text, replies)
     except Exception:
         logger.exception("No fue posible procesar el mensaje de Meta %s", message_id)
         raise

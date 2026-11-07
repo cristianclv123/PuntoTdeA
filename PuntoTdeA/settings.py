@@ -95,6 +95,7 @@ MIDDLEWARE = [
     # whitenoise sirve los estaticos de collectstatic; debe ir tras
     # SecurityMiddleware y antes de cualquier middleware que pueda responder.
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "cases.security.CasesContentSecurityPolicyMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -270,6 +271,12 @@ ALLOW_WEBHOOK_SIMULATOR = os.environ.get(
     "true" if DEBUG else "false",
 ).lower() in {"1", "true", "yes"}
 
+# En Render free no hay workers ni Cron Jobs. Con estos flags los schedulers
+# corren dentro del propio proceso web (Daphne) como hilos demonio, igual en
+# local y en Render.
+ENABLE_INACTIVITY_SCHEDULER = _env_flag("ENABLE_INACTIVITY_SCHEDULER", "false")
+ENABLE_CAMPAIGN_SCHEDULER = _env_flag("ENABLE_CAMPAIGN_SCHEDULER", "false")
+
 # Token compartido con el BFF para la API interna (/campanas/api/).
 # La UI de campanas entra con la sesion del navegador; este token cubre a los
 # consumidores de servicio (BFF) cuando DEBUG=False.
@@ -332,6 +339,11 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# La cookie de CSRF no debe leerse desde JavaScript. El token viaja en la
+# etiqueta meta csrf-token y en el campo oculto del formulario.
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = True
+
 # ImageField models exist; silence check when Pillow is not installed in local/CI.
 SILENCED_SYSTEM_CHECKS = ["fields.E210"]
 
@@ -344,7 +356,8 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = _env_flag("DJANGO_SECURE_SSL_REDIRECT", "true")
-    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "0"))
+    # Un año. El valor 0 dejaba las páginas de casos sin Strict-Transport-Security.
+    SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = "same-origin"
     X_FRAME_OPTIONS = "SAMEORIGIN"

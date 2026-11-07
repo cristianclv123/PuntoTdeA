@@ -9,6 +9,9 @@ from cases.services.realtime import broadcast_new_message
 def advisor_label(user) -> str:
     if user is None:
         return "Un asesor"
+    first_name = (getattr(user, "first_name", "") or "").strip()
+    if first_name:
+        return first_name
     return (user.get_full_name() or "").strip() or user.username
 
 

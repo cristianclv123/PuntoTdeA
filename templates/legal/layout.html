@@ -1,0 +1,40 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} — Punto TdeA</title>
+  <meta name="description" content="{{ description }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}?v=4">
+</head>
+<body class="landing-page">
+  <div class="lp-glow lp-glow-a" aria-hidden="true"></div>
+  <div class="lp-glow lp-glow-b" aria-hidden="true"></div>
+
+  <div class="lp-shell">
+    <header class="lp-nav">
+      <div class="lp-nav-inner">
+        <a class="lp-brand" href="{% url 'home' %}">
+          <span class="lp-brand-mark">TdeA</span>
+          <span class="lp-brand-text">PUNTO<span class="lp-brand-dot">.</span>TDEA</span>
+        </a>
+        <a class="lp-legal-back" href="{% url 'home' %}">Volver al inicio</a>
+      </div>
+    </header>
+
+    <main class="lp-legal">
+      <p class="lp-kicker">Institución Universitaria Tecnológico de Antioquia</p>
+      <h1>{{ title }}</h1>
+      <p class="lp-legal-meta">Punto TdeA · Vigente desde el 31 de octubre de 2026</p>
+      {% block content %}{% endblock %}
+    </main>
+
+    {% include "partials/lp_footer.html" %}
+  </div>
+</body>
+</html>

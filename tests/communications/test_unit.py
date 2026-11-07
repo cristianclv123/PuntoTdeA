@@ -1,8 +1,14 @@
+from unittest.mock import patch
+
 from django.test import TestCase, override_settings
 
 from communications.adapters.base import SendResult
 from communications.adapters.mock_adapter import MockAdapter
 from communications.adapters.meta_adapter import send_text_message
+from communications.apps import (
+    _should_start_campaign_scheduler,
+    run_campaign_scheduler,
+)
 from communications.models import AudienceSegment, Campaign, Contact, MessageTemplate
 from communications.services.campaign_service import resolve_recipients, send_campaign
 
@@ -62,3 +68,43 @@ class CommunicationsUnitTests(TestCase):
         self.assertIsInstance(result, SendResult)
         self.assertFalse(result.success)
         self.assertTrue(result.error)
+
+
+class CampaignSchedulerTests(TestCase):
+    @override_settings(ENABLE_CAMPAIGN_SCHEDULER=False)
+    def test_disabled_by_default(self):
+        with patch("sys.argv", ["daphne", "-b", "0.0.0.0"]):
+            self.assertFalse(_should_start_campaign_scheduler())
+
+    @override_settings(ENABLE_CAMPAIGN_SCHEDULER=True)
+    def test_enabled_for_daphne(self):
+        with patch("sys.argv", ["daphne", "-b", "0.0.0.0"]):
+            self.assertTrue(_should_start_campaign_scheduler())
+
+    @override_settings(ENABLE_CAMPAIGN_SCHEDULER=True)
+    def test_disabled_for_test_command(self):
+        with patch("sys.argv", ["manage.py", "test"]):
+            self.assertFalse(_should_start_campaign_scheduler())
+
+    @patch("communications.apps.time.sleep")
+    @patch(
+        "communications.management.commands.run_scheduled_campaigns.Command.process_due_campaigns"
+    )
+    def test_runs_cycle_and_sleeps(self, process_due_campaigns, sleep):
+        run_campaign_scheduler(interval=30, max_iterations=2)
+
+        self.assertEqual(process_due_campaigns.call_count, 2)
+        self.assertEqual(sleep.call_count, 1)
+        sleep.assert_called_once_with(30)
+
+    @patch("communications.apps.time.sleep")
+    @patch(
+        "communications.management.commands.run_scheduled_campaigns.Command.process_due_campaigns",
+        side_effect=RuntimeError("boom"),
+    )
+    def test_survives_errors(self, process_due_campaigns, sleep):
+        with self.assertLogs("communications.apps", level="ERROR"):
+            run_campaign_scheduler(interval=0, max_iterations=1)
+
+        self.assertEqual(process_due_campaigns.call_count, 1)
+        sleep.assert_not_called()

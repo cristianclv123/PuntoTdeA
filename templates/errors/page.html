@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>__STATUS__ — __TITLE__ · Punto TdeA</title>
   <meta http-equiv="refresh" content="3;url=__HOME__">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="__CSS__">
 </head>
 <body class="error-page" data-error-page="__STATUS__">
@@ -21,26 +18,8 @@
     <p class="error-code" aria-hidden="true">__STATUS__</p>
     <h1>__TITLE__</h1>
     <p class="error-message">__MESSAGE__</p>
-    <p class="error-countdown" id="error-countdown">Te llevamos al inicio en 3 segundos.</p>
+    <p class="error-countdown">Te llevamos al inicio en unos segundos.</p>
     <a class="error-cta" href="__HOME__">Ir al inicio ahora</a>
   </main>
-  <script>
-    (function () {
-      var left = 3;
-      var label = document.getElementById("error-countdown");
-      var home = "__HOME__";
-      var timer = window.setInterval(function () {
-        left -= 1;
-        if (left <= 0) {
-          window.clearInterval(timer);
-          window.location.replace(home);
-          return;
-        }
-        if (label) {
-          label.textContent = "Te llevamos al inicio en " + left + (left === 1 ? " segundo." : " segundos.");
-        }
-      }, 1000);
-    })();
-  </script>
 </body>
 </html>

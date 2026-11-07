@@ -15,23 +15,23 @@ configurar nada a mano** salvo los valores marcados `sync: false`.
 
 ## Primer despliegue
 
-1. **Sube el código a `dev`.** Los administradores del repositorio pueden hacer
-   push directo a `dev`; para el resto del equipo se recomienda Pull Request
-   desde la rama de integración. `render.yaml` apunta a `dev`, así que cada push
-   (o merge) a `dev` dispara un deploy.
+1. **Sube el código a la rama de despliegue.** La que usa `render.yaml` ahora
+   mismo es `feature/JCFS/ChatbotFlujoInactivoDesciones`, para validar antes de
+   integrarla a `dev`. Cuando este validado, se vuelve a `dev`.
 
    ```bash
-   git switch dev
+   git switch feature/JCFS/ChatbotFlujoInactivoDesciones
    git add -A
    git commit -m "Despliegue en Render"
-   git push origin dev
+   git push origin HEAD:feature/JCFS/ChatbotFlujoInactivoDesciones
    ```
 
-   El push a `dev` hace correr el CI sobre ese commit y Render despliega cuando
-   queda verde.
+   El push a esa rama hace correr el CI sobre ese commit y Render despliega
+   cuando queda verde.
 
 2. **Crea el Blueprint** en <https://dashboard.render.com> → *New* → *Blueprint* →
-   apunta a `cristianclv123/PuntoTdeA` y elige la rama `dev`.
+   apunta a `cristianclv123/PuntoTdeA` y elige la rama
+   `feature/JCFS/ChatbotFlujoInactivoDesciones`.
 
    Ojo: hay **dos ramas distintas** en juego, y cambiar solo una no hace nada:
 
@@ -116,8 +116,14 @@ Sube el cambio a `main` y Render aplica el plan nuevo.
 
 **Ahora mismo no hay media persistente.** Es una decisión consciente: en plan
 gratuito Render no monta disco, así que las imágenes de avisos, los adjuntos de
-casos y las imágenes del chatbot se guardan en el sistema de archivos efímero
-del contenedor y **se pierden en el siguiente despliegue**.
+casos se guardan en el sistema de archivos efímero del contenedor y **se pierden
+en el siguiente despliegue**.
+
+Las imágenes de las FAQ se guardan como bytes en Postgres, no en `MEDIA_ROOT`.
+Al responder una pregunta relacionada, el bot recupera esos bytes de la FAQ y
+los sube a Meta; WhatsApp recibe la imagen con la respuesta como pie de foto.
+Las FAQ permanecen disponibles mientras exista la base de datos. En el plan
+gratuito, Postgres expira a los 30 días.
 
 Mientras tanto:
 
@@ -165,6 +171,17 @@ Cuando haya usuarios reales subiendo archivos, las dos salidas son:
   propio: activar HSTS en `*.onrender.com` no es posible desde tu app.
 - El Key Value no tiene persistencia en plan free. No importa: el channel layer
   es reconstruible y solo guarda mensajes en vuelo.
+- **No hay workers ni Cron Jobs en free.** Los ciclos de inactividad y campañas
+  programadas corren **incrustados en el propio web** con
+  `ENABLE_INACTIVITY_SCHEDULER=true` y `ENABLE_CAMPAIGN_SCHEDULER=true` (hilos
+  demonio en `knowledge/apps.py` y `communications/apps.py`). Es el mismo
+  mecanismo que usa Docker local, sin servicios aparte. En free el contenedor se
+  duerme tras 15 min sin tráfico: los hilos solo corren mientras está despierto,
+  así que los avisos/cierres/envíos pueden retrasarse si no hay webhooks o
+  visitas que lo despierten. Con una instancia no hay doble envío; si escalas a
+  varias, vuelve a un worker/cron único. La Postgres free no acepta conexiones
+  externas. El proyecto no depende de Render: en un servidor propio se ejecutan
+  como servicios de systemd/supervisor o cron.
 
 ## El superusuario
 
@@ -200,6 +217,8 @@ Las define `render.yaml`; esta es la referencia de qué hace cada una.
 | `WIDGET_ALLOWED_ORIGINS` | `sync: false` | Orígenes CORS. Deja solo el dominio real. |
 | `DJANGO_SECURE_HSTS_SECONDS` | `0` | Súbelo a `31536000` cuando use dominio propio. |
 | `MEDIA_UPLOADS_ENABLED` | `true` | Poner `false` desactiva la subida de archivos. |
+| `ENABLE_INACTIVITY_SCHEDULER` | `"true"` | Ejecuta el ciclo 5 + 2 minutos como hilo dentro del web (free, sin worker). |
+| `ENABLE_CAMPAIGN_SCHEDULER` | `"true"` | Envía campañas programadas vencidas cada 30 s desde el web (free, sin worker). |
 
 `settings.py` toma `ALLOWED_HOSTS` y `CSRF_TRUSTED_ORIGINS` de
 `RENDER_EXTERNAL_HOSTNAME`, que Render publica solo. No hace falta escribir el

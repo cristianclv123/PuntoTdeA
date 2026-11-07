@@ -58,7 +58,7 @@ Meta Cloud API
 POST /api/whatsapp/webhook/     (communications.webhooks.meta_webhook)
         │
         ├─ estados de entrega ──► BroadcastRecipient (campañas)
-        └─ texto inbound ──────► knowledge.chatbot.whatsapp.handle_message
+        └─ inbound (texto/interactivo) ─► knowledge.chatbot.whatsapp.handle_message
                                       │
                                       ├─ RAG / FAQ
                                       └─ si escala ──► cases.ingest_inbound_message
@@ -118,4 +118,4 @@ Tras editar `.env`: `docker compose up -d --force-recreate web` (un `restart` no
 
 ## Hueco conocido (inbound de casos)
 
-El ticket se crea cuando el bot **escala** (pide asesor o baja confianza). Los mensajes posteriores del estudiante se anexan al mismo caso y aparecen en la bandeja. Al tomar el chat, el asesor envía un saludo automático por WhatsApp.
+El ticket se crea cuando el bot **escala** y el usuario completa la solicitud (mensaje y documento). Aplica tanto para pedir asesor directamente como para la ruta de baja confianza. Los mensajes posteriores del estudiante se anexan al mismo caso y aparecen en la bandeja. Al tomar el chat, el asesor envía un saludo automático por WhatsApp.

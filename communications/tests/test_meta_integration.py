@@ -3,11 +3,17 @@ import hmac
 import json
 from unittest.mock import Mock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from communications.adapters.base import TemplateRef
-from communications.adapters.meta_adapter import MetaAdapter
+from communications.adapters.base import SendResult, TemplateRef
+from communications.adapters.meta_adapter import (
+    MetaAdapter,
+    send_image_message,
+    send_interactive_buttons,
+    send_interactive_list,
+)
 from communications.models import (
     AudienceSegment,
     BroadcastRecipient,
@@ -101,6 +107,45 @@ class MetaWhatsAppIntegrationTests(TestCase):
         post.assert_not_called()
 
     @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_uploads_and_sends_image_with_caption(self, post):
+        upload_response = Mock()
+        upload_response.json.return_value = {"id": "media-image-1"}
+        upload_response.raise_for_status.return_value = None
+        message_response = Mock()
+        message_response.json.return_value = {"messages": [{"id": "wamid.image.1"}]}
+        message_response.raise_for_status.return_value = None
+        post.side_effect = [upload_response, message_response]
+
+        result = send_image_message(
+            "+573001112233",
+            b"image-content",
+            "calendario.png",
+            "image/png",
+            "Consulta el calendario académico.",
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.provider_message_id, "wamid.image.1")
+        self.assertEqual(post.call_count, 2)
+        self.assertIn("/v21.0/123456789/media", post.call_args_list[0].args[0])
+        self.assertEqual(
+            post.call_args_list[0].kwargs["data"],
+            {"messaging_product": "whatsapp"},
+        )
+        self.assertEqual(
+            post.call_args_list[1].kwargs["json"],
+            {
+                "messaging_product": "whatsapp",
+                "to": "573001112233",
+                "type": "image",
+                "image": {
+                    "id": "media-image-1",
+                    "caption": "Consulta el calendario académico.",
+                },
+            },
+        )
+
+    @patch("communications.adapters.meta_adapter.requests.post")
     def test_meta_adapter_sends_static_text_header_and_body_parameters(self, post):
         response = Mock()
         response.json.return_value = {"messages": [{"id": "wamid.outbound.header"}]}
@@ -149,6 +194,18 @@ class MetaWhatsAppIntegrationTests(TestCase):
                 },
             },
         )
+
+    @patch("communications.adapters.meta_adapter.requests.post")
+    def test_meta_adapter_rejects_unsupported_image_type(self, post):
+        result = send_image_message(
+            "+573001112233",
+            b"image-content",
+            "calendario.gif",
+            "image/gif",
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("JPG o PNG", result.error)
 
     @patch("communications.adapters.meta_adapter.requests.post")
     def test_meta_adapter_rejects_text_header_without_text(self, post):
@@ -281,9 +338,9 @@ class MetaWhatsAppIntegrationTests(TestCase):
         )
         self.assertEqual(WhatsAppWebhookEvent.objects.count(), 1)
 
-    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_text", return_value=True)
+    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_replies")
     @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.handle_message", return_value=["Hola"])
-    def test_webhook_sends_inbound_text_to_chatbot_once(self, handle_message, send_text):
+    def test_webhook_keeps_chatbot_replies_on_existing_flow(self, handle_message, send_replies):
         payload = {
             "entry": [
                 {
@@ -316,5 +373,170 @@ class MetaWhatsAppIntegrationTests(TestCase):
             "573001112233",
             "Hola",
             external_message_id="wamid.inbound.1",
+            interactive_id="",
         )
-        send_text.assert_called_once_with("573001112233", "Hola")
+        send_replies.assert_called_once_with("573001112233", "Hola", ["Hola"])
+
+    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_replies")
+    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.handle_message", return_value=["Listo"])
+    def test_webhook_forwards_interactive_button_reply(self, handle_message, send_replies):
+        payload = {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "value": {
+                                "metadata": {"phone_number_id": "123456789"},
+                                "messages": [
+                                    {
+                                        "id": "wamid.inbound.interactive",
+                                        "from": "573001112233",
+                                        "type": "interactive",
+                                        "interactive": {
+                                            "type": "button_reply",
+                                            "button_reply": {
+                                                "id": "chat_finish",
+                                                "title": "Finalizar",
+                                            },
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        response = self._post_webhook(payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["processed"], 1)
+        handle_message.assert_called_once_with(
+            "573001112233",
+            "Finalizar",
+            external_message_id="wamid.inbound.interactive",
+            interactive_id="chat_finish",
+        )
+        send_replies.assert_called_once_with("573001112233", "Finalizar", ["Listo"])
+
+    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.send_replies")
+    @patch("communications.webhooks.meta_webhook.chatbot_whatsapp.handle_message", return_value=["Listo"])
+    def test_webhook_forwards_interactive_list_reply(self, handle_message, send_replies):
+        payload = {
+            "entry": [
+                {
+                    "changes": [
+                        {
+                            "value": {
+                                "metadata": {"phone_number_id": "123456789"},
+                                "messages": [
+                                    {
+                                        "id": "wamid.inbound.list",
+                                        "from": "573001112233",
+                                        "type": "interactive",
+                                        "interactive": {
+                                            "type": "list_reply",
+                                            "list_reply": {
+                                                "id": "chat_advisor",
+                                                "title": "Hablar con asesor",
+                                            },
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+
+        response = self._post_webhook(payload)
+
+        self.assertEqual(response.status_code, 200)
+        handle_message.assert_called_once_with(
+            "573001112233",
+            "Hablar con asesor",
+            external_message_id="wamid.inbound.list",
+            interactive_id="chat_advisor",
+        )
+
+
+@override_settings(
+    META_ACCESS_TOKEN="meta-access-token",
+    WHATSAPP_PHONE_NUMBER_ID="123456789",
+    WHATSAPP_API_VERSION="v21.0",
+)
+class MetaInteractiveMessagesTests(TestCase):
+    @patch("communications.adapters.meta_adapter._post_message")
+    def test_send_interactive_buttons_builds_payload(self, post_message):
+        post_message.return_value = SendResult(
+            success=True,
+            provider_message_id="wamid.buttons",
+        )
+
+        result = send_interactive_buttons(
+            "573001112233",
+            "¿Qué deseas hacer?",
+            [
+                {"id": "chat_more", "title": "Otra consulta"},
+                {"id": "chat_finish", "title": "Finalizar"},
+            ],
+        )
+
+        self.assertTrue(result.success)
+        payload = post_message.call_args.args[0]
+        self.assertEqual(payload["type"], "interactive")
+        self.assertEqual(payload["interactive"]["type"], "button")
+        self.assertEqual(payload["interactive"]["body"]["text"], "¿Qué deseas hacer?")
+        self.assertEqual(
+            payload["interactive"]["action"]["buttons"][0]["reply"],
+            {"id": "chat_more", "title": "Otra consulta"},
+        )
+
+    @patch("communications.adapters.meta_adapter._post_message")
+    def test_send_interactive_list_builds_payload(self, post_message):
+        post_message.return_value = SendResult(
+            success=True,
+            provider_message_id="wamid.list",
+        )
+
+        result = send_interactive_list(
+            "573001112233",
+            "Elige una opción",
+            "Ver opciones",
+            [
+                {
+                    "title": "Ayuda",
+                    "rows": [
+                        {"id": "chat_advisor", "title": "Hablar con asesor"},
+                        {"id": "chat_finish", "title": "Finalizar"},
+                    ],
+                }
+            ],
+        )
+
+        self.assertTrue(result.success)
+        payload = post_message.call_args.args[0]
+        self.assertEqual(payload["interactive"]["type"], "list")
+        self.assertEqual(payload["interactive"]["action"]["button"], "Ver opciones")
+        self.assertEqual(
+            payload["interactive"]["action"]["sections"][0]["rows"][0]["id"],
+            "chat_advisor",
+        )
+
+    @patch("communications.adapters.meta_adapter._post_message")
+    def test_rejects_more_than_three_buttons(self, post_message):
+        result = send_interactive_buttons(
+            "573001112233",
+            "Demasiadas opciones",
+            [
+                {"id": "a", "title": "Uno"},
+                {"id": "b", "title": "Dos"},
+                {"id": "c", "title": "Tres"},
+                {"id": "d", "title": "Cuatro"},
+            ],
+        )
+
+        self.assertFalse(result.success)
+        post_message.assert_not_called()
