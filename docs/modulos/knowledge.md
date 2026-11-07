@@ -22,7 +22,7 @@ knowledge/
     responder.py           # conecta RAG
     validation.py
     schedule.py            # horario hábil
-    whatsapp.py            # handle_message, send_text, crea tickets
+    whatsapp.py            # handle_message, send_replies, crea tickets
     tests.py
   templates/knowledge/
   management/commands/seed_knowledge.py
@@ -51,9 +51,11 @@ Reindex calendario: `POST /api/knowledge/reindex-academic-calendar/`.
 | `flow_state` | Qué espera |
 | --- | --- |
 | `waiting_question` | Pregunta del usuario |
-| `waiting_confirmation` | ¿Te ayudo en algo más? sí/no |
-| `help_options` | Nueva pregunta |
-| `waiting_advisor_question` | Texto para el asesor (después de pedir humano) |
+| `waiting_confirmation` | ¿Otra consulta, hablar con asesor o finalizar? (botones; el texto `sí`/`no` sigue funcionando) |
+| `waiting_low_confidence_choice` | ¿Asesor o nueva pregunta? (botones). Al elegir asesor, pide mensaje y documento antes de crear el ticket |
+| `help_options` | Nueva pregunta o asesor (botones) |
+| `waiting_advisor_document` | Número de documento para abrir el ticket de asesor |
+| `waiting_advisor_question` | Texto de la solicitud para el asesor |
 | `pending` | Ticket en bandeja; inbound se anexa al caso, sin respuesta del bot |
 | `ended` | Conversación cerrada |
 
@@ -61,9 +63,37 @@ Acciones UI JSON (`GET/POST /base-de-conocimiento/chatbot/`): `question`, `confi
 
 Palabras que piden humano en WhatsApp: asesor, humano, persona.
 
+Las preguntas de decisión de WhatsApp incluyen **botones de respuesta rápida**
+(hasta 3) con `id` estable (`chat_more`, `chat_advisor`, `chat_finish`,
+`lowconf_advisor`, `lowconf_question`, `help_question`, `help_advisor`). El
+webhook reenvía el `id`; si el usuario responde por texto, se aceptan los
+títulos y las palabras clave. Una selección vieja (de otro estado) recibe un
+recordatorio y **no** avanza el flujo.
+
+## Inactividad (5 + 2 minutos)
+
+`chatbot/inactivity.py` implementa el ciclo y `ChatConversation` guarda
+`last_user_activity_at` e `inactivity_warned_at`:
+
+1. A los 5 minutos sin mensajes del usuario se envía **un** aviso.
+2. Dos minutos después del aviso (7 en total) se cierra y se informa al usuario.
+3. Cualquier mensaje entrante reinicia el contador y cancela el cierre.
+4. Las conversaciones con un caso abierto o esperando asesor no se cierran.
+5. Los `UPDATE` condicionales evitan avisos/cierres duplicados entre procesos.
+
+El ciclo puede correr **incrustado en el proceso web** con
+`ENABLE_INACTIVITY_SCHEDULER=true` (asi funciona igual en Docker y Render) o
+como comando independiente con `--interval 60` para systemd/supervisor/cron.
+Sin opciones hace una sola pasada. En Render free el contenedor se duerme sin
+tráfico, por lo que el aviso puede retrasarse. No depende de un scheduler de la
+plataforma de despliegue.
+
 ## WhatsApp (`chatbot/whatsapp.py`)
 
-Meta **no** llama este archivo directo. El webhook único (`communications`) invoca `handle_message(sender, text)` y envía cada reply con `send_text` → `send_text_message`.
+Meta **no** llama este archivo directo. El webhook único (`communications`) invoca
+`handle_message(sender, text, external_message_id, interactive_id)` y envía cada
+reply con `send_text` → `send_text_message` (o con los envíos interactivos de
+`communications/adapters/meta_adapter.py`).
 
 Al escalar o al no alcanzar confianza:
 

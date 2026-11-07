@@ -12,6 +12,55 @@
       .replace(/"/g, "&quot;");
   }
 
+  const URL_RE = /https?:\/\/[^\s<>'"]+/gi;
+
+  function linkify(text) {
+    const raw = String(text || "");
+    let html = "";
+    let cursor = 0;
+    URL_RE.lastIndex = 0;
+    raw.replace(URL_RE, function (match, offset) {
+      html += escapeHtml(raw.slice(cursor, offset));
+      const url = match.replace(/[.,);:\]]+$/, "");
+      const tail = match.slice(url.length);
+      html +=
+        '<a class="bubble-link" href="' +
+        escapeHtml(url) +
+        '" target="_blank" rel="noopener noreferrer">' +
+        escapeHtml(url) +
+        "</a>" +
+        escapeHtml(tail);
+      cursor = offset + match.length;
+      return match;
+    });
+    html += escapeHtml(raw.slice(cursor));
+    return html;
+  }
+
+  function renderLinkPreview(text) {
+    const match = String(text || "").match(/https?:\/\/[^\s<>'"]+/i);
+    if (!match) return "";
+    const url = match[0].replace(/[.,);:\]]+$/, "");
+    let host = url;
+    try {
+      host = new URL(url).hostname.replace(/^www\./, "");
+    } catch (err) {
+      host = url;
+    }
+    return (
+      '<a class="link-preview" href="' +
+      escapeHtml(url) +
+      '" target="_blank" rel="noopener noreferrer">' +
+      '<span class="link-preview-kicker">Enlace</span>' +
+      '<span class="link-preview-host">' +
+      escapeHtml(host) +
+      "</span>" +
+      '<span class="link-preview-url">' +
+      escapeHtml(url) +
+      "</span></a>"
+    );
+  }
+
   function renderAttachments(attachments) {
     if (!attachments || !attachments.length) return "";
     const parts = attachments.map(function (att) {
@@ -76,7 +125,7 @@
         '<div class="message-col">' +
         '<div class="bubble">' +
         (message.from_agent ? '<div class="bubble-sender">Asesor</div>' : "") +
-        (text ? '<div class="bubble-text">' + escapeHtml(text) + "</div>" : "") +
+        (text ? '<div class="bubble-text">' + linkify(text) + "</div>" + renderLinkPreview(text) : "") +
         renderAttachments(message.attachments) +
         '<div class="bubble-meta"><span class="bubble-time">' +
         escapeHtml(message.time || "") +

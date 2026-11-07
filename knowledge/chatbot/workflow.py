@@ -12,8 +12,8 @@ from .validation import validate_question
 
 
 FOLLOW_UP_MESSAGE = (
-    '¿Tienes otra duda, necesitas hablar con un asesor? '
-    'Responde sí para continuar o no si ya no necesitas ayuda.'
+    '¿Tienes otra duda o necesitas hablar con un asesor? '
+    'También puedes finalizar la conversación.'
 )
 
 
@@ -58,6 +58,14 @@ class ChatbotWorkflow:
         state = 'waiting_confirmation'
         self.conversation.flow_state = state
         self._add_message('bot', answer, awaiting_advisor=needs_human_attention)
+        image_url = response.get('image_url')
+        if image_url:
+            self.conversation.messages[-1]['image_url'] = image_url
+            self.conversation.messages[-1]['source_question'] = question
+        image_source_id = response.get('image_source_id')
+        if image_source_id:
+            self.conversation.messages[-1]['image_source_id'] = image_source_id
+            self.conversation.messages[-1]['source_question'] = question
         self._save()
         result = self._result(
             state,
@@ -65,6 +73,7 @@ class ChatbotWorkflow:
             valid=True,
             answer_message=answer_message,
             follow_up_message=FOLLOW_UP_MESSAGE,
+            image_faq_id=response.get('image_faq_id'),
         )
         result.update(response)
         result['message'] = answer
@@ -87,10 +96,9 @@ class ChatbotWorkflow:
         return self._result(state, message)
 
     def close_for_inactivity(self) -> dict[str, Any]:
-        message = (
-            'La conversación se cerró por inactividad después de 5 minutos. '
-            'Cuando quieras, puedes escribirnos de nuevo.'
-        )
+        from .inactivity import INACTIVITY_CLOSED_MESSAGE
+
+        message = INACTIVITY_CLOSED_MESSAGE
         self.conversation.status = ChatConversation.STATUS_ENDED
         self.conversation.flow_state = 'ended'
         self._add_message('bot', message)
@@ -98,12 +106,33 @@ class ChatbotWorkflow:
         return self._result('ended', message, inactivity=True)
 
     def escalate(self, reason: str = '') -> dict[str, Any]:
-        message = 'Para ayudarte mejor, transferiremos esta conversación a un asesor. ¿Qué solicitud deseas enviarle?'
+        message = (
+            'Para ayudarte mejor, te contactaremos con un asesor. '
+            '¿Cuál es tu número de documento de identidad?'
+        )
         self.conversation.escalation_reason = reason.strip()
-        self.conversation.flow_state = 'waiting_advisor_question'
+        self.conversation.flow_state = 'waiting_advisor_document'
         self._add_message('bot', message)
         self._save()
-        return self._result('waiting_advisor_question', message)
+        return self._result('waiting_advisor_document', message)
+
+    def submit_advisor_document(self, document_number: str) -> dict[str, Any]:
+        document_number = (document_number or '').strip()
+        if not document_number or len(document_number) > 50:
+            message = (
+                'Por favor, escribe solo tu número de documento de identidad '
+                '(máximo 50 caracteres).'
+            )
+            self._add_message('bot', message)
+            self._save()
+            return self._result('waiting_advisor_document', message, valid=False)
+
+        self.conversation.advisor_document_number = document_number
+        self.conversation.flow_state = 'waiting_advisor_question'
+        message = 'Ahora cuéntame qué solicitud deseas enviarle al asesor.'
+        self._add_message('bot', message)
+        self._save()
+        return self._result('waiting_advisor_question', message, valid=True)
 
     def submit_advisor_question(self, question: str, current_time: datetime | None = None) -> dict[str, Any]:
         valid, error = validate_question(question)
@@ -139,8 +168,9 @@ class ChatbotWorkflow:
 
     def _save(self) -> None:
         self.conversation.save(update_fields=[
-            'status', 'messages', 'escalation_reason', 'advisor_question', 'escalated_at',
-            'case_conversation', 'flow_state', 'last_question', 'updated_at',
+            'status', 'messages', 'escalation_reason', 'advisor_document_number',
+            'advisor_question', 'escalated_at', 'case_conversation', 'flow_state',
+            'last_question', 'updated_at',
         ])
 
     def _result(self, state: str, message: str, **extra: Any) -> dict[str, Any]:

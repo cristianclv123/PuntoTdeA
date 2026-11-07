@@ -2,7 +2,7 @@ from functools import wraps
 
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import JsonResponse
 from rest_framework.permissions import BasePermission
 
 
@@ -78,7 +78,9 @@ def module_access_required(
                 message = f"No tienes permiso para acceder a {module_name}."
                 if api:
                     return JsonResponse({"detail": message}, status=403)
-                return HttpResponseForbidden(message)
+                from PuntoTdeA.errors import render_error
+
+                return render_error(request, 403, message)
             return view_func(request, *args, **kwargs)
 
         return wrapped_view

@@ -1,8 +1,10 @@
 import json
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import models
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from PuntoTdeA.access import module_access_required
@@ -77,6 +79,10 @@ def chatbot(request):
         if conversation.flow_state != 'help_options':
             return JsonResponse({'error': 'Primero debes recibir una respuesta y confirmar que necesitas más ayuda.'}, status=400)
         result = workflow.escalate(payload.get('reason', ''))
+    elif action == 'advisor_document':
+        if conversation.flow_state != 'waiting_advisor_document':
+            return JsonResponse({'error': 'Primero debes solicitar un asesor.'}, status=400)
+        result = workflow.submit_advisor_document(payload.get('document_number', ''))
     elif action == 'advisor_question':
         result = workflow.submit_advisor_question(payload.get('question', ''))
     else:
@@ -89,17 +95,22 @@ def whatsapp_webhook(request):
     return meta_whatsapp_webhook(request)
 
 
-@module_access_required(KNOWLEDGE_PERMISSION, module_name="Knowledge")
 def faq_image(request, pk):
-    """Sirve el binario de la imagen de la FAQ guardado en la base de datos."""
-    faq = get_object_or_404(FAQ, pk=pk)
+    """Sirve imágenes activas de FAQ, que el chatbot puede mostrar públicamente."""
+    now = timezone.now()
+    faqs = FAQ.objects.filter(pk=pk, is_active=True).filter(
+        models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=now),
+    ).filter(
+        models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=now),
+    )
+    faq = get_object_or_404(faqs)
     data = faq.get_image_bytes()
     if not data:
         return HttpResponse(status=404)
     response = HttpResponse(
         data, content_type=faq.image_content_type or 'application/octet-stream'
     )
-    response['Cache-Control'] = 'private, max-age=86400'
+    response['Cache-Control'] = 'public, max-age=86400'
     if faq.image_name:
         response['Content-Disposition'] = f'inline; filename="{faq.image_name}"'
     return response

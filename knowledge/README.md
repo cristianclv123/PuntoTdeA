@@ -92,17 +92,31 @@ otras dudas. El ticket del módulo de casos se crea cuando el usuario completa
 explícitamente la solicitud de atención humana. Mientras el ticket siga abierto,
 el chat continúa activo y el bot puede responder nuevas preguntas; cuando el asesor
 cierra el ticket, un mensaje posterior inicia una conversación nueva.
-Después de cada respuesta, el bot pregunta si el usuario tiene otra duda, necesita
-un asesor o ya resolvió su consulta. Si responde que sí, le pide elegir entre hacer
-otra pregunta o hablar con un asesor; la pregunta de seguimiento se envía como un
-mensaje separado. Si responde que no, finaliza el chat; cualquier mensaje posterior
-inicia una conversación nueva.
+Después de cada respuesta, el bot ofrece botones para elegir entre otra consulta,
+hablar con un asesor o finalizar. La pregunta de seguimiento se envía como un
+mensaje separado y también acepta texto (`sí`/`no`, `asesor`, `otra consulta`).
+Si el usuario finaliza, cualquier mensaje posterior inicia una conversación nueva.
+Las decisiones de baja confianza y de `help_options` también usan botones; una
+selección vieja de otro estado no avanza el flujo. Al pedir asesor, el bot
+solicita primero el número de documento y luego el mensaje antes de crear el
+ticket. La pregunta original se adjunta al caso.
 
-Las conversaciones de WhatsApp activas se cierran con un mensaje después de
-cinco minutos sin actividad solo si el último mensaje fue del bot y no hay una duda
-pendiente de respuesta de un asesor. Para que el aviso se envíe a la hora prevista,
-ejecuta periódicamente (por ejemplo, cada minuto) el comando:
+Las conversaciones de WhatsApp activas reciben **un** aviso a los cinco minutos
+sin actividad y se cierran dos minutos después (siete en total) si el usuario no
+responde. Cualquier mensaje entrante reinicia el contador y cancela el cierre.
+No se cierran conversaciones con un ticket abierto o esperando a un asesor. El
+estado se guarda en `ChatConversation` y los `UPDATE` condicionales evitan
+duplicados entre procesos. El ciclo debe ejecutarse cada minuto. Hay dos formas:
 
 ```powershell
+# Una sola pasada (cron o Programador de tareas)
 python manage.py close_inactive_chats
+
+# Comando independiente para systemd/supervisor
+python manage.py close_inactive_chats --interval 60
 ```
+
+El ciclo corre **incrustado en el proceso web** con
+`ENABLE_INACTIVITY_SCHEDULER=true` (igual en Docker y en Render). También
+puedes usar `--interval 60` con systemd/supervisor o programar `--once` cada
+minuto con cron. No hace falta un scheduler de la plataforma de despliegue.

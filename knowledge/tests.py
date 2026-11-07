@@ -50,6 +50,29 @@ class KnowledgeRagTests(TestCase):
         self.assertEqual(results[0]['title'], 'Pago de matrícula en línea')
         self.assertIn('canales virtuales', answer_query('¿Cómo puedo pagar la matrícula?')['answer'])
 
+    def test_faq_image_is_returned_and_publicly_served(self):
+        faq = FAQ(
+            question='¿Cómo consultar el calendario académico de Punto TdeA?',
+            answer='Consulta el calendario académico en esta imagen.',
+            category=_manager(Category).get(name='Matrículas'),
+        )
+        faq.set_image(SimpleUploadedFile(
+            'calendario.png',
+            b'faq-image-content',
+            content_type='image/png',
+        ))
+        faq.save()
+
+        result = answer_query('¿Cómo consultar el calendario académico de Punto TdeA?')
+
+        image_url = reverse('knowledge:faq-image', kwargs={'pk': faq.pk})
+        self.assertEqual(result['image_url'], image_url)
+        self.assertEqual(result['image_source_id'], faq.pk)
+        response = self.client.get(image_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'faq-image-content')
+
 
 class ChatbotWorkflowTests(TestCase):
     def setUp(self):
@@ -106,7 +129,13 @@ class ChatbotWorkflowTests(TestCase):
 
     def test_advisor_request_during_business_hours_is_pending(self):
         self.workflow.submit_question('No puedo resolver mi caso')
-        self.workflow.escalate('La respuesta requiere revisión humana')
+        escalate_result = self.workflow.escalate('La respuesta requiere revisión humana')
+        self.assertEqual(escalate_result['state'], 'waiting_advisor_document')
+
+        document_result = self.workflow.submit_advisor_document('1234567890')
+        self.assertEqual(document_result['state'], 'waiting_advisor_question')
+        self.assertEqual(self.conversation.advisor_document_number, '1234567890')
+
         result = self.workflow.submit_advisor_question(
             'Necesito que revisen mi caso', datetime(2026, 9, 18, 15, 0, tzinfo=datetime_timezone.utc)
         )
@@ -116,6 +145,7 @@ class ChatbotWorkflowTests(TestCase):
 
     def test_advisor_request_outside_business_hours_is_pending(self):
         self.workflow.escalate('No hay respuesta disponible')
+        self.workflow.submit_advisor_document('1234567890')
         result = self.workflow.submit_advisor_question(
             'Quiero hablar con un asesor', datetime(2026, 9, 19, 20, 0, tzinfo=datetime_timezone.utc)
         )

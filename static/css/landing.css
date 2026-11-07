@@ -438,8 +438,76 @@
   text-decoration: none;
 }
 
-.lp-footer-links a:hover {
+.lp-footer-links a:hover,
+.lp-footer-links a[aria-current="page"] {
   color: #3dff8a;
+}
+
+.lp-legal-back {
+  color: #a3a3a3;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lp-legal-back:hover {
+  color: #3dff8a;
+}
+
+.lp-legal {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.lp-legal h1 {
+  margin: 8px 0 0;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.15;
+  color: #fff;
+}
+
+.lp-legal-meta {
+  margin: 10px 0 28px;
+  color: #737373;
+  font-size: 13px;
+}
+
+.lp-legal h2 {
+  margin: 32px 0 10px;
+  font-size: 18px;
+  line-height: 1.35;
+  color: #fff;
+}
+
+.lp-legal p,
+.lp-legal li {
+  color: #d4d4d4;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.lp-legal p {
+  margin: 0 0 14px;
+}
+
+.lp-legal ul {
+  margin: 0 0 14px;
+  padding-left: 1.2em;
+}
+
+.lp-legal li + li {
+  margin-top: 6px;
+}
+
+.lp-legal a {
+  color: #3dff8a;
+  text-underline-offset: 2px;
+}
+
+.lp-legal strong {
+  color: #fff;
+  font-weight: 600;
 }
 
 .lp-footer-copy {
