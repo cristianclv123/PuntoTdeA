@@ -1,0 +1,41 @@
+---
+title: Punto TdeA — Resumen de arquitectura
+---
+flowchart TB
+    subgraph Canales["Canales"]
+        Asesora["Asesora / staff · navegador"]
+        Estudiante["Estudiante · WhatsApp"]
+    end
+
+    subgraph App["Punto TdeA · Django 5.1 + DRF + Channels (ASGI)"]
+        Dashboard["dashboard · métricas"]
+        Cases["cases · bandeja y tickets"]
+        Knowledge["knowledge · RAG + chatbot"]
+        Comm["communications · campañas y plantillas"]
+        Ann["announcements · avisos y Status"]
+        Notif["notifications · tiempo real"]
+    end
+
+    subgraph Meta["Meta"]
+        Cloud["WhatsApp Cloud API"]
+        Ads["Marketing API · Status Ads"]
+    end
+
+    subgraph Datos["Datos"]
+        DB[("PostgreSQL")]
+        Redis[("Redis · channel layer")]
+        Media[("Media / adjuntos")]
+    end
+
+    subgraph Infra["Infraestructura"]
+        Deploy["Docker · Render · CI/CD"]
+    end
+
+    Canales --> App
+    Knowledge --> Cases
+    Cases --> Comm
+    Ann --> Comm
+    Comm --> Cloud
+    Ann --> Ads
+    App --> Datos
+    App --> Infra

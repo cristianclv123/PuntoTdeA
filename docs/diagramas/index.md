@@ -2,6 +2,54 @@
 
 Diagramas generados con [Mermaid](https://mermaid.js.org) a partir de las fuentes `.mmd` de esta carpeta. GitHub renderiza los bloques directamente; para exportar SVG/PNG ver [`README.md`](README.md).
 
+## 0. Resumen de arquitectura
+
+Vista de una página: canales, módulos, integración con Meta, datos e infraestructura.
+
+```mermaid
+---
+title: Punto TdeA — Resumen de arquitectura
+---
+flowchart TB
+    subgraph Canales["Canales"]
+        Asesora["Asesora / staff · navegador"]
+        Estudiante["Estudiante · WhatsApp"]
+    end
+
+    subgraph App["Punto TdeA · Django 5.1 + DRF + Channels (ASGI)"]
+        Dashboard["dashboard · métricas"]
+        Cases["cases · bandeja y tickets"]
+        Knowledge["knowledge · RAG + chatbot"]
+        Comm["communications · campañas y plantillas"]
+        Ann["announcements · avisos y Status"]
+        Notif["notifications · tiempo real"]
+    end
+
+    subgraph Meta["Meta"]
+        Cloud["WhatsApp Cloud API"]
+        Ads["Marketing API · Status Ads"]
+    end
+
+    subgraph Datos["Datos"]
+        DB[("PostgreSQL")]
+        Redis[("Redis · channel layer")]
+        Media[("Media / adjuntos")]
+    end
+
+    subgraph Infra["Infraestructura"]
+        Deploy["Docker · Render · CI/CD"]
+    end
+
+    Canales --> App
+    Knowledge --> Cases
+    Cases --> Comm
+    Ann --> Comm
+    Comm --> Cloud
+    Ann --> Ads
+    App --> Datos
+    App --> Infra
+```
+
 ## 1. Capas y componentes
 
 Vista lógica del sistema: cliente, acceso (Daphne/HTTP/WS/webhook), módulos de negocio, integración externa y persistencia.
