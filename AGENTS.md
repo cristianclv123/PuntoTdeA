@@ -16,9 +16,11 @@ Entrada de arquitectura: `docs/arquitectura.md` y `docs/modulos/*.md`.
 ## Comandos verificados
 
 - Todo corre en Docker: `docker compose up -d --build` y luego
-  `docker compose exec -T web python manage.py migrate`.
-- Pruebas completas: `docker compose exec -T web python manage.py test` (~400
-  métodos en ~47 archivos). En Docker usan la Postgres del compose salvo que
+  `docker compose exec -T web python manage.py migrate`. El servidor es
+  **Daphne** (`PuntoTdeA.asgi:application`), no `runserver`: el proyecto usa
+  Channels/WebSocket.
+- Pruebas completas: `docker compose exec -T web python manage.py test` (más de
+  400 pruebas en 47 archivos). En Docker usan la Postgres del compose salvo que
   fuerces SQLite; sin `DB_*`/`DATABASE_URL` caen a SQLite (CI/local).
 - Para forzar SQLite dentro de Docker (evita tocar la Postgres del compose y
   dejar una base huérfana):
@@ -82,6 +84,12 @@ Entrada de arquitectura: `docs/arquitectura.md` y `docs/modulos/*.md`.
   `X-Internal-Token` = `INTERNAL_API_TOKEN`. `DEBUG=True` **no** omite el control.
 - Announcements tiene una excepción de solo lectura sobre segmentos:
   `IsAnnouncementsSegmentReader` (solo `list`/`contacts`).
+- Integración externa de cases: `POST /api/cases/webhooks/web/` exige
+  `X-Integration-Token` = `CASES_WEB_WEBHOOK_TOKEN`. Ese token **no** está en
+  `render.yaml` ni en `docker-compose.yml`: en producción el endpoint responde
+  403 hasta añadirlo a mano.
+- El widget público (`/api/cases/web/...`) no usa sesión: firma credenciales con
+  `django.core.signing` y las exige en `X-Widget-Credential`.
 
 ## Suite de pruebas (`tests/` + apps)
 
@@ -89,8 +97,9 @@ Entrada de arquitectura: `docs/arquitectura.md` y `docs/modulos/*.md`.
   **por módulo y nivel**: `test_unit.py`, `test_estados.py` y `test_e2e.py`.
   Fábricas compartidas en `tests/helpers.py`. Ver `tests/README.md`.
 - Las pruebas históricas de cada app siguen vigentes: `cases/tests.py`,
-  `knowledge/tests.py`, `knowledge/chatbot/tests.py`, `announcements/tests.py`,
-  `notifications/tests.py` y `communications/tests/`.
+  `cases/test_*.py`, `knowledge/tests.py`, `knowledge/chatbot/tests.py`,
+  `announcements/tests.py`, `notifications/tests.py`, `dashboard/tests.py` y
+  `communications/tests/`.
 - Stubs vacíos (0 bytes): `communications/tests/{test_adapters,test_models,test_webhooks}.py`.
 - Convenciones: **no** llamar Graph API real (mockear `SendResult`/`MockAdapter`);
   para WhatsApp de cases parchear `cases.services.ingestion.send_text_message`;
@@ -182,13 +191,17 @@ Entrada de arquitectura: `docs/arquitectura.md` y `docs/modulos/*.md`.
 
 ## Documentación (no duplicar)
 
-- Entrada de arquitectura: `docs/arquitectura.md`; fichas por app en
-  `docs/modulos/*.md`.
+- Índice general: `docs/README.md`. Entrada de arquitectura:
+  `docs/arquitectura.md`; fichas por app en `docs/modulos/*.md`.
 - Contrato de WhatsApp para otros módulos: `docs/guia-uso-para-otros-modulos.md`.
 - Despliegue: `docs/despliegue-render.md`. Pruebas: `tests/README.md`.
+- Pruebas de la integración Meta: `docs/pruebas-integracion-meta.md` (relación
+  método ↔ prueba del adapter, webhook y servicios) y
+  `docs/informe-pruebas-meta.md` (lista de pruebas y lo que espera cada una).
 - Si la documentación y el código discrepan, **manda el código**. Deriva
   conocida: `docs/modulos/announcements.md` describe una vista previa que se
-  revela al clic (ya no existe) y `tests/README.md` no menciona `notifications`.
+  revela al clic (ya no existe), `tests/README.md` no menciona `notifications`
+  y `docs/despliegue-render.md` dice "90 pruebas" (son más de 400).
 
 ## Producción y despliegue (Render)
 
@@ -208,6 +221,8 @@ Entrada de arquitectura: `docs/arquitectura.md` y `docs/modulos/*.md`.
   correr **incrustados en el web** con `ENABLE_INACTIVITY_SCHEDULER=true` y
   `ENABLE_CAMPAIGN_SCHEDULER=true`, pero solo mientras el contenedor está
   despierto. Ver `docs/despliegue-render.md` para pasar a pago.
+- `WIDGET_ALLOWED_ORIGINS` (`sync: false`) define los orígenes CORS del widget;
+  sin él el navegador bloquea las peticiones del widget en producción.
 - Con `DEBUG=False` los estáticos los sirve **whitenoise**: sin el
   `collectstatic` del build, `{% static %}` falla con
   "Missing staticfiles manifest entry".

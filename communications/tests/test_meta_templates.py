@@ -1,8 +1,9 @@
 from unittest.mock import Mock, patch
 
+import requests
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from communications.models import MessageTemplate
 from communications.services import meta_templates
@@ -672,3 +673,362 @@ class MetaTemplateAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["success"])
         self.assertEqual(delete.call_args.kwargs["params"]["hsm_id"], "999")
+
+
+@override_settings(
+    META_ACCESS_TOKEN="meta-access-token",
+    WHATSAPP_BUSINESS_ACCOUNT_ID="waba-123",
+    WHATSAPP_API_VERSION="v21.0",
+    META_GRAPH_API_URL="https://graph.facebook.com",
+    META_REQUEST_TIMEOUT=10,
+)
+class MetaTemplateComponentTests(SimpleTestCase):
+    """Casos límite de la traducción de la plantilla local al formato de Meta."""
+
+    def test_meta_buttons_is_limited_to_three(self):
+        buttons = [
+            {"text": "Uno", "url": "https://uno.example"},
+            {"text": "Dos", "url": "https://dos.example"},
+            {"text": "Tres", "url": "https://tres.example"},
+            {"text": "Cuatro", "url": "https://cuatro.example"},
+        ]
+
+        result = meta_templates._meta_buttons(buttons)
+
+        self.assertEqual([button["text"] for button in result], ["Uno", "Dos", "Tres"])
+
+    def test_meta_buttons_ignores_non_dict_entries_and_incomplete_buttons(self):
+        buttons = [
+            None,
+            "texto suelto",
+            42,
+            {"text": "Sin URL"},
+            {"url": "https://sin-texto.example"},
+            {"text": "   ", "url": "https://texto-vacio.example"},
+            {"text": "Válido", "url": "https://valido.example"},
+        ]
+
+        result = meta_templates._meta_buttons(buttons)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["text"], "Válido")
+        self.assertEqual(result[0]["type"], "URL")
+
+    def test_build_components_rejects_empty_text_header(self):
+        with self.assertRaisesRegex(
+            meta_templates.TemplateBuildError, "no puede estar vacío"
+        ):
+            meta_templates.build_components(
+                "Cuerpo", header_type="text", header_text="   "
+            )
+
+    def test_build_components_rejects_text_header_longer_than_60_characters(self):
+        with self.assertRaisesRegex(
+            meta_templates.TemplateBuildError, "no puede superar 60"
+        ):
+            meta_templates.build_components(
+                "Cuerpo", header_type="text", header_text="x" * 61
+            )
+
+    def test_build_components_limits_buttons_to_three(self):
+        buttons = [
+            {"text": f"Botón {indice}", "url": f"https://{indice}.example"}
+            for indice in range(1, 5)
+        ]
+
+        components = meta_templates.build_components("Cuerpo", buttons=buttons)
+
+        buttons_component = components[-1]
+        self.assertEqual(buttons_component["type"], "BUTTONS")
+        self.assertEqual(len(buttons_component["buttons"]), 3)
+
+
+@override_settings(
+    META_ACCESS_TOKEN="meta-access-token",
+    WHATSAPP_BUSINESS_ACCOUNT_ID="waba-123",
+    WHATSAPP_API_VERSION="v21.0",
+    META_GRAPH_API_URL="https://graph.facebook.com",
+    META_REQUEST_TIMEOUT=10,
+)
+class MetaTemplateVerificationEdgeTests(SimpleTestCase):
+    """Validaciones previas de ``verify_campaign_template``."""
+
+    def test_verify_campaign_template_rejects_empty_meta_id(self):
+        for meta_id in ("", "   ", None):
+            with self.subTest(meta_id=meta_id):
+                with self.assertRaisesRegex(
+                    meta_templates.TemplateVerificationError,
+                    "Selecciona una plantilla aprobada",
+                ):
+                    meta_templates.verify_campaign_template(
+                        meta_id, "recordatorio", "es_CO", {}
+                    )
+
+    def test_verify_campaign_template_rejects_meta_id_with_whitespace(self):
+        with self.assertRaisesRegex(
+            meta_templates.TemplateVerificationError, "formato válido"
+        ):
+            meta_templates.verify_campaign_template(
+                " 999 ", "recordatorio", "es_CO", {}
+            )
+
+    def test_verify_campaign_template_rejects_snapshot_that_is_not_an_object(self):
+        for snapshot in ([], "texto", 123, None):
+            with self.subTest(snapshot=snapshot):
+                with self.assertRaisesRegex(
+                    meta_templates.TemplateVerificationError,
+                    "debe ser un objeto JSON",
+                ):
+                    meta_templates.verify_campaign_template(
+                        "999", "recordatorio", "es_CO", snapshot
+                    )
+
+    @patch("communications.services.meta_templates.get_template")
+    def test_verify_campaign_template_rejects_another_template_returned_by_meta(
+        self, get_template
+    ):
+        get_template.return_value = meta_templates.TemplateResult(
+            ok=True,
+            meta_id="888",
+            meta_status="APPROVED",
+            template={
+                "meta_id": "888",
+                "name": "recordatorio",
+                "status": "APPROVED",
+            },
+        )
+
+        with self.assertRaisesRegex(
+            meta_templates.TemplateVerificationError,
+            "distinta al identificador",
+        ):
+            meta_templates.verify_campaign_template(
+                "999", "recordatorio", "es_CO", {}
+            )
+
+
+class MetaTemplateNormalizeEdgeTests(SimpleTestCase):
+    """Normalización de encabezados, botones y conteo de variables."""
+
+    def test_normalize_maps_multimedia_headers(self):
+        cases = (("IMAGE", "image"), ("VIDEO", "video"), ("DOCUMENT", "document"))
+        for meta_format, expected in cases:
+            with self.subTest(meta_format=meta_format):
+                template = meta_templates.normalize_meta_template(
+                    {
+                        "id": "1",
+                        "name": "aviso",
+                        "components": [
+                            {"type": "HEADER", "format": meta_format, "text": "medio"}
+                        ],
+                    }
+                )
+
+                self.assertEqual(template["header_type"], expected)
+                self.assertEqual(template["header_text"], "")
+
+    def test_normalize_keeps_quick_reply_buttons_and_ignores_other_types(self):
+        template = meta_templates.normalize_meta_template(
+            {
+                "id": "1",
+                "name": "aviso",
+                "components": [
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {"type": "QUICK_REPLY", "text": "Sí", "url": ""},
+                            {"type": "URL", "text": "Ver", "url": "https://x.co"},
+                            {"type": "CALL", "text": "Llamar", "url": "tel:123"},
+                            "texto suelto",
+                        ],
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(
+            template["buttons"],
+            [
+                {"text": "Sí", "url": ""},
+                {"text": "Ver", "url": "https://x.co"},
+            ],
+        )
+
+    def test_normalize_preserves_real_rejection_reason(self):
+        template = meta_templates.normalize_meta_template(
+            {
+                "id": "1",
+                "name": "aviso",
+                "rejected_reason": "REVOKED_FOR_POLICY_VIOLATIONS",
+            }
+        )
+
+        self.assertEqual(
+            template["rejected_reason"], "REVOKED_FOR_POLICY_VIOLATIONS"
+        )
+
+    def test_normalize_computes_indexes_and_param_count(self):
+        template = meta_templates.normalize_meta_template(
+            {
+                "id": "1",
+                "name": "aviso",
+                "components": [
+                    {"type": "BODY", "text": "Hola {{2}}, {{1}} y otra vez {{2}}"}
+                ],
+            }
+        )
+
+        self.assertEqual(template["indexes"], [2, 1])
+        self.assertEqual(template["param_count"], 2)
+
+        without_variables = meta_templates.normalize_meta_template(
+            {"id": "2", "name": "aviso"}
+        )
+        self.assertEqual(without_variables["indexes"], [])
+        self.assertEqual(without_variables["param_count"], 0)
+
+
+@override_settings(
+    META_ACCESS_TOKEN="meta-access-token",
+    WHATSAPP_BUSINESS_ACCOUNT_ID="waba-123",
+    WHATSAPP_API_VERSION="v21.0",
+    META_GRAPH_API_URL="https://graph.facebook.com",
+    META_REQUEST_TIMEOUT=10,
+)
+class MetaTemplateServiceErrorTests(TestCase):
+    """Errores de red, JSON y Meta en las operaciones de plantillas."""
+
+    def setUp(self):
+        self.draft = MessageTemplate.objects.create(
+            name="Recordatorio",
+            category=MessageTemplate.Category.UTILITY,
+            body_text="Hola {{1}}.",
+            variable_types={"1": "text"},
+        )
+
+    @patch("communications.services.meta_templates.requests.get")
+    def test_list_templates_handles_network_error(self, get):
+        get.side_effect = requests.ConnectionError("sin conexión")
+
+        result = meta_templates.list_templates()
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("sin conexión", result.message)
+
+    @patch("communications.services.meta_templates.requests.get")
+    def test_list_templates_handles_invalid_json(self, get):
+        response = _response({})
+        response.json.side_effect = ValueError("JSON inválido")
+        get.return_value = response
+
+        result = meta_templates.list_templates()
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("respuesta ilegible", result.message)
+
+    @patch("communications.services.meta_templates.requests.get")
+    def test_get_template_handles_network_error(self, get):
+        get.side_effect = requests.Timeout("tiempo agotado")
+
+        result = meta_templates.get_template("999")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("tiempo agotado", result.message)
+
+    @patch("communications.services.meta_templates.requests.get")
+    def test_get_template_handles_invalid_json(self, get):
+        response = _response({})
+        response.json.side_effect = ValueError("JSON inválido")
+        get.return_value = response
+
+        result = meta_templates.get_template("999")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("respuesta ilegible", result.message)
+
+    @patch("communications.services.meta_templates.requests.post")
+    def test_create_from_draft_handles_network_error(self, post):
+        post.side_effect = requests.ConnectionError("sin conexión")
+
+        result = meta_templates.create_from_draft(self.draft)
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("sin conexión", result.message)
+
+    @patch("communications.services.meta_templates.requests.post")
+    def test_create_from_draft_handles_invalid_json(self, post):
+        response = _response({})
+        response.json.side_effect = ValueError("JSON inválido")
+        post.return_value = response
+
+        result = meta_templates.create_from_draft(self.draft)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.meta_id, "")
+        self.assertEqual(result.meta_status, "PENDING")
+
+    def test_edit_template_reports_build_error(self):
+        result = meta_templates.edit_template(
+            "999", "Cuerpo", header_type="text", header_text=""
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_BUILD)
+
+    @patch("communications.services.meta_templates.requests.post")
+    def test_edit_template_handles_network_error(self, post):
+        post.side_effect = requests.ConnectionError("sin conexión")
+
+        result = meta_templates.edit_template("999", "Cuerpo")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("sin conexión", result.message)
+
+    @patch("communications.services.meta_templates.requests.post")
+    def test_edit_template_reports_meta_error(self, post):
+        post.return_value = _response(
+            {"error": {"message": "edición rechazada", "code": 100}},
+            status_code=400,
+        )
+
+        result = meta_templates.edit_template("999", "Cuerpo")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("edición rechazada", result.message)
+
+    @patch("communications.services.meta_templates.requests.delete")
+    def test_delete_template_handles_network_error(self, delete):
+        delete.side_effect = requests.ConnectionError("sin conexión")
+
+        result = meta_templates.delete_template("999")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("sin conexión", result.message)
+
+    @patch("communications.services.meta_templates.requests.delete")
+    def test_delete_template_reports_meta_error(self, delete):
+        delete.return_value = _response(
+            {"error": {"message": "no se puede eliminar", "code": 2388094}},
+            status_code=400,
+        )
+
+        result = meta_templates.delete_template("999")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_META)
+        self.assertIn("no se puede eliminar", result.message)
+
+    @override_settings(WHATSAPP_BUSINESS_ACCOUNT_ID="")
+    def test_delete_template_reports_missing_config(self):
+        result = meta_templates.delete_template("999")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.kind, meta_templates.KIND_CONFIG)
