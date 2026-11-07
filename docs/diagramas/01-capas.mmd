@@ -1,0 +1,57 @@
+flowchart TB
+    subgraph Cliente["Capa de cliente"]
+        Browser["Navegador web"]
+        WA["Estudiante en WhatsApp"]
+    end
+
+    subgraph Acceso["Capa de acceso - Daphne ASGI"]
+        HTTP["HTTP: vistas Django + DRF"]
+        WS["WebSocket: Channels"]
+        Hook["Webhook Meta"]
+    end
+
+    subgraph Modulos["Capa de aplicación - módulos Django"]
+        Cases["cases<br/>bandeja y tickets"]
+        Knowledge["knowledge<br/>FAQ, RAG, chatbot"]
+        Comm["communications<br/>campañas y plantillas"]
+        Ann["announcements<br/>avisos y Status Ads"]
+        Notif["notifications<br/>dock y WS"]
+        Dash["dashboard<br/>métricas"]
+    end
+
+    subgraph Integracion["Capa de integración externa"]
+        Cloud["Meta Cloud API"]
+        Ads["Meta Marketing API"]
+    end
+
+    subgraph Datos["Capa de persistencia"]
+        DB[("PostgreSQL / SQLite")]
+        Media[("Media / adjuntos")]
+        Redis[("Redis / channel layer")]
+    end
+
+    Browser --> HTTP
+    Browser --> WS
+    WA --> Hook
+    Hook --> Comm
+    Hook --> Knowledge
+    HTTP --> Cases
+    HTTP --> Knowledge
+    HTTP --> Comm
+    HTTP --> Ann
+    HTTP --> Notif
+    HTTP --> Dash
+    WS --> Cases
+    WS --> Notif
+    Knowledge --> Cases
+    Cases --> Comm
+    Ann --> Comm
+    Comm --> Cloud
+    Ann --> Ads
+    Cases --> DB
+    Knowledge --> DB
+    Comm --> DB
+    Ann --> DB
+    Notif --> DB
+    Cases --> Media
+    WS --> Redis

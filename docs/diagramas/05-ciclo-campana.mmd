@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> draft
+    draft --> scheduled
+    draft --> cancelled
+    scheduled --> sending
+    sending --> sent
+    sending --> paused
+    sending --> cancelled
+    sending --> failed
+    paused --> scheduled
+    paused --> cancelled
+    sent --> [*]
+    failed --> [*]
+    cancelled --> [*]

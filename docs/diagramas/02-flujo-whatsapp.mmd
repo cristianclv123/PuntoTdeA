@@ -1,0 +1,30 @@
+sequenceDiagram
+    participant E as Estudiante
+    participant M as Meta Cloud API
+    participant W as Webhook communications
+    participant B as Chatbot knowledge
+    participant R as RAG / FAQ
+    participant C as Cases
+    participant A as Asesora /bandeja/
+
+    E->>M: texto o botón
+    M->>W: POST /api/whatsapp/webhook/ (HMAC)
+    W->>W: valida firma y registra evento (idempotente)
+    W->>B: handle_message(sender, text, id)
+    B->>R: busca respuesta
+    alt confianza alta
+        R-->>B: respuesta
+        B-->>W: replies
+        W->>M: send_text_message
+        M->>E: respuesta del bot
+    else baja confianza o pide asesor
+        B->>C: ingest_inbound_message
+        C-->>B: Conversation TDEA-000123
+        B-->>W: confirmación de ticket
+        W->>M: send_text_message
+        M->>E: ticket creado
+        C->>A: notificación + WebSocket /bandeja/
+        A->>C: claim + saludo automático
+        C->>M: send_text_message
+        M->>E: saludo del asesor
+    end

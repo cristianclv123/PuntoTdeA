@@ -6,6 +6,10 @@
 
 - [Manual de despliegue y configuración](Manual-despliegue-Punto-TdeA.md) — instalación y despliegue en Render, Azure, AWS o servidor propio.
 
+## Diagramas de arquitectura
+
+- [Mapa visual de arquitectura](diagramas/index.md) — capas, flujo WhatsApp, modelo de datos, despliegue y ciclo de campañas. Fuentes `.mmd` en `docs/diagramas/` (ver su `README.md` para regenerar).
+
 ## Por módulo
 
 | Documento | App Django | Qué cubre |

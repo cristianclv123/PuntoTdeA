@@ -1,0 +1,29 @@
+flowchart LR
+    subgraph Usuario["Usuario final"]
+        Navegador["Navegador"]
+    end
+
+    subgraph Render["Render - Blueprint"]
+        subgraph Web["Servicio web (Docker)"]
+            Entry["entrypoint.sh<br/>migrate + createsuperuser"]
+            Daphne["Daphne ASGI"]
+            Django["Django 5.1 + DRF + Channels"]
+            Sched["Schedulers<br/>inactividad y campañas"]
+        end
+        KV[("Key Value / Redis")]
+        PG[("PostgreSQL")]
+    end
+
+    subgraph Meta["Meta"]
+        Cloud["WhatsApp Cloud API"]
+        Ads["Marketing API"]
+    end
+
+    Navegador --> Daphne
+    Entry --> Daphne
+    Daphne --> Django
+    Cloud --> Django
+    Ads --> Django
+    Django --> KV
+    Django --> PG
+    Sched --> Django

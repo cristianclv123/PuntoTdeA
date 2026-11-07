@@ -1,0 +1,25 @@
+erDiagram
+    CHANNEL ||--o{ CONVERSATION : "tiene"
+    DEPARTMENT ||--o{ CONVERSATION : "clasifica"
+    CASES_CONTACT ||--o{ CONVERSATION : "posee"
+    CONVERSATION ||--o{ MESSAGE : "incluye"
+    MESSAGE ||--o{ MESSAGE_ATTACHMENT : "adjunta"
+    CONVERSATION ||--o{ CASE_COMMENT : "anota"
+
+    CATEGORY ||--o{ KNOWLEDGE_ARTICLE : "agrupa"
+    CATEGORY ||--o{ FAQ : "agrupa"
+    INTENT ||--o{ KNOWLEDGE_ARTICLE : "orienta"
+    INTENT ||--o{ FAQ : "orienta"
+
+    COMM_CONTACT ||--o{ CONTACT_EVENT : "registra"
+    COMM_CONTACT ||--o{ SEGMENT_MEMBERSHIP : "pertenece"
+    AUDIENCE_SEGMENT ||--o{ SEGMENT_MEMBERSHIP : "contiene"
+    AUDIENCE_SEGMENT ||--o{ CAMPAIGN : "segmenta"
+    CAMPAIGN ||--o{ BROADCAST_RECIPIENT : "envía"
+    COMM_CONTACT ||--o{ BROADCAST_RECIPIENT : "recibe"
+    CAMPAIGN ||--o| CAMPAIGN_PERSONALIZATION : "autoriza"
+
+    ANNOUNCEMENT ||--o{ STATUS_AD : "publica"
+
+    CHAT_CONVERSATION }o--o| COMM_CONTACT : "contacto CDP"
+    CHAT_CONVERSATION }o--o| CONVERSATION : "ticket cases"
