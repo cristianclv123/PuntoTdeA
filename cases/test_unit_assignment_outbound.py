@@ -10,6 +10,7 @@ from cases.services.assignment import (
     ClaimError,
     CloseError,
     advisor_can_reply,
+    announce_advisor_change,
     claim_conversation,
     claim_greeting_body,
     close_conversation,
@@ -72,10 +73,14 @@ class UserCanActTests(AssignmentOutboundFixtures):
         self.assertFalse(advisor_can_reply(conversation, self.owner))
         self.assertFalse(advisor_can_reply(conversation, self.staff))
 
-    def test_staff_can_reply_unassigned_open_case(self):
+    def test_nobody_can_reply_until_the_case_is_claimed(self):
         conversation = self._conv()
-        self.assertTrue(advisor_can_reply(conversation, self.staff))
+        self.assertFalse(advisor_can_reply(conversation, self.staff))
         self.assertFalse(advisor_can_reply(conversation, self.owner))
+        conversation.assigned_to = self.owner
+        conversation.save(update_fields=["assigned_to"])
+        self.assertTrue(advisor_can_reply(conversation, self.staff))
+        self.assertTrue(advisor_can_reply(conversation, self.owner))
 
 
 class ClaimConversationUnitTests(AssignmentOutboundFixtures):
@@ -135,9 +140,9 @@ class ClaimConversationUnitTests(AssignmentOutboundFixtures):
             direction=Message.Direction.OUTBOUND,
         )
         self.assertEqual(greeting.body, expected)
-        self.assertIn("Ana Dueña", expected)
-        self.assertIn("asesora de soporte al cliente de Punto TdeA", expected)
-        self.assertIn("hablando con un asesor", expected)
+        self.assertIn("Hola, soy Ana", expected)
+        self.assertIn("del equipo de soporte al cliente de Punto TdeA", expected)
+        self.assertIn("hablando con alguien del equipo", expected)
 
         claim_conversation(conversation.id, self.owner)
         send_text.assert_called_once()
@@ -183,6 +188,52 @@ class CloseConversationUnitTests(AssignmentOutboundFixtures):
         self.assertEqual(closed.assigned_to_id, self.staff.id)
         self.assertEqual(closed.department_id, self.dept.id)
         self.assertEqual(closed.closed_by_id, self.staff.id)
+
+    @patch("cases.services.ingestion.send_text_message")
+    def test_close_sends_whatsapp_notice_once(self, send_text):
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.close")
+        conversation = self._conv(assigned_to=self.owner, department=self.dept)
+        close_conversation(conversation.id, self.owner)
+        conversation.refresh_from_db()
+        send_text.assert_called_once_with(
+            "573004445566",
+            (
+                f"El asesor ya cerró el caso {conversation.ticket_number}. "
+                "Si necesitas más ayuda, escríbenos de nuevo."
+            ),
+        )
+        notice = Message.objects.get(
+            conversation=conversation,
+            direction=Message.Direction.OUTBOUND,
+        )
+        self.assertIn(conversation.ticket_number, notice.body)
+        self.assertIn("cerró el caso", notice.body)
+        with self.assertRaises(CloseError):
+            close_conversation(conversation.id, self.owner)
+        send_text.assert_called_once()
+
+    @patch("cases.services.ingestion.send_text_message")
+    def test_reassign_sends_new_advisor_greeting(self, send_text):
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.move")
+        conversation = self._conv(assigned_to=self.owner)
+        self.other.first_name = "Luis"
+        self.other.last_name = "Otro"
+        self.other.save(update_fields=["first_name", "last_name"])
+        previous = conversation.assigned_to_id
+        conversation.assigned_to = self.other
+        conversation.save(update_fields=["assigned_to"])
+        announce_advisor_change(conversation, previous)
+        expected = claim_greeting_body(self.other)
+        send_text.assert_called_once_with("573004445566", expected)
+        self.assertTrue(
+            Message.objects.filter(
+                conversation=conversation,
+                direction=Message.Direction.SYSTEM,
+                body__contains="tomó el caso",
+            ).exists()
+        )
+        announce_advisor_change(conversation, self.other.id)
+        send_text.assert_called_once()
 
     def test_already_closed_and_invalid_priority(self):
         conversation = self._conv(assigned_to=self.owner, department=self.dept)
@@ -248,11 +299,63 @@ class OutboundMetaUnitTests(AssignmentOutboundFixtures):
         )
 
     @patch("cases.services.ingestion.send_text_message")
-    def test_attachment_only_skips_meta_text(self, send_text):
+    def test_whatsapp_url_enables_link_preview(self, send_text):
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.url")
+        conversation = self._conv(assigned_to=self.owner)
+        create_outbound_message(conversation, "Mira https://tdea.edu.co/calendario.")
+        send_text.assert_called_once_with(
+            "573004445566",
+            "Mira https://tdea.edu.co/calendario.",
+            preview_url=True,
+        )
+
+    @patch("cases.services.ingestion.send_media_message")
+    @patch("cases.services.ingestion.upload_whatsapp_media")
+    @patch("cases.services.ingestion.send_text_message")
+    def test_attachment_only_sends_document_not_placeholder_text(self, send_text, upload, send_media):
+        upload.return_value = SendResult(success=True, provider_message_id="media.1")
+        send_media.return_value = SendResult(success=True, provider_message_id="wamid.file")
         conversation = self._conv(assigned_to=self.owner)
         pdf = SimpleUploadedFile("acta.pdf", b"%PDF-1.4 x", content_type="application/pdf")
         message = create_outbound_message(conversation, "   ", uploaded_files=[pdf])
         send_text.assert_not_called()
+        upload.assert_called_once()
+        send_media.assert_called_once_with(
+            "573004445566",
+            media_type="document",
+            media_id="media.1",
+            filename="acta.pdf",
+        )
+        self.assertEqual(message.external_id, "wamid.file")
+        self.assertEqual(message.body, "acta.pdf")
+        self.assertEqual(message.attachments.count(), 1)
+
+    @patch("cases.services.ingestion.send_media_message")
+    @patch("cases.services.ingestion.upload_whatsapp_media")
+    @patch("cases.services.ingestion.send_text_message")
+    def test_whatsapp_image_and_text_send_both(self, send_text, upload, send_media):
+        upload.return_value = SendResult(success=True, provider_message_id="media.img")
+        send_media.return_value = SendResult(success=True, provider_message_id="wamid.img")
+        send_text.return_value = SendResult(success=True, provider_message_id="wamid.txt")
+        conversation = self._conv(assigned_to=self.owner)
+        image = SimpleUploadedFile("foto.png", b"\x89PNG\r\n", content_type="image/png")
+        message = create_outbound_message(
+            conversation,
+            "Revisa https://tdea.edu.co",
+            uploaded_files=[image],
+        )
+        send_media.assert_called_once_with(
+            "573004445566",
+            media_type="image",
+            media_id="media.img",
+            filename="foto.png",
+        )
+        send_text.assert_called_once_with(
+            "573004445566",
+            "Revisa https://tdea.edu.co",
+            preview_url=True,
+        )
+        self.assertEqual(message.external_id, "wamid.img")
         self.assertEqual(message.attachments.count(), 1)
 
     def test_empty_body_without_files_raises(self):

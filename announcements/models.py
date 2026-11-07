@@ -17,6 +17,11 @@ class Announcement(models.Model):
     is_urgent = models.BooleanField(default=False, verbose_name="¿Es urgente?")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
 
+    class Meta:
+        permissions = [
+            ("access_announcements", "Puede acceder al módulo Announcements"),
+        ]
+
     def __str__(self):
         return self.title
 

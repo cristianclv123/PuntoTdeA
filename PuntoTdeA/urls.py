@@ -28,10 +28,13 @@ from communications.meta_console_views import validate_credentials as meta_conso
 from communications.meta_console_views import window_status as meta_console_window
 from communications.webhooks.meta_webhook import whatsapp_webhook
 from . import views
+from cases.api.views import deny_direct_attachment_media
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.home, name='home'),
+    path('tratamiento-de-datos/', views.datos_personales, name='datos-personales'),
+    path('terminos-y-condiciones/', views.terminos, name='terminos'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('perfil/', views.profile_view, name='profile'),
@@ -89,9 +92,9 @@ urlpatterns = [
     path('bandeja/', include('cases.urls')),
     path('base-de-conocimiento/', include('knowledge.urls')),
     path('campanas/', include('communications.urls')),
-    path('audiencias/', communications_views.segments, name='audiences'),
     path('plantillas/', communications_views.templates, name='plantillas'),
     path('avisos/', include('announcements.urls')),
+    path('notificaciones/', include('notifications.urls')),
 
     # Redirecciones para compatibilidad con alias
     path('announcements/', lambda req: redirect('announcements:index', permanent=True)),
@@ -102,4 +105,18 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += staticfiles_urlpatterns()
+
+    urlpatterns.append(
+        path(
+            "media/cases/attachments/<path:path>",
+            deny_direct_attachment_media,
+            name="cases-direct-attachment-denied",
+        )
+    )
+
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+handler400 = "PuntoTdeA.errors.bad_request"
+handler403 = "PuntoTdeA.errors.permission_denied"
+handler404 = "PuntoTdeA.errors.page_not_found"
+handler500 = "PuntoTdeA.errors.server_error"

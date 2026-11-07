@@ -8,22 +8,23 @@ from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins, permissions, status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from cases.models import CaseComment, Channel, Contact, Conversation, Department, Message, ReplyTemplate
+from cases.permissions import HasCasesAccess
 from cases.services.assignment import (
     ClaimError,
     CloseError,
     advisor_can_reply,
+    announce_advisor_change,
     claim_conversation,
     close_conversation,
     user_can_act_on_conversation,
 )
-from cases.services.case_events import mark_claimed
 from cases.services.ingestion import create_outbound_message
 
 from .serializers import (
@@ -45,7 +46,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
 
 class ReplyTemplateViewSet(viewsets.ModelViewSet):
@@ -53,7 +54,7 @@ class ReplyTemplateViewSet(viewsets.ModelViewSet):
 
     queryset = ReplyTemplate.objects.select_related("created_by").all()
     serializer_class = ReplyTemplateSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -64,7 +65,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -84,7 +85,7 @@ class CaseCommentViewSet(viewsets.ModelViewSet):
 
     queryset = CaseComment.objects.select_related("author").all()
     serializer_class = CaseCommentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -116,7 +117,7 @@ class MessageViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.
 
     queryset = Message.objects.prefetch_related("attachments").all()
     serializer_class = MessageDetailSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -136,7 +137,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         "channel", "contact", "department", "escalated_to",
         "assigned_to", "claimed_by", "closed_by",
     ).all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [HasCasesAccess]
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -263,7 +264,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        was_unassigned = conversation.assigned_to_id is None
+        previous_assigned_id = conversation.assigned_to_id
         for field in ("status", "priority", "theme"):
             if field in data:
                 setattr(conversation, field, data[field])
@@ -276,10 +277,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         if conversation.status != Conversation.Status.ESCALADO:
             conversation.escalated_to = None
         conversation.save()
-
-        if conversation.assigned_to_id and (was_unassigned or not conversation.claimed_at):
-            assignee = conversation.assigned_to or request.user
-            mark_claimed(conversation, assignee, assign=False)
+        announce_advisor_change(conversation, previous_assigned_id)
 
         conversation.refresh_from_db()
         return Response(ConversationDetailSerializer(conversation).data)

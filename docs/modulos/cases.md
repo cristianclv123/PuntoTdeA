@@ -79,7 +79,7 @@ Centralizados en `services/assignment.py`:
 
 Al asignar de verdad (primera toma o reclaim de staff) se envía:
 
-> Hola, soy {nombre}, asesora de soporte al cliente de Punto TdeA. ¿En qué te podemos ayudar?
+> Hola, soy {nombre}, del equipo de soporte al cliente de Punto TdeA. ¿En qué te podemos ayudar?
 
 Va por `create_outbound_message` (Meta si el canal es WhatsApp). Si Meta falla, el reclamo **sí** queda y el saludo no se persiste. Texto en `claim_greeting_body`.
 
@@ -124,7 +124,16 @@ Prefijo sin namespace. Router `ticket` → `/api/cases/tickets/`.
 | POST | `/conversations/{id}/reply/` | legado `advisor_reply` |
 | POST | `/webhooks/simulate/` | desarrollo |
 
-Auth: `IsAuthenticated` en ViewSets de gestión.
+El widget público inicia en `POST /web/contacts/`, que crea un contacto nuevo y
+devuelve una credencial firmada. `POST /web/messages/` requiere esa credencial
+en `X-Widget-Credential` y devuelve una credencial vinculada a la conversación;
+`GET /web/conversations/{id}/messages/` requiere esta última. No se recuperan
+credenciales para contactos existentes sin una verificación de identidad. El
+endpoint separado `POST /webhooks/web/` es para integraciones servidor a servidor
+y requiere `X-Integration-Token` configurado mediante `CASES_WEB_WEBHOOK_TOKEN`.
+
+Auth: `HasCasesAccess` en los ViewSets de gestión; requiere `cases.access_cases`
+directo o por grupo, con acceso global para superusuarios activos.
 
 ## WebSocket
 

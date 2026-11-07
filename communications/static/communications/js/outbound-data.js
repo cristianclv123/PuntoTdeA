@@ -3,15 +3,6 @@ window.OutboundDemo = (() => {
         whatsapp: { label: 'WhatsApp', icon: 'bi-whatsapp', account: 'TdeA WhatsApp +57 604 444 00 00' },
     };
 
-    const SEGMENTS = [
-        { id: 'est-activos', name: 'Estudiantes activos', size: 8420, source: 'Backend CRUD' },
-        { id: 'aspirantes', name: 'Aspirantes 2026-1', size: 2104, source: 'Backend CRUD' },
-        { id: 'egresados', name: 'Egresados', size: 15680, source: 'Backend CRUD' },
-        { id: 'docentes', name: 'Docentes', size: 612, source: 'Backend CRUD' },
-        { id: 'admin', name: 'Administrativos', size: 340, source: 'Backend CRUD' },
-        { id: 'opt-out', name: 'Excluidos de informativos', size: 188, source: 'Preferencias' },
-    ];
-
     const TEMPLATES = {
         whatsapp: [
             { id: 'wa-matricula', name: 'Recordatorio de matrícula', type: 'utilidad', body: 'Hola {{nombre}}, el periodo de matrícula {{periodo}} cierra el {{fecha}}. Completa el proceso en Punto TdeA.', buttons: ['Ir a matrícula', 'Hablar con bienestar'] },
@@ -55,5 +46,5 @@ window.OutboundDemo = (() => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     }
 
-    return { CHANNELS, SEGMENTS, TEMPLATES, SEED_LOGS, loadCampaigns, saveCampaigns };
+    return { CHANNELS, TEMPLATES, SEED_LOGS, loadCampaigns, saveCampaigns };
 })();

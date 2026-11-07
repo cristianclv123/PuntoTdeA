@@ -1,6 +1,7 @@
 from itertools import count
 from unittest.mock import patch
 
+from django.contrib.auth.models import Permission
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -22,6 +23,12 @@ class CasesE2ETests(TestCase):
     def setUp(self):
         self.owner = make_user("e2e_owner", first_name="Sofía", last_name="Ruiz")
         self.other = make_user("e2e_other")
+        cases_permission = Permission.objects.get(
+            content_type__app_label="cases",
+            codename="access_cases",
+        )
+        self.owner.user_permissions.add(cases_permission)
+        self.other.user_permissions.add(cases_permission)
         self.dept = department()
         self.api = APIClient()
         self.web = Client()

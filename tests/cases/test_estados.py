@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -13,6 +14,12 @@ class CasesEstadoTests(TestCase):
         self.owner = make_user("st_owner")
         self.other = make_user("st_other")
         self.staff = make_user("st_staff", staff=True)
+        cases_permission = Permission.objects.get(
+            content_type__app_label="cases",
+            codename="access_cases",
+        )
+        for user in (self.owner, self.other, self.staff):
+            user.user_permissions.add(cases_permission)
         self.dept = department()
         self.api = APIClient()
 

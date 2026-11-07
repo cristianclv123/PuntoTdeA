@@ -144,6 +144,9 @@ class Conversation(models.Model):
         indexes = [
             models.Index(fields=["channel", "external_thread_id"]),
         ]
+        permissions = [
+            ("access_cases", "Puede acceder al módulo Cases"),
+        ]
 
     def __str__(self):
         return self.ticket_number or f"{self.contact.full_name} · {self.channel.code}"

@@ -1,9 +1,9 @@
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .permissions import HasKnowledgeAccess
 from knowledge.services.indexing_service import index_academic_calendar
 from knowledge.services.rag_service import answer_query, search_knowledge
 
@@ -31,7 +31,7 @@ _search_result = inline_serializer(
     tags=["knowledge"],
 )
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([HasKnowledgeAccess])
 def search(request):
     query = request.GET.get("q", "").strip()
     results = search_knowledge(query) if query else []
@@ -52,7 +52,7 @@ def search(request):
     tags=["knowledge"],
 )
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([HasKnowledgeAccess])
 def ask(request):
     query = request.GET.get("q", "").strip()
     return Response(answer_query(query))
@@ -77,7 +77,7 @@ def ask(request):
     tags=["knowledge"],
 )
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([HasKnowledgeAccess])
 def reindex_academic_calendar(request):
     payload = index_academic_calendar()
     return Response({"status": "ok", "payload": payload})

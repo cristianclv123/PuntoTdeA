@@ -71,8 +71,9 @@ The payload nests as `entry[].changes[].value`, and inside that:
 - `value.statuses[]` → **campaign status**, updates `BroadcastRecipient`.
 
 Both branches are handled in the same request. An inbound message is discarded
-before reaching the bot if it has no `id` or no `from`, if its `phone_number_id`
-isn't the configured one, if `type != "text"`, or if the body is empty.
+before reaching the bot if it has no `id` or no `from`, if its
+`phone_number_id` isn't the configured one, if it isn't `text`/`interactive`, or
+if it has neither text nor a button/list id.
 
 ---
 
@@ -177,13 +178,18 @@ synthetic (`wamid.SEED…` prefix); clean up with `--limpiar`.
 ```python
 from knowledge.chatbot import whatsapp as chatbot_whatsapp
 
-replies = chatbot_whatsapp.handle_message(sender, text)   # -> list[str]
+replies = chatbot_whatsapp.handle_message(
+    sender,
+    text,
+    external_message_id=wamid,
+    interactive_id="",  # button/list id when the user taps an option
+)   # -> list[str | dict]
 ```
 
 That's the whole contract. The webhook already extracted `sender` (the `from`
-field) and `text` (the body), already filtered non-text messages, and it sends
-each string in the returned list for you via `send_text`. You never see the
-payload, the signature, or the HTTP layer.
+field), the `text`/title and the stable interactive `id`, and it sends every
+reply through `send_replies` (text, image or interactive buttons/list). You
+never see the payload, the signature, or the HTTP layer.
 
 `handle_message` is idempotent at the event level, not at the function level:
 the webhook de-duplicates by `wamid` before calling it.
@@ -203,14 +209,22 @@ you'll have to resolve it by phone, and that resolution isn't written yet.
 | State | What the bot does with the next message |
 | --- | --- |
 | `waiting_question` | Treats it as the question, answers, → `waiting_confirmation` |
-| `waiting_confirmation` | `sí`/`s`/`yes` → `help_options`. `no`/`n` → `ended` (status `ended`). **Anything else re-asks and doesn't advance** |
-| `help_options` | Contains `asesor`, `humano` or `persona` → escalates → `waiting_advisor_question`. Otherwise treated as a new question |
-| `waiting_advisor_question` | Stores the request, status `pending` → `pending` |
+| `waiting_confirmation` | Buttons `chat_more` → `help_options`, `chat_advisor` → escalate, `chat_finish` → `ended`. Text `sí`/`s`/`yes` (or `otra consulta`) → `help_options`; `no`/`n` (or `finalizar`) → `ended`. **Anything else re-asks and doesn't advance** |
+| `waiting_low_confidence_choice` | Buttons `lowconf_advisor` → asks for the advisor document (`waiting_advisor_document`), then the request; `lowconf_question` → `waiting_question`. Text `sí`/`asesor` or `no`/`otra pregunta` also works |
+| `help_options` | Buttons `help_advisor` → escalate; `help_question` → prompt. Text containing `asesor`, `humano` or `persona` escalates; otherwise treated as a new question |
+| `waiting_advisor_document` | Asks for the ID number, then → `waiting_advisor_question` |
+| `waiting_advisor_question` | Asks for the request, creates the ticket, status `pending` → `pending` |
 | `ended` / `pending` | Fixed "already closed" reply |
 
-Unknown state: starts over and submits the text as a question.
+Unknown state: starts over and submits the text as a question. A button or list
+`id` that doesn't belong to the current state gets a reminder and does **not**
+advance the flow.
 
-### Two behaviors that will confuse you if nobody tells you
+Decision prompts use WhatsApp interactive buttons (max 3) with stable ids:
+`chat_more`, `chat_advisor`, `chat_finish`, `lowconf_advisor`,
+`lowconf_question`, `help_question`, `help_advisor`.
+
+### Three behaviors that will confuse you if nobody tells you
 
 **1. The first message's text is discarded.** On a new conversation,
 `handle_message` returns the greeting and never looks at the text:
@@ -224,16 +238,26 @@ So the first thing a person sends has to be a greeting; the question is only
 processed from the second message onward. If you test by hand and the bot seems
 to ignore you, this is why.
 
-**2. In `waiting_confirmation` only yes/no works.** Anything else gets
-"Respóndeme sí o no: ¿te puedo ayudar en algo más?" and **the message isn't
-stored** in the conversation history.
+**2. In `waiting_confirmation` free text re-asks.** Anything that isn't a valid
+option (yes/no, another question, advisor or finish) gets the same prompt with
+buttons and **the message isn't stored** in the conversation history.
+
+**3. Inactivity is 5 + 2 minutes.** After 5 minutes without user activity the
+bot sends one warning; 2 minutes later it closes the conversation and notifies
+the user. Any inbound message resets the timer and cancels the pending close.
+Conversations with an open case or waiting for an advisor are not closed. The
+`close_inactive_chats` command can run as a daemon thread inside the web process
+when `ENABLE_INACTIVITY_SCHEDULER=true` (the same in Docker and on Render), or
+independently with `--interval 60` for systemd/supervisor, or `--once` from a
+cron job. On Render free it only runs while the container is awake.
 
 ### Persisted state
 
 `ChatConversation`: `flow_state`, `status` (`active`/`ended`/`pending`),
-`last_question`, `advisor_question`, `escalation_reason`, `escalated_at`, and
-`messages` as a JSON list of `{author, content, created_at}`.
-Visible in `/admin/knowledge/chatconversation/`.
+`last_question`, `advisor_question`, `escalation_reason`, `escalated_at`,
+`last_user_activity_at`, `inactivity_warned_at`, and `messages` as a JSON list of
+`{author, content, created_at}`. Visible in
+`/admin/knowledge/chatconversation/`.
 
 ### Extending it
 
@@ -270,8 +294,9 @@ type, a fake number means the reply never reaches a real phone — that's expect
 
 - Don't create a second webhook or a parallel route. There's one.
 - Don't re-validate the signature. It's done, and it's mandatory.
-- Don't call Graph API directly. Go through `MetaAdapter` or `chatbot_whatsapp.send_text`.
-  A direct call skips `provider_message_id`, and the delivery states stop working.
+- Don't call Graph API directly. Go through `MetaAdapter` or
+  `chatbot_whatsapp.send_replies` (or `send_text` for plain text). A direct call
+  skips `provider_message_id`, and the delivery states stop working.
 - Don't assume a message you sent was delivered. `sent` only means Meta accepted it.
   Read receipts are what confirm delivery, and a read may never arrive.
 
@@ -279,14 +304,14 @@ type, a fake number means the reply never reaches a real phone — that's expect
 
 Worth knowing before you design around them:
 
-- **Only `type: "text"` inbound messages are processed.** Images, audio, documents
-  and interactive replies (list messages, quick-reply buttons) are logged and
-  discarded. If you need them, that's new work in `_process_inbound`.
+- **Only `text` and interactive replies (`button_reply`/`list_reply`) are
+  processed.** Images, audio, documents and other interactive types are logged
+  and discarded. If you need them, that's new work in `_process_inbound`.
 - **`send_campaign` is synchronous.** Fine for tens of recipients, wrong for
   thousands. The async move is the campaigns team's.
-- **A retried event can replay the bot's reply.** If `handle_message` succeeds but
-  `send_text` then fails, the request returns `500`, Meta retries, and the bot
-  answers again. The event is left unprocessed on purpose so it isn't lost, which
+- **A retried event can replay the bot's reply.** If `handle_message` succeeds
+  but `send_replies` then fails, the request returns `500`, Meta retries, and the
+  bot answers again. The event is left unprocessed on purpose so it isn't lost, which
   means the trade-off is currently "at least once" rather than "exactly once". If
   duplicate replies become a problem, the fix is to record the outbound `wamid`
   per inbound event.

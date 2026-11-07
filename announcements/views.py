@@ -1,8 +1,10 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from PuntoTdeA.access import module_access_required
+
+from .permissions import ANNOUNCEMENTS_PERMISSION
 from .models import Announcement, StatusAd
 from .status_ad_service import publish_announcement
 
@@ -29,6 +31,15 @@ def _notify(request: HttpRequest, status_ad: StatusAd) -> None:
         return
     estado = "activo" if status_ad.state == StatusAd.State.ACTIVE else "pausado (prueba)"
     messages.success(request, f"Anuncio creado en WhatsApp Status ({estado}).")
+    from notifications.events import notify_announcement
+    from notifications.models import Notification
+
+    notify_announcement(
+        "Aviso publicado en WhatsApp Status",
+        status_ad.announcement.title if status_ad.announcement_id else "Status",
+        event="announcement.status",
+        level=Notification.Level.SUCCESS,
+    )
 
 
 def _retry_status(request: HttpRequest, announcement: Announcement) -> None:
@@ -54,7 +65,10 @@ def _retry_status(request: HttpRequest, announcement: Announcement) -> None:
     _notify(request, status_ad)
 
 
-@login_required
+@module_access_required(
+    ANNOUNCEMENTS_PERMISSION,
+    module_name="Announcements",
+)
 def index(request):
     if request.method == "POST":
         action = (request.POST.get("action") or "create").strip()
@@ -69,8 +83,18 @@ def index(request):
                     "estado de WhatsApp.",
                 )
                 return redirect("announcements:index")
+            title = announcement.title
             announcement.delete()
             messages.success(request, "Aviso eliminado.")
+            from notifications.events import notify_announcement
+            from notifications.models import Notification
+
+            notify_announcement(
+                "Se eliminó un aviso",
+                title,
+                event="announcement.deleted",
+                level=Notification.Level.WARNING,
+            )
             return redirect("announcements:index")
 
         if action == "publish_status":
@@ -117,6 +141,15 @@ def index(request):
         except Exception:
             pass
         messages.success(request, "Aviso creado.")
+        from notifications.events import notify_announcement
+        from notifications.models import Notification
+
+        notify_announcement(
+            "Se creó un aviso",
+            announcement.title,
+            event="announcement.created",
+            level=Notification.Level.SUCCESS,
+        )
 
         if publish_status:
             if not announcement.has_image:
@@ -145,7 +178,10 @@ def index(request):
     return render(request, "announcements/avisos.html", context)
 
 
-@login_required
+@module_access_required(
+    ANNOUNCEMENTS_PERMISSION,
+    module_name="Announcements",
+)
 def announcement_image(request: HttpRequest, pk: int) -> HttpResponse:
     """Sirve el binario de la imagen del aviso guardado en la base de datos."""
     announcement = get_object_or_404(Announcement, pk=pk)

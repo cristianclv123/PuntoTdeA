@@ -2,6 +2,7 @@ from unittest.mock import patch
 from itertools import count
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -27,18 +28,35 @@ _unique_send_result.counter = count(1)
 class AdvisorE2EMixin:
     def _make_users(self):
         self.owner = User.objects.create_user(
-            username="asesor_owner", password="secret123", first_name="Ana", last_name="Dueña"
+        username="asesor_owner",
+        password="secret123",
+        first_name="Ana",
+        last_name="Dueña",
         )
         self.other = User.objects.create_user(
-            username="asesor_otro", password="secret123", first_name="Luis", last_name="Otro"
+        username="asesor_otro",
+        password="secret123",
+        first_name="Luis",
+        last_name="Otro",
         )
         self.staff = User.objects.create_user(
-            username="asesor_staff",
-            password="secret123",
-            first_name="Sofia",
-            last_name="Admin",
-            is_staff=True,
+        username="asesor_staff",
+        password="secret123",
+        first_name="Sofia",
+        last_name="Admin",
+        is_staff=True,
         )
+
+
+        cases_permission = Permission.objects.get(
+            content_type__app_label="cases",
+            codename="access_cases",
+        )
+
+        for user in (self.owner, self.other, self.staff):
+            user.user_permissions.add(cases_permission)
+
+
 
     def _make_whatsapp_conversation(self, **kwargs):
         channel = Channel.objects.get(code="whatsapp")
@@ -58,7 +76,6 @@ class AdvisorE2EMixin:
         }
         defaults.update(kwargs)
         return Conversation.objects.create(**defaults)
-
 
 class InboundE2ETests(AdvisorE2EMixin, TestCase):
     def setUp(self):

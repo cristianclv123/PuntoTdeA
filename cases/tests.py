@@ -1,8 +1,23 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from channels.db import database_sync_to_async
+from channels.layers import get_channel_layer
+from channels.routing import URLRouter
+from channels.testing import WebsocketCommunicator
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, RequestFactory, TestCase
+from django.test import (
+    Client,
+    RequestFactory,
+    TestCase,
+    TransactionTestCase,
+    override_settings,
+)
 from django.urls import reverse
+from django.conf import settings
+from tempfile import TemporaryDirectory
+from time import time as current_time
+from unittest.mock import patch
 
 from cases.models import (
     CaseComment,
@@ -17,6 +32,7 @@ from cases.models import (
 from cases.services.assignment import ClaimError, claim_conversation
 from cases.services.attachments import detect_kind, validate_uploaded_file
 from cases.services.ingestion import InboundPayload, create_outbound_message, ingest_inbound_message
+from cases.routing import websocket_urlpatterns
 from cases.views import _bandeja_list_context
 
 User = get_user_model()
@@ -125,6 +141,7 @@ class AuthTests(TestCase):
 class WidgetApiTests(TestCase):
     def test_web_contact_and_message_flow(self):
         client = Client()
+
         contact_res = client.post(
             reverse("web-contacts"),
             data={
@@ -137,17 +154,198 @@ class WidgetApiTests(TestCase):
             },
             content_type="application/json",
         )
-        self.assertIn(contact_res.status_code, (200, 201))
-        contact_id = contact_res.json()["id"]
+
+        self.assertEqual(contact_res.status_code, 201)
+
+        contact_data = contact_res.json()
+        self.assertIn("contact_credential", contact_data)
 
         msg_res = client.post(
             reverse("web-messages"),
-            data={"contact_id": contact_id, "body": "Necesito info de matrícula"},
+            data={"body": "Necesito info de matrícula"},
+            content_type="application/json",
+            HTTP_X_WIDGET_CREDENTIAL=contact_data["contact_credential"],
+        )
+
+        self.assertEqual(
+            msg_res.status_code,
+            201,
+            msg=f"Estado: {msg_res.status_code}. Respuesta: {msg_res.content.decode('utf-8')}",
+        )
+
+        message_data = msg_res.json()
+        self.assertIn("conversation_credential", message_data)
+
+        conv = Conversation.objects.get(
+            channel__code="web",
+            pk=message_data["conversation_id"],
+        )
+
+        self.assertIsNone(conv.assigned_to_id)
+
+        list_res = client.get(
+            reverse(
+                "web-messages-list",
+                kwargs={"conversation_id": conv.pk},
+            ),
+            HTTP_X_WIDGET_CREDENTIAL=message_data["conversation_credential"],
+        )
+
+        self.assertEqual(list_res.status_code, 200)
+
+        invalid_list_res = client.get(
+            reverse(
+                "web-messages-list",
+                kwargs={"conversation_id": conv.pk},
+            ),
+            HTTP_X_WIDGET_CREDENTIAL=contact_data["contact_credential"],
+        )
+        mismatched_conversation_res = client.get(
+            reverse(
+                "web-messages-list",
+                kwargs={"conversation_id": conv.pk + 1},
+            ),
+            HTTP_X_WIDGET_CREDENTIAL=message_data["conversation_credential"],
+        )
+        self.assertEqual(invalid_list_res.status_code, 403)
+        self.assertEqual(mismatched_conversation_res.status_code, 403)
+
+    def test_widget_rejects_missing_and_tampered_contact_credentials(self):
+        contact = self.client.post(
+            reverse("web-contacts"),
+            data={
+                "full_name": "Contacto firmado",
+                "document_number": "DOC-WIDGET-TAMPER",
+                "email": "widget-tamper@example.com",
+                "phone": "3001234567",
+                "academic_program": "Sistemas",
+                "semester": 1,
+            },
+            content_type="application/json",
+        ).json()
+        url = reverse("web-messages")
+        payload = {"body": "Mensaje sin identidad"}
+
+        missing = self.client.post(
+            url,
+            data=payload,
             content_type="application/json",
         )
-        self.assertEqual(msg_res.status_code, 201)
-        conv = Conversation.objects.get(channel__code="web")
-        self.assertIsNone(conv.assigned_to_id)
+        tampered = self.client.post(
+            url,
+            data=payload,
+            content_type="application/json",
+            HTTP_X_WIDGET_CREDENTIAL=f'{contact["contact_credential"]}tampered',
+        )
+
+        self.assertEqual(missing.status_code, 403)
+        self.assertEqual(tampered.status_code, 403)
+
+    def test_widget_rejects_an_expired_conversation_credential(self):
+        contact_response = self.client.post(
+            reverse("web-contacts"),
+            data={
+                "full_name": "Contacto vencido",
+                "document_number": "DOC-WIDGET-EXPIRED",
+                "email": "widget-expired@example.com",
+                "phone": "3001234568",
+                "academic_program": "Sistemas",
+                "semester": 1,
+            },
+            content_type="application/json",
+        )
+        message_response = self.client.post(
+            reverse("web-messages"),
+            data={"body": "Primer mensaje"},
+            content_type="application/json",
+            HTTP_X_WIDGET_CREDENTIAL=contact_response.json()["contact_credential"],
+        )
+        self.assertEqual(message_response.status_code, 201)
+
+        expired_at = current_time() + 90 * 24 * 60 * 60 + 1
+        with patch("django.core.signing.time.time", return_value=expired_at):
+            response = self.client.get(
+                reverse(
+                    "web-messages-list",
+                    kwargs={"conversation_id": message_response.json()["conversation_id"]},
+                ),
+                HTTP_X_WIDGET_CREDENTIAL=message_response.json()[
+                    "conversation_credential"
+                ],
+            )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_widget_does_not_issue_a_new_credential_for_an_existing_contact(self):
+        client = Client()
+        payload = {
+            "full_name": "Juan Calle",
+            "document_number": "998877",
+            "email": "juan@tdea.edu.co",
+            "phone": "3009998877",
+            "academic_program": "Sistemas",
+            "semester": 5,
+        }
+        first = client.post(
+            reverse("web-contacts"),
+            data=payload,
+            content_type="application/json",
+        )
+        repeated = client.post(
+            reverse("web-contacts"),
+            data=payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(repeated.status_code, 409)
+        self.assertNotIn("contact_credential", repeated.json())
+
+
+class CaseIntegrationWebhookTokenTests(TestCase):
+    @override_settings(CASES_WEB_WEBHOOK_TOKEN="case-integration-secret")
+    def test_web_ingestion_webhook_rejects_missing_or_invalid_token(self):
+        payload = {"document_number": "DOC-NOT-LOOKED-UP", "body": "Mensaje"}
+
+        missing = self.client.post(
+            reverse("web-webhook"),
+            data=payload,
+            content_type="application/json",
+        )
+        invalid = self.client.post(
+            reverse("web-webhook"),
+            data=payload,
+            content_type="application/json",
+            HTTP_X_INTEGRATION_TOKEN="wrong-token",
+        )
+
+        self.assertEqual(missing.status_code, 403)
+        self.assertEqual(invalid.status_code, 403)
+
+    @override_settings(CASES_WEB_WEBHOOK_TOKEN="case-integration-secret")
+    def test_valid_integration_token_preserves_public_ingestion_flow(self):
+        contact = Contact.objects.create(
+            full_name="Integración autorizada",
+            document_number="DOC-INTEGRATION-OK",
+            email="integration@example.com",
+            phone="573001112244",
+            semester=1,
+        )
+
+        response = self.client.post(
+            reverse("web-webhook"),
+            data={"contact_id": contact.pk, "body": "Mensaje integrado"},
+            content_type="application/json",
+            HTTP_X_INTEGRATION_TOKEN="case-integration-secret",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertTrue(
+            Conversation.objects.filter(
+                channel__code=Channel.Code.WEB,
+                contact=contact,
+            ).exists()
+        )
 
     def test_simulate_webhook(self):
         client = Client()
@@ -170,17 +368,28 @@ class WidgetApiTests(TestCase):
 class CaseActionsTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username="asesor_case", password="secret123")
-        self.client.login(username="asesor_case", password="secret123")
+        self.user = User.objects.create_user(
+        username="asesor_case",
+        password="secret123",
+        )
+
+        cases_permission = Permission.objects.get(
+            content_type__app_label="cases",
+            codename="access_cases",
+        )
+        self.user.user_permissions.add(cases_permission)
+
+        self.client.force_login(self.user)
+
         self.channel = Channel.objects.get(code="web")
         self.dept = Department.objects.get(code="registro_academico")
         self.contact = Contact.objects.create(
-            full_name="Valentina Soto",
-            document_number="DOC-CASE-1",
-            email="vale@tdea.edu.co",
-            phone="3002223344",
-            academic_program="Sistemas",
-            semester=4,
+        full_name="Valentina Soto",
+        document_number="DOC-CASE-1",
+        email="vale@tdea.edu.co",
+        phone="3002223344",
+        academic_program="Sistemas",
+        semester=4,
         )
         self.conversation = Conversation.objects.create(
             channel=self.channel,
@@ -398,7 +607,10 @@ class AttachmentAndTemplateTests(TestCase):
         with self.assertRaises(ValidationError):
             validate_uploaded_file(bad)
 
+
     def test_create_reply_template_via_post(self):
+        self._grant_cases_permission()
+
         url = reverse("cases:detail", args=[self.conversation.id])
         res = self.client.post(
             url,
@@ -408,33 +620,296 @@ class AttachmentAndTemplateTests(TestCase):
                 "template_body": "Hola, ¿en qué te ayudo?",
             },
         )
+
         self.assertEqual(res.status_code, 302)
         self.assertTrue(
-            ReplyTemplate.objects.filter(title="Bienvenida rápida", is_active=True).exists()
+            ReplyTemplate.objects.filter(
+                title="Bienvenida rápida",
+                is_active=True,
+            ).exists()
         )
 
     def test_seeded_templates_exist(self):
         self.assertTrue(ReplyTemplate.objects.filter(title="Saludo inicial").exists())
+
+    def _create_test_attachment(self):
+        content = b"contenido privado de prueba"
+
+        message = Message.objects.create(
+            conversation=self.conversation,
+            direction=Message.Direction.OUTBOUND,
+            body="Documento de prueba",
+        )
+
+        attachment = MessageAttachment.objects.create(
+            message=message,
+            file=SimpleUploadedFile(
+                "documento.txt",
+                content,
+                content_type="text/plain",
+            ),
+            original_name="documento.txt",
+            content_type="text/plain",
+            kind=MessageAttachment.Kind.OFFICE,
+            size_bytes=len(content),
+        )
+
+        return attachment, content
+
+    def _grant_cases_permission(self):
+        permission = Permission.objects.get(
+            content_type__app_label="cases",
+            codename="access_cases",
+        )
+        self.user.user_permissions.add(permission)
+
+        # Actualiza la sesión con un usuario recién cargado.
+        self.client.force_login(User.objects.get(pk=self.user.pk))
+
+    def test_download_attachment_requires_explicit_cases_permission(self):
+        attachment, _ = self._create_test_attachment()
+
+        response = self.client.get(
+            reverse(
+    "cases-attachment-download",
+    kwargs={"attachment_id": attachment.pk},
+)
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_user_with_cases_permission_can_download_attachment(self):
+        attachment, expected_content = self._create_test_attachment()
+        self._grant_cases_permission()
+
+        response = self.client.get(
+            reverse(
+                "cases-attachment-download",
+                kwargs={"attachment_id": attachment.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), expected_content)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertIn("attachment", response["Content-Disposition"])
+
+    def test_safe_image_and_video_attachments_can_be_previewed_inline(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            direction=Message.Direction.OUTBOUND,
+            body="Archivos de vista previa",
+        )
+        attachments = [
+            MessageAttachment.objects.create(
+                message=message,
+                file=SimpleUploadedFile(
+                    "vista.jpg",
+                    bytes([255, 216, 255]),
+                    content_type="image/jpeg",
+                ),
+                original_name="vista.jpg",
+                content_type="image/jpeg",
+                kind=MessageAttachment.Kind.IMAGE,
+                size_bytes=3,
+            ),
+            MessageAttachment.objects.create(
+                message=message,
+                file=SimpleUploadedFile(
+                    "vista.mp4",
+                    b"video",
+                    content_type="video/mp4",
+                ),
+                original_name="vista.mp4",
+                content_type="video/mp4",
+                kind=MessageAttachment.Kind.VIDEO,
+                size_bytes=5,
+            ),
+        ]
+        self._grant_cases_permission()
+
+        for attachment in attachments:
+            with self.subTest(name=attachment.original_name):
+                response = self.client.get(
+                    reverse(
+                        "cases-attachment-download",
+                        kwargs={"attachment_id": attachment.pk},
+                    )
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("inline", response["Content-Disposition"])
+                self.assertEqual(
+                    response["Content-Type"],
+                    attachment.content_type,
+                )
+
+    def test_attachment_with_active_content_is_forced_to_download(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            direction=Message.Direction.OUTBOUND,
+            body="Imagen",
+        )
+        attachment = MessageAttachment.objects.create(
+            message=message,
+            file=SimpleUploadedFile(
+                "imagen.jpg",
+                b"<html>contenido activo</html>",
+                content_type="text/html",
+            ),
+            original_name="imagen.jpg",
+            content_type="text/html",
+            kind=MessageAttachment.Kind.IMAGE,
+            size_bytes=30,
+        )
+        self._grant_cases_permission()
+
+        response = self.client.get(
+            reverse(
+                "cases-attachment-download",
+                kwargs={"attachment_id": attachment.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+
+
+    def test_download_attachment_returns_404_for_missing_id(self):
+        self._grant_cases_permission()
+
+        response = self.client.get(
+            reverse(
+                "cases-attachment-download",
+                kwargs={"attachment_id": 999999},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(DEBUG=True)
+    def test_direct_media_url_for_attachment_returns_404(self):
+        with TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root):
+                response = self.client.get(
+                    "/media/cases/attachments/2026/10/documento.txt"
+                )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_download_attachment_rejects_post(self):
+        attachment, _ = self._create_test_attachment()
+
+        # Autoriza al usuario para que la solicitud llegue a @require_GET.
+        self._grant_cases_permission()
+
+        response = self.client.post(
+            reverse(
+                "cases-attachment-download",
+                kwargs={"attachment_id": attachment.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 405)
+
+
+class WebSocketPermissionRevocationTests(TransactionTestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="ws-revocation-user")
+        self.permission = Permission.objects.get(
+            content_type__app_label="cases",
+            codename="access_cases",
+        )
+        self.user.user_permissions.add(self.permission)
+        channel = Channel.objects.get(code="web")
+        contact = Contact.objects.create(
+            full_name="Estudiante WebSocket",
+            document_number="DOC-WS-REVOKE",
+            email="ws-revoke@example.edu",
+            phone="3001234567",
+            academic_program="Sistemas",
+            semester=3,
+        )
+        self.conversation = Conversation.objects.create(
+            channel=channel,
+            contact=contact,
+            external_thread_id="web-DOC-WS-REVOKE",
+        )
+
+    async def test_revoked_permission_closes_existing_subscriptions(self):
+        cases = (
+            ("/ws/bandeja/", "bandeja", "bandeja.event"),
+            (
+                f"/ws/conversations/{self.conversation.pk}/",
+                f"conversation_{self.conversation.pk}",
+                "conversation.event",
+            ),
+        )
+        channel_layer = get_channel_layer()
+
+        for path, group_name, event_type in cases:
+            communicator = WebsocketCommunicator(
+                URLRouter(websocket_urlpatterns),
+                path,
+            )
+            communicator.scope["user"] = self.user
+            connected, _ = await communicator.connect()
+            self.assertTrue(connected)
+
+            await database_sync_to_async(self.user.user_permissions.remove)(
+                self.permission
+            )
+            await channel_layer.group_send(
+                group_name,
+                {"type": event_type, "private_data": "sensitive"},
+            )
+
+            close_event = await communicator.receive_output(timeout=1)
+            self.assertEqual(close_event["type"], "websocket.close")
+            self.assertEqual(close_event["code"], 4403)
+            await communicator.wait()
+
+            await database_sync_to_async(self.user.user_permissions.add)(
+                self.permission
+            )
+
 
 
 class ClaimQueueTests(TestCase):
     def setUp(self):
         self.channel = Channel.objects.get(code="web")
         self.contact = Contact.objects.create(
-            full_name="Luis Mesa",
-            document_number="DOC-CLAIM-1",
-            email="luis@tdea.edu.co",
-            phone="3001110000",
-            academic_program="Sistemas",
-            semester=1,
+        full_name="Luis Mesa",
+        document_number="DOC-CLAIM-1",
+        email="luis@tdea.edu.co",
+        phone="3001110000",
+        academic_program="Sistemas",
+        semester=1,
         )
         self.conversation = Conversation.objects.create(
-            channel=self.channel,
-            contact=self.contact,
-            external_thread_id="web-DOC-CLAIM-1",
+        channel=self.channel,
+        contact=self.contact,
+        external_thread_id="web-DOC-CLAIM-1",
         )
-        self.advisor_a = User.objects.create_user(username="adv_a", password="secret123")
-        self.advisor_b = User.objects.create_user(username="adv_b", password="secret123")
+
+        self.advisor_a = User.objects.create_user(
+            username="adv_a",
+            password="secret123",
+        )
+        self.advisor_b = User.objects.create_user(
+            username="adv_b",
+            password="secret123",
+        )
+
+        cases_permission = Permission.objects.get(
+            content_type__app_label="cases",
+            codename="access_cases",
+        )
+
+        self.advisor_a.user_permissions.add(cases_permission)
+        self.advisor_b.user_permissions.add(cases_permission)
 
     def test_claim_assigns_first_advisor(self):
         claimed = claim_conversation(self.conversation.id, self.advisor_a)

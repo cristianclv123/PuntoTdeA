@@ -1,6 +1,5 @@
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db.models import OuterRef, Prefetch, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,17 +9,20 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from cases.constants import channel_ui, status_tag_class
 from cases.models import CaseComment, Conversation, Department, Message, ReplyTemplate
+from cases.permissions import CASES_PERMISSION
 from cases.services.assignment import (
     ClaimError,
     CloseError,
     advisor_can_reply,
+    announce_advisor_change,
     claim_conversation,
     close_conversation,
     user_can_act_on_conversation,
 )
 from cases.services.attachments import ACCEPT_ATTR
-from cases.services.case_events import advisor_label, mark_claimed
+from cases.services.case_events import advisor_label
 from cases.services.ingestion import create_outbound_message
+from PuntoTdeA.access import module_access_required
 
 User = get_user_model()
 
@@ -252,13 +254,13 @@ def _bandeja_list_context(request, selected_id=None):
     }
 
 
-@login_required
+@module_access_required(CASES_PERMISSION, module_name="Cases")
 def bandeja(request):
     context = _bandeja_list_context(request)
     return render(request, "cases/bandeja.html", context)
 
 
-@login_required
+@module_access_required(CASES_PERMISSION, module_name="Cases")
 @require_POST
 def claim_case(request, case_id):
     try:
@@ -293,7 +295,7 @@ def _handle_update_case(request, conversation: Conversation):
         messages.error(request, "Si el caso está escalado, debes indicar a qué dependencia.")
         return False
 
-    was_unassigned = conversation.assigned_to_id is None
+    previous_assigned_id = conversation.assigned_to_id
     conversation.status = status
     conversation.priority = priority
     conversation.department_id = int(department_id) if department_id.isdigit() else None
@@ -307,10 +309,7 @@ def _handle_update_case(request, conversation: Conversation):
             int(assigned_to_id) if assigned_to_id.isdigit() else conversation.assigned_to_id
         )
     conversation.save()
-
-    if conversation.assigned_to_id and (was_unassigned or not conversation.claimed_at):
-        assignee = conversation.assigned_to or request.user
-        mark_claimed(conversation, assignee, assign=False)
+    announce_advisor_change(conversation, previous_assigned_id)
 
     messages.success(request, "Gestión del caso guardada.")
     return True
@@ -412,7 +411,7 @@ def _handle_reply(request, conversation: Conversation):
     return True
 
 
-@login_required
+@module_access_required(CASES_PERMISSION, module_name="Cases")
 @require_http_methods(["GET", "POST"])
 def caso_detail(request, case_id):
     conversation = get_object_or_404(

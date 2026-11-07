@@ -35,6 +35,7 @@ class TemplateRef:
     body_text: str = ""
     header_type: str = "none"
     header_media_url: str = ""
+    header_text: str = ""
 
 
 

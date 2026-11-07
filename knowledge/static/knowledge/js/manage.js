@@ -9,6 +9,10 @@
   const ICON_TRASH = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
   function getCookie(name) {
+    if (name === "csrftoken") {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (meta && meta.content) return meta.content;
+    }
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
@@ -73,9 +77,12 @@
     const statusPill = item.is_active
       ? '<span class="pill pill-success">Activa</span>'
       : '<span class="pill pill-neutral">Inactiva</span>';
+    const thumb = item.image_url
+      ? `<img src="${escapeHtml(item.image_url)}" alt="" style="width:34px; height:34px; object-fit:cover; border-radius:6px; vertical-align:middle; margin-right:8px;">`
+      : '';
     return `
       <div class="data-table-row" data-row-id="${item.id}">
-        <div class="col-flex" style="font-weight:500;">${escapeHtml(item.question)}</div>
+        <div class="col-flex" style="font-weight:500;">${thumb}${escapeHtml(item.question)}</div>
         <div class="col-fixed-160"><span class="tag">${escapeHtml(categoryName(item.category))}</span></div>
         <div class="col-fixed-110">${statusPill}</div>
         <div class="row-actions" style="width:80px; flex-shrink:0;">
@@ -132,6 +139,19 @@
     dialog.querySelector('[data-dialog-title]').textContent = item
       ? (tab === 'faqs' ? 'Editar pregunta' : 'Editar artículo')
       : (tab === 'faqs' ? 'Nueva pregunta' : 'Nuevo artículo');
+    if (tab === 'faqs') {
+      const preview = form.querySelector('[data-image-preview]');
+      const previewImg = form.querySelector('[data-image-preview-img]');
+      if (preview && previewImg) {
+        if (item && item.image_url) {
+          previewImg.src = item.image_url;
+          preview.hidden = false;
+        } else {
+          previewImg.removeAttribute('src');
+          preview.hidden = true;
+        }
+      }
+    }
     if (item) {
       if (tab === 'faqs') {
         form.elements.question.value = item.question;
@@ -158,17 +178,21 @@
     const id = form.elements.id.value;
     try {
       const categoryId = await resolveCategoryId(form.elements.category_name.value);
-      let payload;
+      const url = id ? `${API[tab]}${id}/` : API[tab];
+      const method = id ? 'PATCH' : 'POST';
       if (tab === 'faqs') {
-        payload = {
-          question: form.elements.question.value.trim(),
-          answer: form.elements.answer.value.trim(),
-          category: categoryId,
-          is_active: form.elements.is_active.checked,
-        };
+        // Con imagen el cuerpo va multipart (FormData), no JSON.
+        const formData = new FormData();
+        formData.append('question', form.elements.question.value.trim());
+        formData.append('answer', form.elements.answer.value.trim());
+        formData.append('category', categoryId);
+        formData.append('is_active', form.elements.is_active.checked ? 'true' : 'false');
+        const file = form.elements.image.files && form.elements.image.files[0];
+        if (file) formData.append('image', file);
+        await apiRequest(url, { method, body: formData });
       } else {
         const published = form.elements.published.checked;
-        payload = {
+        const payload = {
           title: form.elements.title.value.trim(),
           summary: form.elements.summary.value.trim(),
           content: form.elements.content.value.trim(),
@@ -177,9 +201,8 @@
           published,
           status: published ? 'published' : 'draft',
         };
+        await apiRequest(url, { method, body: JSON.stringify(payload) });
       }
-      const url = id ? `${API[tab]}${id}/` : API[tab];
-      await apiRequest(url, { method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
       form.closest('dialog').close();
       await loadList(tab);
     } catch (err) {
@@ -285,5 +308,23 @@
       if (file) handleImport(file);
       event.target.value = '';
     });
+
+    const faqImageInput = document.getElementById('faq_image');
+    if (faqImageInput) {
+      faqImageInput.addEventListener('change', () => {
+        const form = faqImageInput.closest('form');
+        const preview = form && form.querySelector('[data-image-preview]');
+        const previewImg = form && form.querySelector('[data-image-preview-img]');
+        const file = faqImageInput.files && faqImageInput.files[0];
+        if (!preview || !previewImg) return;
+        if (file) {
+          previewImg.src = URL.createObjectURL(file);
+          preview.hidden = false;
+        } else {
+          previewImg.removeAttribute('src');
+          preview.hidden = true;
+        }
+      });
+    }
   });
 })();

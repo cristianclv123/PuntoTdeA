@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -12,6 +13,18 @@ from communications.services import meta_config, meta_templates
 from communications.services.ads_service import AdsResult
 
 from announcements.models import Announcement, StatusAd
+
+
+def _create_authorized_staff(username):
+    user = get_user_model().objects.create_user(
+        username=username, password="x", is_staff=True
+    )
+    permission = Permission.objects.get(
+        content_type__app_label="communications",
+        codename="access_communications",
+    )
+    user.user_permissions.add(permission)
+    return user
 
 
 class MetaConfigStatusTests(TestCase):
@@ -70,9 +83,7 @@ class MetaConfigStatusTests(TestCase):
 class MetaTestPageAccessTests(TestCase):
     def setUp(self):
         self.url = reverse("meta-whatsapp-test")
-        self.staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        self.staff = _create_authorized_staff("staff")
         self.regular = get_user_model().objects.create_user(
             username="asesor", password="x"
         )
@@ -85,7 +96,24 @@ class MetaTestPageAccessTests(TestCase):
     def test_non_staff_cannot_open_the_page(self):
         self.client.force_login(self.regular)
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_staff_with_explicit_permission_still_gets_forbidden(self):
+        permission = Permission.objects.get(
+            content_type__app_label="communications",
+            codename="access_communications",
+        )
+        self.regular.user_permissions.add(permission)
+        self.client.force_login(self.regular)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_staff_without_explicit_permission_gets_forbidden(self):
+        staff_without_permission = get_user_model().objects.create_user(
+            username="staff-sin-permiso", password="x", is_staff=True
+        )
+        self.client.force_login(staff_without_permission)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
     def test_staff_sees_the_page(self):
         self.client.force_login(self.staff)
@@ -108,9 +136,7 @@ class MetaTestPageAccessTests(TestCase):
 
 class MetaHealthEndpointTests(TestCase):
     def setUp(self):
-        self.staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        self.staff = _create_authorized_staff("staff")
         self.client.force_login(self.staff)
 
     def test_health_endpoint_reports_missing_configuration(self):
@@ -126,9 +152,7 @@ class MetaHealthEndpointTests(TestCase):
 class MetaConfigPageTests(TestCase):
     def setUp(self):
         self.url = reverse("meta-whatsapp-config")
-        self.staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        self.staff = _create_authorized_staff("staff")
         self.regular = get_user_model().objects.create_user(
             username="asesor", password="x"
         )
@@ -138,9 +162,9 @@ class MetaConfigPageTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("login", response.url)
 
-    def test_non_staff_is_redirected_away(self):
+    def test_non_staff_without_permission_gets_forbidden(self):
         self.client.force_login(self.regular)
-        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
     @override_settings(
         META_VERIFY_TOKEN="",
@@ -197,9 +221,7 @@ class SidebarMenuTests(TestCase):
     """El grupo del menú solo puede existir para personal staff."""
 
     def setUp(self):
-        self.staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        self.staff = _create_authorized_staff("staff")
         self.regular = get_user_model().objects.create_user(
             username="asesor", password="x"
         )
@@ -231,9 +253,7 @@ class SidebarMenuTests(TestCase):
 
 class MetaConfigPageActiveNavTests(TestCase):
     def test_pages_mark_themselves_as_active(self):
-        staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        staff = _create_authorized_staff("staff")
         self.client.force_login(staff)
         self.assertEqual(
             self.client.get(reverse("meta-whatsapp-config")).context["active_nav"],
@@ -254,9 +274,7 @@ class MetaResultsPageTests(TestCase):
 
     def setUp(self):
         self.url = reverse("meta-whatsapp-results")
-        self.staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        self.staff = _create_authorized_staff("staff")
         self.regular = get_user_model().objects.create_user(
             username="asesor", password="x"
         )
@@ -268,7 +286,7 @@ class MetaResultsPageTests(TestCase):
 
     def test_non_staff_cannot_open_the_page(self):
         self.client.force_login(self.regular)
-        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
 
     def test_staff_sees_every_tab(self):
         self.client.force_login(self.staff)
@@ -321,9 +339,7 @@ class MetaAdsCleanupTests(TestCase):
     def setUp(self):
         self.url = reverse("meta-whatsapp-results")
         self.delete_url = reverse("meta-whatsapp-results-delete")
-        self.staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        self.staff = _create_authorized_staff("staff")
         self.regular = get_user_model().objects.create_user(
             username="asesor", password="x"
         )
@@ -349,7 +365,7 @@ class MetaAdsCleanupTests(TestCase):
     def test_the_delete_action_requires_staff(self):
         self.client.force_login(self.regular)
         response = self.client.post(self.delete_url, {"status_ad": self.status_ad.id})
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)
         self.status_ad.refresh_from_db()
         self.assertEqual(self.status_ad.campaign_id, "111")
 
@@ -385,14 +401,87 @@ class MetaAdsCleanupTests(TestCase):
         self.assertEqual(self.status_ad.campaign_id, "111")
 
 
+class ExplicitModulePermissionTests(TestCase):
+    def setUp(self):
+        self.permission = Permission.objects.get(
+            content_type__app_label="communications",
+            codename="access_communications",
+        )
+        self.url = reverse("meta-whatsapp-config")
+
+    def test_direct_communications_permission_grants_console_access(self):
+        user = get_user_model().objects.create_user(
+            username="communications-direct", is_staff=True
+        )
+        user.user_permissions.add(self.permission)
+        self.client.force_login(user)
+
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+
+    def test_group_communications_permission_grants_console_access(self):
+        user = get_user_model().objects.create_user(
+            username="communications-group", is_staff=True
+        )
+        group = Group.objects.create(name="communications-access")
+        group.permissions.add(self.permission)
+        user.groups.add(group)
+        self.client.force_login(user)
+
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+
+    def test_superuser_without_explicit_permission_can_access_all_modules(self):
+        user = get_user_model().objects.create_superuser(
+            username="communications-superuser", password="x"
+        )
+        self.client.force_login(user)
+
+        module_urls = (
+            reverse("dashboard:index"),
+            reverse("cases:bandeja"),
+            reverse("knowledge:index"),
+            reverse("communications:campaigns"),
+            reverse("announcements:index"),
+            reverse("meta-whatsapp-config"),
+        )
+        for url in module_urls:
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+        sidebar = self.client.get(reverse("dashboard:index")).content.decode()
+        for name in (
+            "cases:bandeja",
+            "knowledge:list",
+            "communications:campaigns",
+            "announcements:index",
+            "meta-whatsapp-config",
+        ):
+            with self.subTest(menu_link=name):
+                self.assertIn(reverse(name), sidebar)
+
+    def test_permission_grant_and_revocation_apply_to_same_user_instance(self):
+        from PuntoTdeA.access import user_has_explicit_permission
+
+        user = get_user_model().objects.create_user(username="permission-cache")
+        self.assertFalse(
+            user_has_explicit_permission(user, "communications.access_communications")
+        )
+
+        user.user_permissions.add(self.permission)
+        self.assertTrue(
+            user_has_explicit_permission(user, "communications.access_communications")
+        )
+
+        user.user_permissions.remove(self.permission)
+        self.assertFalse(
+            user_has_explicit_permission(user, "communications.access_communications")
+        )
+
 class SampleTemplateLabelTests(TestCase):
     """`hello_world` es de muestra: se oculta salvo que sea la única aprobada."""
 
     def setUp(self):
         self.url = reverse("meta-whatsapp-test")
-        self.staff = get_user_model().objects.create_user(
-            username="staff", password="x", is_staff=True
-        )
+        self.staff = _create_authorized_staff("staff")
 
     @staticmethod
     def _template(name, status="APPROVED"):

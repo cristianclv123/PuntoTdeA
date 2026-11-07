@@ -13,13 +13,14 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "PuntoTdeA.settings")
 
 django_asgi_app = get_asgi_application()
 
-from cases.routing import websocket_urlpatterns  # noqa: E402
+from cases.routing import websocket_urlpatterns as cases_ws  # noqa: E402
+from notifications.routing import websocket_urlpatterns as notifications_ws  # noqa: E402
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
         "websocket": AllowedHostsOriginValidator(
-            AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+            AuthMiddlewareStack(URLRouter(cases_ws + notifications_ws))
         ),
     }
 )

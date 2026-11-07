@@ -16,7 +16,7 @@ urlpatterns = [
     path("webhooks/web/", views.web_webhook, name="web-webhook"),
     path("webhooks/simulate/", views.simulate_webhook, name="simulate-webhook"),
     path("web/contacts/", views.web_create_contact, name="web-contacts"),
-    path("web/messages/", views.web_webhook, name="web-messages"),
+    path("web/messages/", views.web_create_message, name="web-messages"),
     path(
         "web/conversations/<int:conversation_id>/messages/",
         views.web_list_messages,
@@ -26,6 +26,11 @@ urlpatterns = [
         "conversations/<int:conversation_id>/reply/",
         views.advisor_reply,
         name="advisor-reply",
+    ),
+    path(
+        "attachments/<int:attachment_id>/download/",
+        views.download_attachment,
+        name="cases-attachment-download",
     ),
 
     # Gestión completa del caso / creación de tickets (uso interno)

@@ -58,7 +58,7 @@ Meta Cloud API
 POST /api/whatsapp/webhook/     (communications.webhooks.meta_webhook)
         │
         ├─ estados de entrega ──► BroadcastRecipient (campañas)
-        └─ texto inbound ──────► knowledge.chatbot.whatsapp.handle_message
+        └─ inbound (texto/interactivo) ─► knowledge.chatbot.whatsapp.handle_message
                                       │
                                       ├─ RAG / FAQ
                                       └─ si escala ──► cases.ingest_inbound_message
@@ -88,9 +88,9 @@ El chatbot busca el contacto de comunicaciones por teléfono y copia datos al cr
 ## Auth
 
 - UI: sesión Django (`login_required`). Login por username o email.
-- `/api/cases/` y `/api/knowledge/`: `IsAuthenticated` en ViewSets de gestión; webhooks de ingesta pueden ser públicos.
-- `/campanas/api/`: `IsInternalService` (sesión **o** header `X-Internal-Token`). En `DEBUG=True` queda abierto.
-- Consola `/whatsapp-prueba/`, `/whatsapp-prueba/resultados/` y `/whatsapp-configuracion/`: solo `is_staff`.
+- `/api/cases/` y `/api/knowledge/`: permiso modular explícito en vistas y ViewSets; widget y webhooks conservan controles públicos propios.
+- `/campanas/api/`: `IsInternalService` exige permiso explícito de Communications en sesión o `X-Internal-Token` válido para integraciones de servicio. `DEBUG=True` no omite la autorización. Usuarios con permiso de Announcements pueden listar segmentos y ver la vista previa acotada de contactos, sin permisos de escritura ni acceso general a Communications.
+- Consola `/whatsapp-prueba/`, `/whatsapp-prueba/resultados/` y `/whatsapp-configuracion/`: requiere `is_staff` y acceso explícito a Communications; el superusuario activo pasa el control modular.
 
 ## Tiempo real
 
@@ -118,4 +118,4 @@ Tras editar `.env`: `docker compose up -d --force-recreate web` (un `restart` no
 
 ## Hueco conocido (inbound de casos)
 
-El ticket se crea cuando el bot **escala** (pide asesor o baja confianza). Los mensajes posteriores del estudiante se anexan al mismo caso y aparecen en la bandeja. Al tomar el chat, el asesor envía un saludo automático por WhatsApp.
+El ticket se crea cuando el bot **escala** y el usuario completa la solicitud (mensaje y documento). Aplica tanto para pedir asesor directamente como para la ruta de baja confianza. Los mensajes posteriores del estudiante se anexan al mismo caso y aparecen en la bandeja. Al tomar el chat, el asesor envía un saludo automático por WhatsApp.

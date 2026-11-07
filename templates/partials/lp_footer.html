@@ -1,0 +1,16 @@
+<footer class="lp-footer">
+  <div class="lp-footer-inner">
+    <div class="lp-footer-brand">
+      <span class="lp-brand-mark">TdeA</span>
+      <span>Punto TdeA · Tecnológico de Antioquia</span>
+    </div>
+    <nav class="lp-footer-links" aria-label="Legal">
+      <a href="{% url 'login' %}">Acceso</a>
+      <a href="{% url 'announcements:index' %}">Anuncios</a>
+      <a href="{% if on_landing %}#modulos{% else %}{% url 'home' %}#modulos{% endif %}">Módulos</a>
+      <a href="{% url 'datos-personales' %}"{% if legal_current == "datos" %} aria-current="page"{% endif %}>Tratamiento de datos</a>
+      <a href="{% url 'terminos' %}"{% if legal_current == "terminos" %} aria-current="page"{% endif %}>Términos y condiciones</a>
+    </nav>
+    <p class="lp-footer-copy">© {% now "Y" %} Institución Universitaria Tecnológico de Antioquia</p>
+  </div>
+</footer>

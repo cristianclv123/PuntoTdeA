@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.templatetags.static import static
 from django.test import TestCase
 from django.urls import reverse
@@ -16,12 +17,22 @@ class CampaignWizardPageTests(TestCase):
 
     def test_campaign_new_renders_audience_picker(self):
         user = User.objects.create_user(username="camp", password="secret")
+        user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="communications",
+                codename="access_communications",
+            )
+        )
         self.client.force_login(user)
 
         response = self.client.get(reverse("communications:campaign_new"))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn("campaignAudiencePicker", content)
+        self.assertIn('id="personalizationFile"', content)
+        self.assertIn('id="inspectPersonalizationFile"', content)
+        self.assertIn('id="validatePersonalization"', content)
+        self.assertIn('id="confirmPartialSend"', content)
         # Con DEBUG=false whitenoise sirve el asset con hash en el nombre; se
         # compara contra la ruta real del manifest, no contra el nombre literal.
         self.assertIn(static("js/audience-picker.js"), content)

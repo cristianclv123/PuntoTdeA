@@ -1,8 +1,20 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.urls import reverse
 
 User = get_user_model()
+
+
+def _user_with_communications_access(username):
+    user = User.objects.create_user(username=username, password="secret")
+    user.user_permissions.add(
+        Permission.objects.get(
+            content_type__app_label="communications",
+            codename="access_communications",
+        )
+    )
+    return user
 
 
 class TemplatesPageTests(TestCase):
@@ -16,7 +28,7 @@ class TemplatesPageTests(TestCase):
         self.assertIn("login", response.url)
 
     def test_renders_standalone_template_page(self):
-        user = User.objects.create_user(username="tpl-user", password="secret")
+        user = _user_with_communications_access("tpl-user")
         self.client.force_login(user)
 
         response = self.client.get(reverse("plantillas"))
@@ -30,7 +42,7 @@ class TemplatesPageTests(TestCase):
         self.assertNotIn("outbound-tabs", content)
 
     def test_renders_template_filters(self):
-        user = User.objects.create_user(username="tpl-filter", password="secret")
+        user = _user_with_communications_access("tpl-filter")
         self.client.force_login(user)
 
         response = self.client.get(reverse("plantillas"))
@@ -44,7 +56,7 @@ class TemplatesPageTests(TestCase):
         self.assertIn('id="templateStatusFilters"', content)
 
     def test_campaigns_link_points_to_standalone_page(self):
-        user = User.objects.create_user(username="tpl-user-2", password="secret")
+        user = _user_with_communications_access("tpl-user-2")
         self.client.force_login(user)
 
         response = self.client.get(reverse("communications:campaigns"))

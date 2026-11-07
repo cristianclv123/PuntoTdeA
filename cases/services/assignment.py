@@ -40,34 +40,76 @@ def user_can_act_on_conversation(conversation: Conversation, user) -> bool:
 
 
 def advisor_can_reply(conversation: Conversation, user) -> bool:
-    return user_can_act_on_conversation(conversation, user) and (
-        conversation.status != Conversation.Status.CERRADO
+    return (
+        user_can_act_on_conversation(conversation, user)
+        and conversation.assigned_to_id is not None
+        and conversation.status != Conversation.Status.CERRADO
     )
 
 
 def claim_greeting_body(user) -> str:
     name = advisor_label(user)
     return (
-        f"Hola, soy {name}, asesora de soporte al cliente de Punto TdeA. "
-        "A partir de ahora estás hablando con un asesor. ¿En qué te podemos ayudar?"
+        f"Hola, soy {name}, del equipo de soporte al cliente de Punto TdeA. "
+        "A partir de ahora estás hablando con alguien del equipo. ¿En qué te podemos ayudar?"
     )
 
 
-def _send_claim_greeting(conversation: Conversation, user) -> None:
+def close_notice_body(conversation: Conversation) -> str:
+    ticket = conversation.ticket_number or f"TDEA-{conversation.pk:06d}"
+    return (
+        f"El asesor ya cerró el caso {ticket}. "
+        "Si necesitas más ayuda, escríbenos de nuevo."
+    )
+
+
+def _send_customer_text(conversation: Conversation, body: str, user, *, log_label: str) -> None:
     from cases.services.ingestion import create_outbound_message
 
     try:
         create_outbound_message(
             conversation,
-            claim_greeting_body(user),
+            body,
             user=user,
+            emit_notification=False,
         )
     except ValidationError as exc:
         logger.warning(
-            "No se pudo enviar el saludo al tomar el caso %s: %s",
+            "No se pudo enviar %s del caso %s: %s",
+            log_label,
             conversation.pk,
             "; ".join(exc.messages) if hasattr(exc, "messages") else exc,
         )
+
+
+def _send_claim_greeting(conversation: Conversation, user) -> None:
+    _send_customer_text(
+        conversation,
+        claim_greeting_body(user),
+        user,
+        log_label="el saludo al tomar",
+    )
+
+
+def _send_close_notice(conversation: Conversation, user) -> None:
+    _send_customer_text(
+        conversation,
+        close_notice_body(conversation),
+        user,
+        log_label="el aviso de cierre",
+    )
+
+
+def announce_advisor_change(conversation: Conversation, previous_assigned_id) -> None:
+    """Si Guardar gestión deja otro asesor, registra la toma y saluda al cliente."""
+    new_id = conversation.assigned_to_id
+    if not new_id or new_id == previous_assigned_id:
+        return
+    assignee = User.objects.filter(pk=new_id, is_active=True).first()
+    if assignee is None:
+        return
+    mark_claimed(conversation, assignee, assign=False, force=True)
+    _send_claim_greeting(conversation, assignee)
 
 
 def _locked_conversation(conversation_id: int) -> Conversation | None:
@@ -115,6 +157,9 @@ def claim_conversation(conversation_id: int, user) -> Conversation:
     conversation, send_greeting = _assign_claim(conversation_id, user)
     if send_greeting:
         _send_claim_greeting(conversation, user)
+        from notifications.events import notify_chat_claimed
+
+        notify_chat_claimed(conversation, user)
     return conversation
 
 
@@ -186,4 +231,8 @@ def close_conversation(
     mark_closed(conversation, user)
     broadcast_conversation_update(conversation)
     conversation.refresh_from_db()
+    from notifications.events import notify_chat_closed
+
+    notify_chat_closed(conversation, user)
+    _send_close_notice(conversation, user)
     return conversation

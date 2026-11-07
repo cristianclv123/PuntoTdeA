@@ -6,6 +6,7 @@ from typing import Any
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -169,7 +170,13 @@ def search_knowledge(query: str, limit: int | None = None):
         models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=now),
     ).filter(
         models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=now),
-    ).select_related('category', 'intent')
+    ).select_related('category', 'intent').annotate(
+        image_available=models.Case(
+            models.When(image_data__isnull=False, then=models.Value(True)),
+            default=models.Value(False),
+            output_field=models.BooleanField(),
+        ),
+    ).defer('image_data')
     for faq in faq_queryset:
         score = _relevance_score(query, faq.question, f'{faq.question} {faq.answer}', faq.category.name)
         if score <= 0:
@@ -182,7 +189,11 @@ def search_knowledge(query: str, limit: int | None = None):
             'category': faq.category.name if faq.category else 'General',
             'score': round(score, 4),
             'source_type': 'faq',
-            'image_url': faq.image.url if faq.image else None,
+            'image_url': (
+                reverse('knowledge:faq-image', kwargs={'pk': faq.pk})
+                if faq.image_available else None
+            ),
+            'image_source_id': faq.pk if faq.image_available else None,
         })
 
     results.sort(key=lambda item: item['score'], reverse=True)
@@ -211,6 +222,7 @@ def answer_query(question: str) -> dict[str, Any]:
             'confidence': 0.0,
             'needs_human_attention': True,
             'sources': [],
+            'image_faq_id': None,
         }
 
     results = search_knowledge(question, limit=5)
@@ -218,11 +230,21 @@ def answer_query(question: str) -> dict[str, Any]:
         best_result = max(results, key=lambda result: float(result.get('score', 0.0)))
         confidence = evaluate_confidence(question, best_result)
         answer = best_result.get('summary') or best_result.get('content') or 'No encontré una respuesta formulada.'
+        image_faq_id = None
+        if best_result.get('source_type') == 'faq' and best_result.get('image_url'):
+            image_faq_id = best_result.get('id')
         return {
             'answer': answer,
             'confidence': confidence,
             'needs_human_attention': confidence < settings.KNOWLEDGE_SETTINGS.get('MIN_CONFIDENCE', 0.7),
             'sources': results,
+            'image_url': best_result.get('image_url'),
+            'image_source_id': (
+                best_result.get('id')
+                if best_result.get('source_type') == 'faq' and best_result.get('image_url')
+                else None
+            ),
+            'image_faq_id': image_faq_id,
         }
 
     return {
@@ -230,4 +252,5 @@ def answer_query(question: str) -> dict[str, Any]:
         'confidence': 0.0,
         'needs_human_attention': True,
         'sources': [],
+        'image_faq_id': None,
     }

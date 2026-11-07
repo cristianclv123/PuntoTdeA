@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from rest_framework import serializers
 
 from cases.models import (
@@ -32,6 +33,7 @@ class ContactSerializer(serializers.ModelSerializer):
 class WebContactCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
+        extra_kwargs = {"document_number": {"validators": []}}
         fields = [
             "full_name",
             "document_number",
@@ -59,6 +61,11 @@ class WebMessageCreateSerializer(serializers.Serializer):
                 "Se requiere contact_id o document_number."
             )
         return attrs
+
+
+class WidgetMessageCreateSerializer(serializers.Serializer):
+    body = serializers.CharField()
+    theme = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class SimulateWebhookSerializer(serializers.Serializer):
@@ -160,6 +167,8 @@ class CaseCommentSerializer(serializers.ModelSerializer):
 
 
 class MessageAttachmentSerializer(serializers.ModelSerializer):
+    file = serializers.SerializerMethodField()
+
     class Meta:
         model = MessageAttachment
         fields = [
@@ -167,6 +176,12 @@ class MessageAttachmentSerializer(serializers.ModelSerializer):
             "content_type", "kind", "size_bytes", "created_at",
         ]
         read_only_fields = fields
+
+    def get_file(self, obj) -> str:
+        return reverse(
+            "cases-attachment-download",
+            kwargs={"attachment_id": obj.pk},
+        )
 
 
 class MessageDetailSerializer(MessageSerializer):

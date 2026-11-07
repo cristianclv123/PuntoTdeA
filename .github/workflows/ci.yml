@@ -3,15 +3,17 @@ name: CI
 # Corre en cada push y PR. El job `tests` es el check que vigila Render:
 # con autoDeployTrigger=checksPass, un deploy solo arranca si esto pasa.
 #
-# IMPORTANTE: la rama que Render despliegue debe seguir listada aqui. Render
+# IMPORTANTE: la rama que Render despliegue debe estar listada aqui. Render
 # usa `autoDeployTrigger: checksPass`, asi que si el CI no corre en esa rama no
 # hay check verde y el servicio simplemente nunca despliega, sin avisar.
-# Hoy es `dev`. Cuando cambies `branch:` en render.yaml, cambiala aqui tambien.
+# Ahora mismo es `feature/JCFS/ChatbotFlujoInactivoDesciones` para validar el
+# flujo antes de integrarlo a `dev`. Cuando cambies `branch:` en render.yaml,
+# cambiala aqui tambien.
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, 'feature/JCFS/ChatbotFlujoInactivoDesciones']
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, 'feature/JCFS/ChatbotFlujoInactivoDesciones']
 
 concurrency:
   group: ci-${{ github.ref }}

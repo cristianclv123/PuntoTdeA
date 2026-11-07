@@ -64,6 +64,10 @@ class TemplateBuildError(ValueError):
     """La plantilla local no se puede traducir al formato de Meta."""
 
 
+class TemplateVerificationError(ValueError):
+    """La plantilla de una campaña no coincide con la versión aprobada en Meta."""
+
+
 @dataclass
 class TemplateResult:
     """Resultado de una operación sobre una sola plantilla de Meta."""
@@ -122,8 +126,13 @@ def _headers() -> dict[str, str]:
 
 def _error_detail(response: requests.Response) -> str:
     try:
-        error = response.json().get("error", {})
+        data = response.json()
     except (TypeError, ValueError):
+        return f"Meta respondió HTTP {response.status_code}."
+    if not isinstance(data, dict):
+        return f"Meta respondió HTTP {response.status_code}."
+    error = data.get("error", {})
+    if not isinstance(error, dict):
         return f"Meta respondió HTTP {response.status_code}."
     message = error.get("message") or "Error sin detalle."
     code = error.get("code")
@@ -178,13 +187,24 @@ def build_components(
     variable_types: dict | None = None,
     buttons: Any = None,
     header_type: str = "none",
+    header_text: str = "",
 ) -> list[dict[str, Any]]:
     """Traduce los campos de una plantilla a la lista ``components`` de Meta."""
-    if header_type and header_type != "none":
+    header_type = str(header_type or "none").lower()
+    components: list[dict[str, Any]] = []
+    if header_type == "text":
+        text = str(header_text or "").strip()
+        if not text:
+            raise TemplateBuildError("El encabezado de texto no puede estar vacío.")
+        if len(text) > 60:
+            raise TemplateBuildError("El encabezado de texto no puede superar 60 caracteres.")
+        if "{{" in text or "}}" in text:
+            raise TemplateBuildError("El encabezado de texto no admite variables.")
+        components.append({"type": "HEADER", "format": "TEXT", "text": text})
+    elif header_type != "none":
         raise TemplateBuildError(
-            "Meta no permite crear encabezados de imagen, video o documento por "
-            "API sin subir antes el archivo. Quita el encabezado o crea la "
-            "plantilla directamente en WhatsApp Manager."
+            "Los encabezados multimedia requieren una carga de archivo a Meta, "
+            "que aún no está implementada."
         )
 
     body: dict[str, Any] = {"type": "BODY", "text": body_text}
@@ -192,7 +212,7 @@ def build_components(
     if example:
         body["example"] = example
 
-    components: list[dict[str, Any]] = [body]
+    components.append(body)
     meta_buttons = _meta_buttons(buttons)
     if meta_buttons:
         components.append({"type": "BUTTONS", "buttons": meta_buttons})
@@ -223,6 +243,79 @@ def is_sample_template(name: Any) -> bool:
     return str(name or "").strip().lower() in SAMPLE_TEMPLATE_NAMES
 
 
+def verify_campaign_template(
+    meta_id: Any,
+    name: Any,
+    language: Any,
+    snapshot: Any,
+) -> dict[str, Any]:
+    """Devuelve la copia canónica de una plantilla propia aprobada por Meta."""
+    received_id = str(meta_id or "")
+    requested_id = received_id.strip()
+    if not requested_id:
+        raise TemplateVerificationError("Selecciona una plantilla aprobada de Meta.")
+    if received_id != requested_id:
+        raise TemplateVerificationError(
+            "El identificador de la plantilla no tiene un formato válido."
+        )
+    if not isinstance(snapshot, dict):
+        raise TemplateVerificationError("La copia de la plantilla debe ser un objeto JSON.")
+
+    result = get_template(requested_id)
+    if not result.ok or not result.template:
+        detail = result.message or "Meta no devolvió la plantilla solicitada."
+        raise TemplateVerificationError(
+            f"No fue posible verificar la plantilla en Meta: {detail}"
+        )
+
+    template = result.template
+    if str(template.get("meta_id", "")) != requested_id:
+        raise TemplateVerificationError(
+            "Meta devolvió una plantilla distinta al identificador solicitado."
+        )
+    if str(template.get("status", "")).upper() != "APPROVED":
+        raise TemplateVerificationError(
+            "La plantilla seleccionada no está aprobada por Meta."
+        )
+    actual_name = str(template.get("name", "") or "")
+    if template.get("is_sample") or is_sample_template(actual_name):
+        raise TemplateVerificationError(
+            "Las plantillas de muestra de Meta no se pueden usar en campañas."
+        )
+    if str(name or "") != actual_name:
+        raise TemplateVerificationError(
+            "El nombre de la plantilla no coincide con el registrado en Meta."
+        )
+    if str(language or "") != str(template.get("language", "") or META_LANGUAGE):
+        raise TemplateVerificationError(
+            "El idioma de la plantilla no coincide con el registrado en Meta."
+        )
+
+    canonical_snapshot = {
+        "name": actual_name,
+        "language": str(template.get("language", "") or META_LANGUAGE),
+        "category": str(template.get("category", "") or "").lower(),
+        "body_text": str(template.get("body_text", "") or ""),
+        "header_type": str(template.get("header_type", "") or "none"),
+        "header_text": str(template.get("header_text", "") or ""),
+        "buttons": template.get("buttons") if isinstance(template.get("buttons"), list) else [],
+    }
+    supplied_snapshot = {
+        "name": str(snapshot.get("name", "") or ""),
+        "language": str(snapshot.get("language", "") or ""),
+        "category": str(snapshot.get("category", "") or "").lower(),
+        "body_text": str(snapshot.get("body_text", "") or ""),
+        "header_type": str(snapshot.get("header_type", "") or "none"),
+        "header_text": str(snapshot.get("header_text", "") or ""),
+        "buttons": snapshot.get("buttons") if isinstance(snapshot.get("buttons"), list) else [],
+    }
+    if supplied_snapshot != canonical_snapshot:
+        raise TemplateVerificationError(
+            "El contenido de la plantilla no coincide con la versión aprobada en Meta."
+        )
+    return canonical_snapshot
+
+
 def selectable_templates(templates: Any) -> list[dict[str, Any]]:
     """Plantillas aprobadas que la interfaz puede ofrecer para enviar.
 
@@ -249,6 +342,7 @@ def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
     """
     body_text = ""
     header_type = "none"
+    header_text = ""
     buttons: list[dict[str, str]] = []
     for component in data.get("components") or []:
         if not isinstance(component, dict):
@@ -259,10 +353,13 @@ def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
         elif component_type == "HEADER":
             fmt = str(component.get("format", "")).upper()
             header_type = {
+                "TEXT": "text",
                 "IMAGE": "image",
                 "VIDEO": "video",
                 "DOCUMENT": "document",
             }.get(fmt, "none")
+            if header_type == "text":
+                header_text = str(component.get("text", "") or "")
         elif component_type == "BUTTONS":
             for button in component.get("buttons") or []:
                 if not isinstance(button, dict):
@@ -291,6 +388,7 @@ def normalize_meta_template(data: dict[str, Any]) -> dict[str, Any]:
         "rejected_reason": rejection_reason,
         "body_text": body_text,
         "header_type": header_type,
+        "header_text": header_text,
         "buttons": buttons,
         "indexes": [int(number) for number in order],
         "param_count": len(order),
@@ -372,6 +470,10 @@ def get_template(meta_id: str) -> TemplateResult:
         return TemplateResult(
             ok=False, message="Meta devolvió una respuesta ilegible.", kind=KIND_META
         )
+    if not isinstance(data, dict):
+        return TemplateResult(
+            ok=False, message="Meta devolvió una respuesta ilegible.", kind=KIND_META
+        )
 
     template = normalize_meta_template(data)
     return TemplateResult(
@@ -396,6 +498,7 @@ def create_from_draft(draft, meta_name: str = "") -> TemplateResult:
             draft.variable_types,
             draft.buttons,
             draft.header_type,
+            draft.header_text,
         )
     except TemplateBuildError as exc:
         return TemplateResult(ok=False, message=str(exc), kind=KIND_BUILD)
@@ -441,6 +544,7 @@ def edit_template(
     variable_types: dict | None = None,
     buttons: Any = None,
     header_type: str = "none",
+    header_text: str = "",
 ) -> TemplateResult:
     """Edita una plantilla existente en Meta (``POST /{template_id}``).
 
@@ -453,7 +557,9 @@ def edit_template(
         return TemplateResult(ok=False, message=error, kind=KIND_CONFIG)
 
     try:
-        components = build_components(body_text, variable_types, buttons, header_type)
+        components = build_components(
+            body_text, variable_types, buttons, header_type, header_text
+        )
     except TemplateBuildError as exc:
         return TemplateResult(ok=False, message=str(exc), kind=KIND_BUILD)
 

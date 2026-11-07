@@ -55,21 +55,50 @@
 
                 <section class="wizard-pane d-none" data-pane="2">
 
-                    <div class="mb-3">
-                        <h2 class="h5 mb-1 fw-bold">
-                            Selecciona y personaliza la plantilla
-                        </h2>
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                        <div>
+                            <h2 class="h5 mb-1 fw-bold">
+                                Selecciona y personaliza la plantilla
+                            </h2>
 
-                        <p class="small text-muted mb-0">
-                            Selecciona una plantilla para personalizar el mensaje.
-                        </p>
+                            <p class="small text-muted mb-0">
+                                Selecciona una plantilla para personalizar el mensaje.
+                            </p>
+                        </div>
+                        <a href="{% url 'plantillas' %}" class="btn btn-outline-success fw-semibold rounded-pill px-4">
+                            <i class="bi bi-file-earmark-text me-1"></i> Gestionar plantillas
+                        </a>
                     </div>
 
                     <div id="templateGrid" class="template-grid mb-4"></div>
 
-                    <div id="variableEditor" class="d-none">
-                        <h3 class="h6 fw-bold">Variables</h3>
-                        <div id="variableFields"></div>
+                    <div class="mt-4 p-3 border rounded-3" id="personalizationPanel">
+                        <h3 class="h6 fw-bold mb-1">Personalización desde Excel (opcional)</h3>
+                        <p class="small text-muted">
+                            Relaciona cada fila con un contacto por su documento. Este archivo no modifica la audiencia ni los datos del contacto.
+                        </p>
+                        <p class="small text-success d-none" id="personalizationFileSource"></p>
+                        <div class="mb-3 d-none" id="personalizationUploadField">
+                            <label class="form-label fw-semibold" for="personalizationFile">Archivo .xlsx</label>
+                            <input class="form-control" id="personalizationFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                            <div class="form-text">Esta carga adicional solo se necesita para audiencias existentes sin archivo original disponible.</div>
+                        </div>
+                        <button type="button" class="btn btn-outline-success btn-sm" id="inspectPersonalizationFile">
+                            Leer columnas del archivo
+                        </button>
+                        <div class="d-none mt-3" id="personalizationMapping">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="personalizationDocumentColumn">
+                                    Columna de documento
+                                </label>
+                                <select class="form-select" id="personalizationDocumentColumn"></select>
+                            </div>
+                            <div id="personalizationVariableMappings"></div>
+                            <button type="button" class="btn btn-success btn-sm mt-2" id="validatePersonalization">
+                                Validar y previsualizar
+                            </button>
+                        </div>
+                        <div class="mt-3" id="personalizationReport" aria-live="polite"></div>
                     </div>
 
                 </section>
@@ -99,7 +128,6 @@
                             <input id="scheduleAt" class="form-control" type="datetime-local" disabled>
                         </div>
                     </div>
-
                     <!--div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="optOutCheck" checked>
 
@@ -108,14 +136,22 @@
                         </label>
                     </div-->
                     <p class="small text-muted mb-0" id="costEstimate"></p>
+                    <div class="alert alert-warning mt-3 mb-0 d-none" id="partialConfirmationPanel">
+                        <div class="fw-semibold">Hay filas rechazadas</div>
+                        <p class="small mb-2" id="partialConfirmationText"></p>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="confirmPartialSend">
+                            <label class="form-check-label" for="confirmPartialSend">
+                                Confirmo continuar únicamente con los destinatarios validados.
+                            </label>
+                        </div>
+                    </div>
                 </section>
             </div>
             <div class="card-footer d-flex justify-content-between py-3 px-4"
                 style="background: var(--surface-2); border-top: 1px solid var(--border);">
                 <button type="button" class="btn btn-outline-secondary" id="wizardBack" disabled>Atrás</button>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-success d-none" id="wizardTest">Enviar
-                        prueba</button>
                     <button type="button" class="btn btn-success px-4" id="wizardNext">Continuar</button>
                 </div>
             </div>
