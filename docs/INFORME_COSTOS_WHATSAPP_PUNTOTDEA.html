@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INFORME EJECUTIVO DE COSTOS DE MENSAJERÍA DE WHATSAPP</title>
+<style>
+:root {
+  --verde: #0b3d2e;
+  --verde-claro: #e8f2ee;
+  --gris: #5b6770;
+  --borde: #cfd8d4;
+  --texto: #1f2933;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: var(--texto);
+  line-height: 1.65;
+  font-size: 15px;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 28px 64px;
+  background: #ffffff;
+}
+h1 {
+  font-size: 1.9em;
+  color: var(--verde);
+  border-bottom: 3px solid var(--verde);
+  padding-bottom: 10px;
+  margin-top: 1.2em;
+  line-height: 1.25;
+}
+h2 {
+  font-size: 1.45em;
+  color: var(--verde);
+  border-bottom: 1px solid var(--borde);
+  padding-bottom: 6px;
+  margin-top: 1.8em;
+  page-break-after: avoid;
+}
+h3 {
+  font-size: 1.18em;
+  color: #14523f;
+  margin-top: 1.5em;
+  page-break-after: avoid;
+}
+h4 { font-size: 1.05em; color: #14523f; margin-top: 1.3em; }
+p { margin: 0.75em 0; }
+a { color: #0b5cab; text-decoration: none; word-break: break-word; }
+a:hover { text-decoration: underline; }
+strong { color: #10241c; }
+hr {
+  border: none;
+  border-top: 1px solid var(--borde);
+  margin: 2em 0;
+}
+ul, ol { margin: 0.6em 0; padding-left: 1.5em; }
+li { margin: 0.35em 0; }
+blockquote {
+  margin: 1em 0;
+  padding: 0.6em 1em;
+  border-left: 4px solid var(--verde);
+  background: var(--verde-claro);
+  color: #243b32;
+}
+code {
+  font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+  font-size: 0.9em;
+  background: #f2f5f4;
+  padding: 2px 5px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+pre {
+  background: #f2f5f4;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  page-break-inside: avoid;
+}
+pre code { background: none; padding: 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.1em 0;
+  font-size: 0.94em;
+  page-break-inside: avoid;
+}
+thead { display: table-header-group; }
+tr { page-break-inside: avoid; }
+th {
+  background: var(--verde);
+  color: #ffffff;
+  text-align: left;
+  padding: 9px 11px;
+  border: 1px solid var(--verde);
+  font-weight: 600;
+}
+td {
+  padding: 8px 11px;
+  border: 1px solid var(--borde);
+  vertical-align: top;
+}
+tbody tr:nth-child(even) { background: #f6faf8; }
+tbody tr:hover { background: var(--verde-claro); }
+table td[style*="text-align: right"],
+table th[style*="text-align: right"] { text-align: right; }
+img { max-width: 100%; height: auto; }
+@page {
+  size: A4;
+  margin: 18mm 16mm 20mm 16mm;
+}
+@media print {
+  body { max-width: none; padding: 0; font-size: 11pt; }
+  h1, h2, h3 { page-break-after: avoid; }
+  table, pre, blockquote { page-break-inside: avoid; }
+  a { color: var(--texto); }
+}
+</style>
+</head>
+<body>
+<h1 id="informe-ejecutivo-de-costos-de-mensajeria-de-whatsapp">INFORME EJECUTIVO DE COSTOS DE MENSAJERÍA DE WHATSAPP</h1>
+<h2 id="integracion-de-punto-tdea-con-whatsapp-business-platform-meta-cloud-api">Integración de Punto TdeA con WhatsApp Business Platform (Meta Cloud API)</h2>
+<hr>
+<p><strong>Institución:</strong> Punto TdeA<br>
+<strong>Documento:</strong> Informe general de costos de mensajería (Tablas 1 y 2)<br>
+<strong>Fecha de elaboración:</strong> 4 de noviembre de 2026<br>
+<strong>Fecha de consulta de tarifas:</strong> 4 de noviembre de 2026<br>
+<strong>Tarifas vigentes:</strong> 1 de octubre de 2026<br>
+<strong>Elaborado para:</strong> Rectoría de la institución<br>
+<strong>Alcance:</strong> Análisis financiero de los costos de mensajería asociados al uso de la integración de WhatsApp de Punto TdeA. Este documento no modifica código, configuraciones ni bases de datos.</p>
+<hr>
+<h2 id="1-resumen-ejecutivo">1. Resumen ejecutivo</h2>
+<p>Punto TdeA utiliza la plataforma oficial de WhatsApp Business (Meta Cloud API) para atender a los estudiantes mediante chatbot, tickets con asesores y campañas institucionales. Este informe explica, en lenguaje ejecutivo, cuánto cuesta cada tipo de mensaje y cómo se comporta el costo en distintos volúmenes.</p>
+<p>Los hallazgos principales son los siguientes:</p>
+<ol>
+<li>
+<p><strong>Meta cobra por mensaje entregado, no por mensaje enviado.</strong> Si un mensaje no se entrega, no genera cobro. La tarifa depende de la categoría del mensaje (marketing, utilidad, autenticación o servicio) y del mercado del número del destinatario (Colombia, código +57).</p>
+</li>
+<li>
+<p><strong>Las tarifas oficiales vigentes para Colombia, en pesos colombianos (COP), son:</strong></p>
+</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Categoría</th>
+<th>Tarifa por mensaje (COP)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Marketing</td>
+<td>$ 46,0227</td>
+</tr>
+<tr>
+<td>Utilidad</td>
+<td>$ 2,9455</td>
+</tr>
+<tr>
+<td>Autenticación</td>
+<td>$ 2,9455</td>
+</tr>
+<tr>
+<td>Servicio</td>
+<td>$ 2,9455</td>
+</tr>
+</tbody>
+</table>
+<p>Estas tarifas corresponden a la tarjeta oficial de Meta vigente desde el 1 de octubre de 2026. Los valores en esta tabla son los publicados por Meta en moneda colombiana.</p>
+<ol start="3">
+<li><strong>A partir del 1 de octubre de 2026, Meta volvió a cobrar por dos tipos de mensajes que antes eran gratuitos:</strong><br>
+   - Los <strong>mensajes de servicio</strong> (respuestas no plantilla dentro de la ventana de atención).<br>
+   - Las <strong>plantillas de utilidad enviadas dentro de la ventana de atención</strong>.</li>
+</ol>
+<p>Para suavizar este cambio, Meta otorga <strong>1.000 mensajes de servicio gratuitos por mes por cada número de negocio</strong>. Este beneficio <strong>no aplica</strong> para mensajes de marketing, utilidad o autenticación.</p>
+<ol start="4">
+<li>
+<p><strong>Los mensajes de marketing no tienen volumen gratuito.</strong> El único caso en que un mensaje de marketing puede ser gratuito es cuando la conversación se origina desde un anuncio que redirige a WhatsApp (Click to WhatsApp) y se encuentra dentro de la ventana de entrada gratuita.</p>
+</li>
+<li>
+<p><strong>El chatbot y la atención con asesores ahora generan costo.</strong> Antes del 1 de octubre de 2026, las respuestas automáticas y las respuestas de los asesores dentro de la ventana de atención no tenían costo. Desde esa fecha, cada respuesta cuenta como un mensaje de servicio: los primeros 1.000 mensajes de servicio del mes son gratis y, a partir del mensaje 1.001, se cobran a la tarifa de servicio ($ 2,9455 COP por mensaje en Colombia).</p>
+</li>
+<li>
+<p><strong>Las campañas de utilidad sí generan costo.</strong> Cada plantilla de utilidad entregada se cobra a la tarifa de utilidad, con descuentos por volumen mensual (tiers) para volúmenes superiores a 100.000 mensajes.</p>
+</li>
+<li>
+<p><strong>Las campañas de marketing son las más costosas.</strong> Cada mensaje de marketing entregado cuesta $ 46,0227 COP, sin descuentos por volumen.</p>
+</li>
+<li>
+<p><strong>Los valores presentados en este informe no incluyen impuestos ni cargos de proveedores.</strong> La integración de Punto TdeA se realiza directamente con Meta Cloud API, sin un proveedor intermediario (BSP). La aplicabilidad de impuestos (IVA, retenciones) debe validarse con la dirección contable de la institución.</p>
+</li>
+<li>
+<p><strong>Las ventanas de atención son las siguientes:</strong><br>
+   - <strong>Ventana de servicio al cliente (CSW):</strong> 24 horas, se abre con cada mensaje del estudiante y se reinicia con cada nueva interacción. Dentro de esta ventana, el negocio puede enviar mensajes de texto libre (no plantilla).<br>
+   - <strong>Ventana de entrada gratuita (FEP):</strong> se abre cuando el estudiante escribe primero desde un anuncio Click to WhatsApp. La documentación oficial para desarrolladores vigente establece que puede permanecer abierta <strong>hasta 7 días</strong>; la página comercial de WhatsApp menciona 72 horas. Esta diferencia debe validarse en la consola de Meta de la institución.</p>
+</li>
+<li>
+<p><strong>El presente informe se acompaña de un documento independiente</strong> sobre el presupuesto para difundir avisos institucionales mediante <strong>estados de WhatsApp</strong> (publicidad), que no debe confundirse con el envío de mensajes por la API.</p>
+</li>
+</ol>
+<hr>
+<h2 id="2-objetivo-del-analisis">2. Objetivo del análisis</h2>
+<p>El objetivo de este informe es presentar a la rectoría una estimación clara, verificable y financieramente coherente de los costos de mensajería de WhatsApp de Punto TdeA, en diferentes escenarios de volumen, diferenciando:</p>
+<ul>
+<li>La mensajería del chatbot.</li>
+<li>La atención mediante tickets con asesores.</li>
+<li>Las campañas de utilidad.</li>
+<li>Las campañas de marketing.</li>
+</ul>
+<p>El informe no pretende sustituir la asesoría contable ni la revisión de los términos comerciales específicos de la cuenta de Meta de la institución. Su finalidad es servir de base para la toma de decisiones presupuestales.</p>
+<hr>
+<h2 id="3-descripcion-general-de-la-integracion-de-whatsapp-en-punto-tdea">3. Descripción general de la integración de WhatsApp en Punto TdeA</h2>
+<p>Punto TdeA es un sistema web desarrollado en Django que integra los siguientes módulos relacionados con WhatsApp:</p>
+<table>
+<thead>
+<tr>
+<th>Módulo</th>
+<th>Función</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>knowledge</code></td>
+<td>Base de conocimiento y chatbot que responde automáticamente a los estudiantes.</td>
+</tr>
+<tr>
+<td><code>cases</code></td>
+<td>Bandeja de casos y conversaciones con asesores (tickets).</td>
+</tr>
+<tr>
+<td><code>communications</code></td>
+<td>Campañas, plantillas, audiencias y adaptador de Meta Cloud API.</td>
+</tr>
+<tr>
+<td><code>announcements</code></td>
+<td>Avisos institucionales y su publicación opcional en estados de WhatsApp.</td>
+</tr>
+<tr>
+<td><code>dashboard</code></td>
+<td>Indicadores y seguimiento.</td>
+</tr>
+</tbody>
+</table>
+<p>La integración con WhatsApp se realiza mediante <strong>Meta WhatsApp Cloud API</strong>, con las siguientes características:</p>
+<ul>
+<li><strong>Un único webhook</strong> recibe los mensajes entrantes del chatbot y los estados de entrega de las campañas.</li>
+<li><strong>El chatbot</strong> responde automáticamente a los mensajes de texto de los estudiantes dentro de la ventana de atención.</li>
+<li><strong>Los casos con asesor</strong> se atienden mediante mensajes de texto libre dentro de la ventana de atención.</li>
+<li><strong>Las campañas</strong> se envían mediante plantillas aprobadas por Meta (categorías marketing o utilidad).</li>
+<li><strong>Los avisos</strong> pueden publicarse como anuncios en estados de WhatsApp mediante la Meta Marketing API (este mecanismo se trata en el documento independiente).</li>
+</ul>
+<p>Esta integración <strong>no utiliza un proveedor intermediario (BSP)</strong>: Punto TdeA se conecta directamente con la API de Meta. Por lo tanto, los costos de mensajería son los tarifados directamente por Meta, sin margen de intermediario.</p>
+<hr>
+<h2 id="4-modelo-de-cobro-de-meta">4. Modelo de cobro de Meta</h2>
+<h3 id="41-cobro-por-mensaje-per-message-pricing">4.1. Cobro por mensaje (per-message pricing)</h3>
+<p>Desde el <strong>1 de julio de 2025</strong>, Meta cobra por mensaje, no por conversación. Este modelo reemplazó al esquema anterior de cobro por conversación de 24 horas. Las reglas esenciales son:</p>
+<ul>
+<li><strong>Se cobra cuando el mensaje es entregado</strong> al estudiante. No se cobra por mensajes enviados que no se entregan.</li>
+<li><strong>No se cobran los mensajes del estudiante al negocio</strong> (mensajes entrantes). Solo se cobran los mensajes del negocio al estudiante.</li>
+<li><strong>La tarifa depende de dos factores:</strong> la categoría del mensaje y el mercado del número del destinatario (código de país). Para Colombia, el código es +57.</li>
+<li><strong>Cada mensaje pertenece a una sola categoría</strong> y, por tanto, genera un solo cargo.</li>
+</ul>
+<h3 id="42-categorias-de-mensajes">4.2. Categorías de mensajes</h3>
+<table>
+<thead>
+<tr>
+<th>Categoría</th>
+<th>Descripción</th>
+<th>¿Cuándo se usa?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Marketing</strong></td>
+<td>Mensajes con fines promocionales: ofertas, invitaciones, promoción de programas, difusión comercial.</td>
+<td>Plantillas de marketing, enviadas en cualquier momento (requieren opt-in).</td>
+</tr>
+<tr>
+<td><strong>Utilidad</strong></td>
+<td>Mensajes transaccionales o informativos no promocionales: confirmaciones, recordatorios, avisos de trámites, actualizaciones de estado.</td>
+<td>Plantillas de utilidad, enviadas en cualquier momento.</td>
+</tr>
+<tr>
+<td><strong>Autenticación</strong></td>
+<td>Mensajes de verificación de identidad (códigos de un solo uso).</td>
+<td>Plantillas de autenticación.</td>
+</tr>
+<tr>
+<td><strong>Servicio</strong></td>
+<td>Mensajes no plantilla (texto libre, imágenes, etc.) enviados en respuesta al estudiante dentro de la ventana de atención.</td>
+<td>Chatbot y asesores.</td>
+</tr>
+<tr>
+<td><strong>Meta Business Agent</strong></td>
+<td>Mensajes no plantilla generados por la plataforma de agentes de IA de Meta.</td>
+<td>No aplica a PuntoTdeA en su configuración actual.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43-tarifas-oficiales-vigentes-para-colombia-cop">4.3. Tarifas oficiales vigentes para Colombia (COP)</h3>
+<p>Las siguientes tarifas fueron consultadas el 4 de noviembre de 2026 en el servicio oficial de precios de WhatsApp Business y corresponden a la tarjeta vigente desde el 1 de octubre de 2026:</p>
+<table>
+<thead>
+<tr>
+<th>Categoría</th>
+<th>Tarifa por mensaje (COP)</th>
+<th>Equivalente en USD (referencia)</th>
+<th>Volumen tiers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Marketing</td>
+<td>$ 46,0227</td>
+<td>$ 0,0125</td>
+<td>No aplica</td>
+</tr>
+<tr>
+<td>Utilidad</td>
+<td>$ 2,9455</td>
+<td>$ 0,0008</td>
+<td>Sí (desde 100.001 mensajes/mes)</td>
+</tr>
+<tr>
+<td>Autenticación</td>
+<td>$ 2,9455</td>
+<td>$ 0,0008</td>
+<td>Sí (desde 120.001 mensajes/mes)</td>
+</tr>
+<tr>
+<td>Servicio</td>
+<td>$ 2,9455</td>
+<td>$ 0,0008</td>
+<td>No aplica</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Nota sobre la moneda:</strong> Meta publica tarifas en COP desde el 1 de abril de 2026. La moneda de facturación de cada cuenta de Meta se define al crear la cuenta y no puede cambiarse sin un proceso de migración. Si la cuenta de Punto TdeA factura en USD, el valor en COP dependerá de la tasa de cambio de facturación. Los valores en COP de este informe son la referencia oficial de Meta y deben entenderse como la base tarifaria.</p>
+<h3 id="44-descuentos-por-volumen-volume-tiers">4.4. Descuentos por volumen (volume tiers)</h3>
+<p>Los descuentos por volumen aplican <strong>únicamente</strong> a las categorías de <strong>utilidad</strong> y <strong>autenticación</strong>. No aplican para marketing ni para servicio.</p>
+<p>Para Colombia, los tramos de utilidad vigentes son:</p>
+<table>
+<thead>
+<tr>
+<th>Mensajes de utilidad por mes</th>
+<th>Tarifa (COP)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0 – 100.000</td>
+<td>$ 2,9455</td>
+</tr>
+<tr>
+<td>100.001 – 1.000.000</td>
+<td>$ 2,7982</td>
+</tr>
+<tr>
+<td>1.000.001 – 4.500.000</td>
+<td>$ 2,6510</td>
+</tr>
+<tr>
+<td>4.500.001 – 15.000.000</td>
+<td>$ 2,5037</td>
+</tr>
+<tr>
+<td>15.000.001 – 30.000.000</td>
+<td>$ 2,3564</td>
+</tr>
+<tr>
+<td>30.000.001 o más</td>
+<td>$ 2,2091</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Importante:</strong> el descuento se aplica de forma progresiva: cada tramo de mensajes recibe la tarifa del tramo que le corresponde. Por ejemplo, si en un mes se envían 150.000 mensajes de utilidad, los primeros 100.000 se cobran a $ 2,9455 y los 50.000 siguientes a $ 2,7982. Los tramos se calculan a nivel de portafolio de negocio (sumando todas las cuentas de Meta de la institución) y se reinician cada mes.</p>
+<p>En los volúmenes considerados en la Tabla 1 de este informe (hasta 100.000 mensajes), <strong>no se alcanza el segundo tramo</strong>, por lo que se utiliza la tarifa de lista ($ 2,9455 COP).</p>
+<hr>
+<h2 id="5-tabla-1-chatbot-atencion-con-asesores-y-campanas-de-utilidad">5. Tabla 1. Chatbot, atención con asesores y campañas de utilidad</h2>
+<h3 id="51-presentacion-de-la-tabla">5.1. Presentación de la tabla</h3>
+<p>La siguiente tabla muestra el costo estimado de tres escenarios de operación, evaluados de forma <strong>independiente</strong> para la misma cantidad de mensajes. No se asume una distribución fija de los mensajes entre las tres categorías, porque la institución no ha definido una proporción de uso.</p>
+<p><strong>Columnas:</strong></p>
+<ul>
+<li><strong>Chatbot:</strong> mensajes de servicio (respuestas automáticas del bot) enviados dentro de la ventana de atención.</li>
+<li><strong>Tickets con asesor:</strong> mensajes de servicio (respuestas humanas) enviados dentro de la ventana de atención.</li>
+<li><strong>Campañas de utilidad:</strong> plantillas de utilidad enviadas a los estudiantes (normalmente fuera de la ventana de atención).</li>
+<li><strong>Costo total estimado:</strong> escenario combinado que asume que los tres flujos ocurren en el mismo mes, con el mismo volumen y un solo número de negocio. El beneficio de 1.000 mensajes de servicio gratuitos se aplica <strong>una sola vez</strong>.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Cantidad de mensajes por escenario</th>
+<th style="text-align: right;">Chatbot</th>
+<th style="text-align: right;">Tickets con asesor</th>
+<th style="text-align: right;">Campañas de utilidad</th>
+<th style="text-align: right;">Costo total estimado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100</td>
+<td style="text-align: right;">$ 0</td>
+<td style="text-align: right;">$ 0</td>
+<td style="text-align: right;">$ 295</td>
+<td style="text-align: right;">$ 295</td>
+</tr>
+<tr>
+<td>500</td>
+<td style="text-align: right;">$ 0</td>
+<td style="text-align: right;">$ 0</td>
+<td style="text-align: right;">$ 1.473</td>
+<td style="text-align: right;">$ 1.473</td>
+</tr>
+<tr>
+<td>1.000</td>
+<td style="text-align: right;">$ 0</td>
+<td style="text-align: right;">$ 0</td>
+<td style="text-align: right;">$ 2.946</td>
+<td style="text-align: right;">$ 5.891</td>
+</tr>
+<tr>
+<td>5.000</td>
+<td style="text-align: right;">$ 11.782</td>
+<td style="text-align: right;">$ 11.782</td>
+<td style="text-align: right;">$ 14.728</td>
+<td style="text-align: right;">$ 41.237</td>
+</tr>
+<tr>
+<td>10.000</td>
+<td style="text-align: right;">$ 26.510</td>
+<td style="text-align: right;">$ 26.510</td>
+<td style="text-align: right;">$ 29.455</td>
+<td style="text-align: right;">$ 85.420</td>
+</tr>
+<tr>
+<td>20.000</td>
+<td style="text-align: right;">$ 55.965</td>
+<td style="text-align: right;">$ 55.965</td>
+<td style="text-align: right;">$ 58.910</td>
+<td style="text-align: right;">$ 173.785</td>
+</tr>
+<tr>
+<td>50.000</td>
+<td style="text-align: right;">$ 144.330</td>
+<td style="text-align: right;">$ 144.330</td>
+<td style="text-align: right;">$ 147.275</td>
+<td style="text-align: right;">$ 438.880</td>
+</tr>
+<tr>
+<td>100.000</td>
+<td style="text-align: right;">$ 291.605</td>
+<td style="text-align: right;">$ 291.605</td>
+<td style="text-align: right;">$ 294.550</td>
+<td style="text-align: right;">$ 880.705</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Todos los valores están expresados en pesos colombianos (COP), redondeados al peso más cercano.</strong></p>
+<h3 id="52-metodologia-de-calculo">5.2. Metodología de cálculo</h3>
+<p><strong>Chatbot y tickets con asesor (mensajes de servicio):</strong></p>
+<ul>
+<li>Los mensajes del bot y los del asesor son mensajes no plantilla enviados dentro de la ventana de atención. Meta los clasifica como <strong>servicio</strong>.</li>
+<li>Cada número de negocio tiene <strong>1.000 mensajes de servicio gratuitos por mes</strong>. El beneficio no acumula y se reinicia cada mes.</li>
+<li>El costo se calcula así:</li>
+</ul>
+<p><code>Costo de servicio = max(0, cantidad de mensajes de servicio − 1.000) × $ 2,9455</code></p>
+<ul>
+<li>En la tabla, las columnas Chatbot y Tickets muestran el costo de cada escenario <strong>por separado</strong>, aplicando el beneficio de 1.000 gratis a cada escenario unitario.</li>
+</ul>
+<p><strong>Campañas de utilidad (plantillas de utilidad):</strong></p>
+<ul>
+<li>Cada plantilla de utilidad entregada se cobra a la tarifa de utilidad.</li>
+<li>Para volúmenes de hasta 100.000 mensajes mensuales, la tarifa es $ 2,9455 COP.</li>
+<li>El costo se calcula así:</li>
+</ul>
+<p><code>Costo de utilidad = cantidad de mensajes × $ 2,9455</code></p>
+<p><strong>Costo total estimado (escenario combinado):</strong></p>
+<ul>
+<li>Se asume que los tres flujos ocurren en el mismo mes y con un solo número de negocio.</li>
+<li>El beneficio de 1.000 mensajes de servicio gratuitos se aplica <strong>una sola vez</strong>, compartido entre chatbot y tickets:</li>
+</ul>
+<p><code>Servicio combinado = max(0, (mensajes de chatbot + mensajes de tickets) − 1.000) × $ 2,9455</code></p>
+<p><code>Total = Servicio combinado + Costo de utilidad</code></p>
+<p><strong>Ejemplo numérico (1.000 mensajes por escenario):</strong></p>
+<ul>
+<li>Chatbot: 1.000 mensajes de servicio.</li>
+<li>Tickets: 1.000 mensajes de servicio.</li>
+<li>Servicio total: 2.000 mensajes. Se restan los 1.000 gratuitos: 1.000 mensajes cobrados × $ 2,9455 = <strong>$ 2.945,50</strong>.</li>
+<li>Campañas de utilidad: 1.000 × $ 2,9455 = <strong>$ 2.945,50</strong>.</li>
+<li><strong>Total estimado: $ 5.891.</strong></li>
+</ul>
+<p><strong>Nota sobre la suma de escenarios unitarios:</strong> si se sumaran las tres columnas como escenarios completamente independientes (aplicando el beneficio de 1.000 gratis a cada escenario), el resultado sería $ 2.946 COP menor para cantidades de 1.000 o más, porque el beneficio se estaría aplicando dos veces. Para no duplicar el beneficio gratuito, la columna "Costo total estimado" utiliza la fórmula del escenario combinado.</p>
+<h3 id="53-explicacion-de-la-tabla-1">5.3. Explicación de la tabla 1</h3>
+<p><strong>¿Por qué el chatbot puede costar diferente que una campaña de utilidad?</strong></p>
+<p>Aunque ambos mensajes se cobran a la misma tarifa en Colombia ($ 2,9455 COP), su tratamiento es distinto:</p>
+<ol>
+<li>
+<p><strong>Los mensajes del chatbot son de servicio.</strong> Se envían como respuesta al estudiante dentro de la ventana de atención y se benefician de los primeros 1.000 mensajes gratuitos por mes. Por eso, para volúmenes pequeños (hasta 1.000 mensajes), el chatbot no tiene costo.</p>
+</li>
+<li>
+<p><strong>Las campañas de utilidad son plantillas.</strong> Se envían de forma masiva, normalmente fuera de la ventana de atención, y <strong>no</strong> se benefician del cupo de 1.000 mensajes gratuitos. Cada mensaje de utilidad se cobra, aunque el volumen sea bajo.</p>
+</li>
+<li>
+<p><strong>A partir del 1 de octubre de 2026, los mensajes de servicio ya no son gratuitos</strong> (salvo el cupo de 1.000). Este es un cambio reciente que debe considerarse en el presupuesto.</p>
+</li>
+</ol>
+<p><strong>¿Qué pasa si el chatbot o el asesor envían una plantilla de utilidad dentro de la ventana de atención?</strong></p>
+<p>Si en lugar de responder con texto libre se envía una plantilla de utilidad, el mensaje se clasifica como <strong>utilidad</strong> y se cobra a la tarifa de utilidad, sin beneficiarse del cupo de 1.000 mensajes de servicio gratuitos. Por el contrario, si se envía texto libre dentro de la ventana, se clasifica como <strong>servicio</strong> y sí puede beneficiarse del cupo.</p>
+<p><strong>¿Qué pasa si se envía una plantilla de utilidad fuera de la ventana de atención?</strong></p>
+<p>Se cobra igual: la tarifa de utilidad no depende de si la plantilla se envía dentro o fuera de la ventana. La ventana solo determina si se puede usar texto libre (no plantilla) o si es obligatorio usar una plantilla.</p>
+<hr>
+<h2 id="6-tabla-2-campanas-de-marketing">6. Tabla 2. Campañas de marketing</h2>
+<h3 id="61-presentacion-de-la-tabla">6.1. Presentación de la tabla</h3>
+<p>Las campañas de marketing son las que tienen un costo más alto por mensaje, porque su tarifa es significativamente superior a la de utilidad y servicio. La siguiente tabla muestra el costo estimado de enviar campañas de marketing a los estudiantes, utilizando la tarifa oficial vigente para Colombia.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Cantidad de mensajes</th>
+<th style="text-align: right;">Tarifa por mensaje (COP)</th>
+<th style="text-align: right;">Costo total estimado (COP)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 4.602</td>
+</tr>
+<tr>
+<td style="text-align: right;">500</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 23.011</td>
+</tr>
+<tr>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 46.023</td>
+</tr>
+<tr>
+<td style="text-align: right;">5.000</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 230.114</td>
+</tr>
+<tr>
+<td style="text-align: right;">10.000</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 460.227</td>
+</tr>
+<tr>
+<td style="text-align: right;">20.000</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 920.454</td>
+</tr>
+<tr>
+<td style="text-align: right;">50.000</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 2.301.135</td>
+</tr>
+<tr>
+<td style="text-align: right;">100.000</td>
+<td style="text-align: right;">$ 46,0227</td>
+<td style="text-align: right;">$ 4.602.270</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Todos los valores están expresados en pesos colombianos (COP), redondeados al peso más cercano.</strong></p>
+<h3 id="62-explicacion-de-la-tabla-2">6.2. Explicación de la tabla 2</h3>
+<p><strong>Cálculo:</strong></p>
+<p><code>Costo total = cantidad de mensajes entregados × $ 46,0227</code></p>
+<p><strong>Reglas aplicables a los mensajes de marketing:</strong></p>
+<ol>
+<li>
+<p><strong>No hay mensajes gratuitos.</strong> A diferencia de los mensajes de servicio, los mensajes de marketing no tienen un cupo mensual gratuito. Cada mensaje de marketing entregado se cobra.</p>
+</li>
+<li>
+<p><strong>Solo se cobra si el mensaje se entrega.</strong> Si el estudiante no tiene WhatsApp, bloqueó el número o no aceptó recibir mensajes, el mensaje no se entrega y no se cobra.</p>
+</li>
+<li>
+<p><strong>Se requiere opt-in.</strong> La institución solo puede enviar plantillas de marketing a estudiantes que hayan aceptado recibir mensajes de WhatsApp.</p>
+</li>
+<li>
+<p><strong>Se requiere una plantilla de marketing aprobada.</strong> No se puede enviar marketing con texto libre; debe usarse una plantilla de la categoría marketing aprobada por Meta.</p>
+</li>
+<li>
+<p><strong>No hay descuento por volumen.</strong> La tarifa de marketing es fija por mensaje, independientemente del volumen mensual.</p>
+</li>
+</ol>
+<p><strong>Diferencia entre plantilla de utilidad y plantilla de marketing:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Aspecto</th>
+<th>Plantilla de utilidad</th>
+<th>Plantilla de marketing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Contenido</td>
+<td>No promocional: confirmaciones, recordatorios, avisos de trámites, actualizaciones.</td>
+<td>Promocional: ofertas, invitaciones, promoción de programas, difusión comercial.</td>
+</tr>
+<tr>
+<td>Tarifa en Colombia</td>
+<td>$ 2,9455 COP</td>
+<td>$ 46,0227 COP</td>
+</tr>
+<tr>
+<td>Descuento por volumen</td>
+<td>Sí</td>
+<td>No</td>
+</tr>
+<tr>
+<td>¿Puede incluir promoción?</td>
+<td>No. Si incluye promoción, Meta la reclasifica como marketing.</td>
+<td>Sí.</td>
+</tr>
+<tr>
+<td>Ejemplo</td>
+<td>"Su solicitud de matrícula fue recibida. Fecha límite: 15 de noviembre."</td>
+<td>"¡Matrículas abiertas! Obtenga un 10 % de descuento en programas de posgrado."</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Advertencia:</strong> Meta revisa el contenido de las plantillas y puede reclasificar una plantilla de utilidad como marketing si detecta contenido promocional. Una plantilla de utilidad que se reclasifica como marketing pasa a cobrarse a la tarifa de marketing ($ 46,0227 COP), lo que representa un aumento de más de 15 veces en el costo por mensaje.</p>
+<hr>
+<h2 id="7-mensajes-gratuitos-y-ventanas-de-atencion">7. Mensajes gratuitos y ventanas de atención</h2>
+<h3 id="71-los-primeros-1000-mensajes-gratuitos">7.1. Los primeros 1.000 mensajes gratuitos</h3>
+<p><strong>¿Existe algún volumen mensual gratuito?</strong></p>
+<p>Sí, pero <strong>únicamente para mensajes de servicio</strong>. A partir del 1 de octubre de 2026, cada número de negocio de WhatsApp tiene un cupo de <strong>1.000 mensajes de servicio gratuitos por mes</strong>.</p>
+<p><strong>Condiciones del beneficio:</strong></p>
+<ul>
+<li>Se aplica <strong>por número de negocio</strong>, no por cuenta de Meta ni por institución. Si la institución usa varios números, cada uno tendrá su propio cupo.</li>
+<li>Se reinicia cada mes (al inicio del mes, según la zona horaria de la cuenta de Meta). <strong>No acumula</strong>: los mensajes no usados no pasan al mes siguiente.</li>
+<li><strong>No aplica</strong> a mensajes de marketing, utilidad o autenticación.</li>
+<li><strong>No aplica</strong> a los mensajes de Meta Business Agent.</li>
+<li>Si la cuenta de Meta no tiene un método de pago registrado, Meta entrega los mensajes de servicio dentro del cupo gratuito, pero <strong>no entrega</strong> los mensajes de servicio una vez superado el cupo. Es indispensable registrar un método de pago para garantizar la continuidad del servicio.</li>
+</ul>
+<p><strong>¿Los primeros 1.000 mensajes de marketing tienen algún tratamiento gratuito?</strong></p>
+<p><strong>No.</strong> Los mensajes de marketing no tienen ningún cupo gratuito. El beneficio de 1.000 mensajes gratuitos es exclusivo de los mensajes de servicio.</p>
+<p><strong>¿Qué pasa con los mensajes derivados de campañas de marketing?</strong></p>
+<p>Si un estudiante responde a una campaña de marketing, su respuesta abre una ventana de servicio de 24 horas. Los mensajes que el negocio envíe dentro de esa ventana (texto libre) se clasifican como <strong>servicio</strong> y pueden beneficiarse del cupo de 1.000 mensajes de servicio gratuitos. Pero esto no significa que los mensajes de marketing originales sean gratuitos: la campaña de marketing se cobró a la tarifa de marketing.</p>
+<h3 id="72-ventana-de-servicio-al-cliente-csw">7.2. Ventana de servicio al cliente (CSW)</h3>
+<ul>
+<li><strong>Duración:</strong> 24 horas.</li>
+<li><strong>Se abre:</strong> cuando el estudiante envía un mensaje al negocio (o llama).</li>
+<li><strong>Se reinicia:</strong> cada vez que el estudiante envía un nuevo mensaje o llamada antes de que expire la ventana.</li>
+<li><strong>Qué permite:</strong> enviar mensajes no plantilla (texto libre, imágenes, documentos, etc.) al estudiante.</li>
+<li><strong>Qué no permite:</strong> enviar mensajes de texto libre fuera de la ventana. Fuera de la ventana, solo se pueden enviar plantillas aprobadas.</li>
+<li><strong>Facturación:</strong> los mensajes no plantilla enviados dentro de la ventana son <strong>servicio</strong>. Se benefician del cupo de 1.000 gratuitos y, a partir del mensaje 1.001, se cobran a la tarifa de servicio ($ 2,9455 COP en Colombia).</li>
+</ul>
+<h3 id="73-ventana-de-entrada-gratuita-fep">7.3. Ventana de entrada gratuita (FEP)</h3>
+<ul>
+<li><strong>Requisito:</strong> que el estudiante escriba primero desde un <strong>anuncio que redirige a WhatsApp (Click to WhatsApp)</strong> o desde un botón de llamada a la acción de una página de Facebook, usando un dispositivo Android o iOS.</li>
+<li><strong>Qué hace:</strong> abre una ventana de entrada gratuita. Mientras está abierta, los mensajes de marketing, utilidad, autenticación o servicio enviados por el negocio <strong>no se cobran</strong>.</li>
+<li><strong>Duración:</strong> la documentación oficial para desarrolladores vigente (actualizada el 30 de septiembre de 2026) establece que la ventana puede permanecer abierta <strong>hasta 7 días</strong>. La página comercial de WhatsApp menciona 72 horas. <strong>Esta diferencia debe validarse en la consola de Meta de la institución.</strong></li>
+<li><strong>Limitaciones:</strong> los mensajes de Meta Business Agent siguen cobrándose. La ventana se rastrea por la pareja negocio-usuario, no por cuenta de Meta; si varias cuentas envían al mismo número, todas comparten la ventana.</li>
+<li><strong>No aplica</strong> a las campañas de plantillas enviadas desde la API. El FEP solo se origina desde un anuncio Click to WhatsApp.</li>
+</ul>
+<h3 id="74-ejemplo-practico-campana-de-marketing-y-respuesta-del-estudiante">7.4. Ejemplo práctico: campaña de marketing y respuesta del estudiante</h3>
+<p><strong>Situación:</strong></p>
+<ol>
+<li>Punto TdeA envía una <strong>plantilla de marketing</strong> a un estudiante: "¡Matrículas abiertas! Obtenga un 10 % de descuento en programas de posgrado."</li>
+<li>El estudiante recibe el mensaje (se entrega). <strong>Costo: $ 46,0227 COP</strong> (tarifa de marketing).</li>
+<li>El estudiante responde: "¿Cuáles son los programas disponibles?"</li>
+<li>La respuesta del estudiante <strong>abre una ventana de servicio de 24 horas</strong>.</li>
+<li>El chatbot o un asesor responde con texto libre: "Los programas disponibles son...". <strong>Este mensaje se clasifica como servicio.</strong> Si el número de negocio aún no ha superado los 1.000 mensajes de servicio del mes, es gratis. Si ya los superó, cuesta $ 2,9455 COP.</li>
+<li>El estudiante sigue preguntando dentro de las 24 horas. Cada respuesta del negocio es un mensaje de servicio, con el mismo tratamiento.</li>
+<li>Si el estudiante no responde en 24 horas y el negocio quiere continuar la conversación, debe enviar una <strong>plantilla aprobada</strong> (utilidad o marketing). El costo dependerá de la categoría de la plantilla.</li>
+</ol>
+<p><strong>Conclusión del ejemplo:</strong> la campaña de marketing se cobra a la tarifa de marketing. La respuesta del estudiante no hace gratuitos los mensajes de marketing. Las respuestas del negocio dentro de la ventana son mensajes de servicio, que pueden ser gratuitos solo dentro del cupo mensual de 1.000.</p>
+<p><strong>Sobre la afirmación histórica de la "ventana de 24 horas sin costo" para mensajes derivados de campañas de marketing:</strong> esta afirmación no es una regla universal. La ventana de 24 horas permite enviar mensajes no plantilla sin necesidad de plantilla, pero desde el 1 de octubre de 2026 esos mensajes de servicio se cobran una vez superado el cupo de 1.000 mensajes gratuitos. La ventana gratuita de hasta 7 días (o 72 horas, según la fuente) solo aplica cuando la conversación se origina desde un anuncio Click to WhatsApp.</p>
+<hr>
+<h2 id="8-impuestos-y-cargos-adicionales">8. Impuestos y cargos adicionales</h2>
+<h3 id="81-valores-presentados">8.1. Valores presentados</h3>
+<p>Todos los valores de este informe son <strong>tarifas base publicadas por Meta</strong>, expresadas en pesos colombianos (COP). <strong>No incluyen</strong> impuestos, retenciones ni cargos adicionales.</p>
+<h3 id="82-conceptos-que-deben-validarse">8.2. Conceptos que deben validarse</h3>
+<table>
+<thead>
+<tr>
+<th>Concepto</th>
+<th>Tratamiento en este informe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tarifa base de Meta</td>
+<td>Incluida (marketing, utilidad, autenticación, servicio).</td>
+</tr>
+<tr>
+<td>IVA</td>
+<td>No incluido. Su aplicabilidad depende de la naturaleza del servicio y de la residencia del proveedor. Debe validarse con la dirección contable.</td>
+</tr>
+<tr>
+<td>Retención en la fuente</td>
+<td>No incluida. Los servicios digitales del exterior pueden estar sujetos a retención. Debe validarse con la dirección contable.</td>
+</tr>
+<tr>
+<td>Cargos del proveedor o intermediario</td>
+<td>No aplican. Punto TdeA se integra directamente con Meta Cloud API, sin BSP.</td>
+</tr>
+<tr>
+<td>Costos de infraestructura y operación</td>
+<td>No incluidos. Servidores, almacenamiento, desarrollo y soporte son costos internos de la institución.</td>
+</tr>
+<tr>
+<td>Impuestos en publicidad (documento 2)</td>
+<td>No incluidos. Los CPM de referencia son valores brutos de subasta.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="83-recomendacion">8.3. Recomendación</h3>
+<p>Se recomienda que la dirección contable de la institución revise la facturación real de Meta en la consola de facturación (Billing Hub) para determinar los impuestos y retenciones aplicables a cada concepto. Los valores de este informe son una base tarifaria, no una proyección de la factura final.</p>
+<hr>
+<h2 id="9-consideraciones-y-supuestos">9. Consideraciones y supuestos</h2>
+<h3 id="91-supuestos-generales">9.1. Supuestos generales</h3>
+<ol>
+<li><strong>Mercado:</strong> todos los mensajes se envían a números colombianos (+57). Si la institución envía mensajes a números de otros países, la tarifa será la del mercado correspondiente.</li>
+<li><strong>Categoría:</strong> los costos se calcularon con las tarifas oficiales de Colombia vigentes al 1 de octubre de 2026.</li>
+<li><strong>Entrega:</strong> se asume que el 100 % de los mensajes se entregan. En la práctica, los mensajes no entregados no se cobran, por lo que el costo real podría ser menor.</li>
+<li><strong>Moneda:</strong> los valores se expresan en COP. Si la cuenta de Meta factura en USD, el valor en COP dependerá de la tasa de cambio de facturación.</li>
+<li><strong>Sin distribución de volumen:</strong> no se asume una proporción fija entre chatbot, tickets y campañas de utilidad. La Tabla 1 presenta escenarios unitarios.</li>
+<li><strong>Un solo número de negocio:</strong> se asume que la operación usa un número de WhatsApp. Si se usan varios, cada uno tiene su propio cupo de 1.000 mensajes de servicio gratuitos.</li>
+<li><strong>Opt-in:</strong> se asume que los estudiantes han aceptado recibir mensajes de WhatsApp de la institución.</li>
+<li><strong>Plantillas aprobadas:</strong> se asume que las plantillas de marketing y utilidad están aprobadas por Meta y que su categoría es correcta.</li>
+<li><strong>Sin impuestos:</strong> los valores no incluyen impuestos ni cargos adicionales.</li>
+<li><strong>Sin costos de infraestructura:</strong> no se incluyen servidores, licencias, desarrollo ni soporte técnico.</li>
+</ol>
+<h3 id="92-exclusiones">9.2. Exclusiones</h3>
+<p>Este informe no incluye:</p>
+<ul>
+<li>Costos de desarrollo, implementación o mantenimiento de Punto TdeA.</li>
+<li>Costos de infraestructura (servidores, bases de datos, certificados, dominios).</li>
+<li>Costos de publicidad en estados de WhatsApp (se tratan en el documento independiente).</li>
+<li>Costos de llamadas de voz o video (WhatsApp Business Calling API).</li>
+<li>Costos de mensajes de Meta Business Agent.</li>
+<li>Impuestos, retenciones ni cargos de terceros.</li>
+</ul>
+<h3 id="93-escenarios">9.3. Escenarios</h3>
+<p>Los escenarios de este informe son:</p>
+<ul>
+<li><strong>Escenario unitario por categoría:</strong> el costo de N mensajes de chatbot, N mensajes de tickets o N mensajes de utilidad, evaluados por separado.</li>
+<li><strong>Escenario combinado:</strong> los tres flujos ocurren en el mismo mes con el mismo volumen y un solo número de negocio.</li>
+<li><strong>Escenario de marketing:</strong> N mensajes de marketing, sin cupo gratuito.</li>
+</ul>
+<hr>
+<h2 id="10-conclusiones-y-recomendaciones">10. Conclusiones y recomendaciones</h2>
+<h3 id="101-conclusiones">10.1. Conclusiones</h3>
+<ol>
+<li>
+<p><strong>El costo de la mensajería de WhatsApp es ahora más sensible al volumen.</strong> El cambio del 1 de octubre de 2026, que restablece el cobro por mensajes de servicio y por plantillas de utilidad enviadas en ventana, convierte al chatbot y a la atención con asesores en partidas presupuestales que antes no existían.</p>
+</li>
+<li>
+<p><strong>Las campañas de marketing son el costo más alto.</strong> A $ 46,0227 COP por mensaje, una campaña de 10.000 mensajes cuesta $ 460.227 COP, mientras que 10.000 mensajes de utilidad cuestan $ 29.455 COP.</p>
+</li>
+<li>
+<p><strong>El cupo de 1.000 mensajes de servicio gratuitos es una protección importante, pero limitada.</strong> Para operaciones pequeñas (menos de 1.000 mensajes de servicio al mes), el chatbot y los asesores pueden seguir sin costo. Para operaciones más grandes, cada mensaje adicional cuesta $ 2,9455 COP.</p>
+</li>
+<li>
+<p><strong>La clasificación correcta de las plantillas es decisiva.</strong> Una plantilla de utilidad que Meta reclasifica como marketing puede multiplicar el costo por 15. La institución debe revisar periódicamente el estado de sus plantillas.</p>
+</li>
+<li>
+<p><strong>El beneficio de la ventana de entrada gratuita (FEP) es poco aprovechable para campañas masivas.</strong> Solo aplica cuando el estudiante escribe primero desde un anuncio Click to WhatsApp, no desde una campaña de plantillas.</p>
+</li>
+</ol>
+<h3 id="102-recomendaciones">10.2. Recomendaciones</h3>
+<ol>
+<li>
+<p><strong>Presupuestar los mensajes de servicio.</strong> Incluir en el presupuesto anual una partida para los mensajes de servicio del chatbot y los asesores, considerando el cupo de 1.000 gratuitos por número y por mes.</p>
+</li>
+<li>
+<p><strong>Medir el volumen real de mensajes.</strong> Implementar un seguimiento mensual de los mensajes por categoría (servicio, utilidad, marketing) para ajustar el presupuesto y detectar desviaciones.</p>
+</li>
+<li>
+<p><strong>Revisar la clasificación de plantillas.</strong> Auditar las plantillas aprobadas y verificar que no contengan contenido promocional que Meta pueda reclasificar como marketing.</p>
+</li>
+<li>
+<p><strong>Evaluar el uso de plantillas de utilidad en lugar de texto libre.</strong> Cuando el caso lo permita, las plantillas de utilidad pueden ser más eficientes que el texto libre, porque no dependen de la ventana de atención y su tarifa es baja.</p>
+</li>
+<li>
+<p><strong>Mantener un método de pago registrado en la consola de Meta.</strong> Sin método de pago, los mensajes de servicio no se entregarán después del cupo gratuito.</p>
+</li>
+<li>
+<p><strong>Validar los impuestos con contabilidad.</strong> Solicitar a la dirección contable la revisión de la facturación de Meta para determinar IVA, retenciones y su tratamiento.</p>
+</li>
+<li>
+<p><strong>Capacitar al equipo de campañas.</strong> Asegurar que el equipo comprenda la diferencia entre marketing y utilidad, y el impacto financiero de cada categoría.</p>
+</li>
+<li>
+<p><strong>Considerar la publicidad en estados como un canal complementario.</strong> Para avisos institucionales de difusión, los estados de WhatsApp pueden ser una alternativa a las campañas de marketing. Su presupuesto se presenta en el documento independiente.</p>
+</li>
+</ol>
+<hr>
+<h2 id="11-fuentes-oficiales-consultadas">11. Fuentes oficiales consultadas</h2>
+<p>Las siguientes fuentes fueron consultadas el <strong>4 de noviembre de 2026</strong>:</p>
+<ol>
+<li>
+<p><strong>Meta for Developers. Pricing on the WhatsApp Business Platform.</strong> Documentación oficial de precios, actualizada el 30 de septiembre de 2026. Incluye el modelo de cobro por mensaje, las categorías, las ventanas de atención, el cupo de 1.000 mensajes de servicio gratuitos y los cambios del 1 de octubre de 2026.<br>
+   - https://developers.facebook.com/docs/whatsapp/pricing/</p>
+</li>
+<li>
+<p><strong>Meta for Developers. Template categorization.</strong> Criterios oficiales para clasificar plantillas como marketing, utilidad o autenticación.<br>
+   - https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-categorization</p>
+</li>
+<li>
+<p><strong>WhatsApp Business. Business Platform Pricing.</strong> Página comercial oficial de precios, con tarifas interactivas por mercado y moneda.<br>
+   - https://business.whatsapp.com/products/platform-pricing</p>
+</li>
+<li>
+<p><strong>Servicio REST oficial de tarifas de WhatsApp Business.</strong> Consulta directa de las tarifas de Colombia (mercado CO) en COP, vigentes al 1 de octubre de 2026:<br>
+   - https://whatsappbusiness.com/wp-json/wab/v1/pricing?market=CO&amp;currency=COP&amp;category=Marketing<br>
+   - https://whatsappbusiness.com/wp-json/wab/v1/pricing?market=CO&amp;currency=COP&amp;category=Utility<br>
+   - https://whatsappbusiness.com/wp-json/wab/v1/pricing?market=CO&amp;currency=COP&amp;category=Authentication<br>
+   - https://whatsappbusiness.com/wp-json/wab/v1/pricing?market=CO&amp;currency=COP&amp;category=Service</p>
+</li>
+<li>
+<p><strong>Meta for Developers. Documentación de WhatsApp Business Platform.</strong> Información general sobre la plataforma, plantillas, webhooks y buenas prácticas.<br>
+   - https://developers.facebook.com/docs/whatsapp/</p>
+</li>
+<li>
+<p><strong>Banco de la República. Tasa Representativa del Mercado (TRM).</strong> Consultada el 4 de noviembre de 2026 para referencia cambiaria.<br>
+   - https://suameca.banrep.gov.co/estadisticas-economicas/informacionSerie/1/tasa_cambio_peso_colombiano_trm_dolar_usd</p>
+</li>
+<li>
+<p><strong>Documentación interna de Punto TdeA.</strong> Para la descripción de la integración:<br>
+   - <code>D:\PuntoTdeA\docs\whatsapp-meta.md</code><br>
+   - <code>D:\PuntoTdeA\docs\arquitectura.md</code><br>
+   - <code>D:\PuntoTdeA\docs\anuncios-status-whatsapp.md</code><br>
+   - <code>D:\PuntoTdeA\AGENTS.md</code></p>
+</li>
+</ol>
+<hr>
+<p><strong>Fin del documento 1.</strong></p>
+</body>
+</html>
